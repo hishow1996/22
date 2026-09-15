@@ -16,6 +16,7 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private int mapHeight = 96;
         [SerializeField] private int daysPerSecond = 1;
         [SerializeField] private WorldTilemapRenderer mapRenderer;
+        [SerializeField] private PopulationUnitLayer populationUnitLayer;
 
         public WorldState World { get; private set; }
         public GeneratedWorld Map { get; private set; }
@@ -60,6 +61,7 @@ namespace CivilizationSandbox.Runtime
             Map = worldGenerator.Generate(mapWidth, mapHeight, seed);
             Agents = CreateStartingAgents(World.Population.Count);
             Movement.Seed(Agents, mapWidth, mapHeight);
+            if (populationUnitLayer != null) populationUnitLayer.Initialize(this);
             if (mapRenderer != null)
             {
                 mapRenderer.Render(Map);
