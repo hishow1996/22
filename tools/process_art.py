@@ -36,6 +36,8 @@ sprite_sheets = {
     'hud-resource-icons.png': ['population', 'food', 'wood', 'stone', 'metal', 'electricity', 'science'],
     'hud-era-badges.png': ['primordial', 'agrarian', 'industrial', 'modern', 'space'],
     'hud-space-mission-icons.png': ['satellite', 'space-station', 'deep-space-probe', 'crewed-exploration'],
+    'ui-control-buttons.png': ['pause', 'slower', 'normal-speed', 'faster', 'add-food', 'rain', 'meteor', 'technology-tree'],
+    'ui-tech-tree-nodes.png': ['fire', 'farming', 'steam', 'modern-science', 'space'],
 }
 for sheet_name, labels in sprite_sheets.items():
     image = Image.open(root / sheet_name).convert('RGBA')
@@ -49,5 +51,15 @@ for sheet_name, labels in sprite_sheets.items():
             cell = cell.crop(bbox)
         scale = min(1.0, 96 / max(cell.size))
         target = (max(1, int(cell.width * scale)), max(1, int(cell.height * scale)))
-        cell.resize(target, Image.Resampling.NEAREST).save(root / f'processed-hud-{label}.png', optimize=True)
+        prefix = 'hud' if sheet_name.startswith('hud-') else ('ui-control' if sheet_name == 'ui-control-buttons.png' else 'ui-tech')
+        cell.resize(target, Image.Resampling.NEAREST).save(root / f'processed-{prefix}-{label}.png', optimize=True)
         print(sheet_name, label, '->', target)
+
+panel = Image.open(root / 'ui-space-mission-card.png').convert('RGBA')
+bbox = panel.getchannel('A').getbbox()
+if bbox is not None:
+    panel = panel.crop(bbox)
+scale = min(1.0, 512 / max(panel.size))
+target = (max(1, int(panel.width * scale)), max(1, int(panel.height * scale)))
+panel.resize(target, Image.Resampling.NEAREST).save(root / 'processed-ui-space-mission-card.png', optimize=True)
+print('ui-space-mission-card.png ->', target)

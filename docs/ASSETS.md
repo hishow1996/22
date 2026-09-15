@@ -66,3 +66,12 @@
 | 空间站 | `Assets/Art/Generated/space-station.png` | `processed-space-station.png` | 轨道设施与深空探索建筑 |
 
 太空时代资源引入白色与深海军蓝结构、青色灯光、太阳能板、天线和轨道舱体，完成原始、农业、工业、现代、太空五个时代的第一批视觉基准。
+
+## 竖屏 UI 皮肤资源
+
+| 资源 | 文件 | 用途 |
+|---|---|---|
+| 控制按钮图集 | `Assets/Art/Generated/ui-control-buttons.png` | 暂停、速度、天气、灾害和科技树按钮 |
+| 科技树节点图集 | `Assets/Art/Generated/ui-tech-tree-nodes.png` | 五时代科技节点 |
+| 太空任务卡 | `Assets/Art/Generated/ui-space-mission-card.png` | 太空任务状态面板 |
+| 独立处理版 | `processed-ui-control-*`、`processed-ui-tech-*`、`processed-ui-space-mission-card.png` | Unity Canvas 直接绑定 |
