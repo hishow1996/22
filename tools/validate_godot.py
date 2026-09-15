@@ -3,6 +3,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
 required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd')]
+required.append(root / 'tests' / 'simulation_smoke.gd')
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
@@ -26,4 +27,10 @@ for token in ('name="Android"', 'screen/handheld/orientation=1', 'package/unique
 simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encoding='utf-8')
 for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'try_crewed_exploration'):
     assert token in simulation, token
+world_view = (root / 'scripts' / 'world_view.gd').read_text(encoding='utf-8')
+for token in ('processed-" + name', 'primordial-settler', 'Sprite2D', '篝火'):
+    assert token in world_view, token
+smoke = (root / 'tests' / 'simulation_smoke.gd').read_text(encoding='utf-8')
+for token in ('diplomacy', 'technology', 'space program', 'save restore'):
+    assert token in smoke, token
 print(f'PASS: {len(gd)} GDScript files, {len(assets)} PNG assets, expanded systems and Android preset present')
