@@ -2,13 +2,13 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd')]
 required.append(root / 'tests' / 'simulation_smoke.gd')
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 13
+assert len(gd) >= 14
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -36,7 +36,7 @@ assert 'EffectPlayer' in main and 'effect_player.setup' in main
 assert 'StarMapView' in main and 'starmap.setup' in main
 assert 'event_fx.z_index = 40' in main
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
     assert token in hud, token
 save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8')
 for token in ('SAVE_VERSION := 2', 'saved_at', '_migrate_legacy_save', 'data.get("world", data)'):
@@ -53,4 +53,7 @@ for token in ('diplomacy', 'technology', 'space program', 'save restore'):
 effect_player = (root / 'scripts' / 'effect_player.gd').read_text(encoding='utf-8')
 for token in ('effect-resource-gathering', 'effect-rocket-launch', 'effect-weather-disaster', 'AnimatedSprite2D', 'animation_finished'):
     assert token in effect_player, token
+ui_theme = (root / 'scripts' / 'ui_theme.gd').read_text(encoding='utf-8')
+for token in ('font_hover_color', 'font_pressed_color', 'set_stylebox("hover", "Button"', 'corner_radius_top_left = 0'):
+    assert token in ui_theme, token
 print(f'PASS: {len(gd)} GDScript files, {len(assets)} PNG assets, expanded systems and Android preset present')

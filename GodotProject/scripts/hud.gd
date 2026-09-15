@@ -31,6 +31,7 @@ func _build_ui() -> void:
     var root := Control.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.size = Vector2(768, 1365)
+    root.theme = CivilizationUiTheme.create()
     _calculate_safe_insets()
     add_child(root)
     var top := ColorRect.new()
@@ -115,7 +116,7 @@ func _build_ui() -> void:
     info_panel.add_child(info_label)
 
 func _button(parent: Container, text: String, callback: Callable) -> void:
-    var button := Button.new(); button.text = text; button.custom_minimum_size = Vector2(116, 58); button.size_flags_horizontal = Control.SIZE_EXPAND_FILL; button.pressed.connect(callback); parent.add_child(button)
+    var button := Button.new(); button.text = text; button.custom_minimum_size = Vector2(116, 58); button.size_flags_horizontal = Control.SIZE_EXPAND_FILL; button.focus_mode = Control.FOCUS_ALL; button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND; button.pressed.connect(callback); parent.add_child(button)
 
 func _calculate_safe_insets() -> void:
     var safe_area := DisplayServer.get_display_safe_area()
