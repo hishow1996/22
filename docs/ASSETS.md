@@ -75,3 +75,15 @@
 | 科技树节点图集 | `Assets/Art/Generated/ui-tech-tree-nodes.png` | 五时代科技节点 |
 | 太空任务卡 | `Assets/Art/Generated/ui-space-mission-card.png` | 太空任务状态面板 |
 | 独立处理版 | `processed-ui-control-*`、`processed-ui-tech-*`、`processed-ui-space-mission-card.png` | Unity Canvas 直接绑定 |
+
+## 世界地形 Tile 资源
+
+| 资源 | 文件 | 用途 |
+|---|---|---|
+| 地形图集 | `Assets/Art/Generated/world-terrain-tiles.png` | 六种地形的美术源图集 |
+| 海洋 Tile | `processed-terrain-ocean.png` | `TerrainType.Ocean` |
+| 草地 Tile | `processed-terrain-grass.png` | `TerrainType.Grass` |
+| 泥地 Tile | `processed-terrain-dirt.png` | `TerrainType.Dirt` |
+| 森林 Tile | `processed-terrain-forest.png` | `TerrainType.Forest` |
+| 山地 Tile | `processed-terrain-mountain.png` | `TerrainType.Mountain` |
+| 河流 Tile | `processed-terrain-river.png` | `TerrainType.River` |

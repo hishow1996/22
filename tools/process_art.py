@@ -63,3 +63,15 @@ scale = min(1.0, 512 / max(panel.size))
 target = (max(1, int(panel.width * scale)), max(1, int(panel.height * scale)))
 panel.resize(target, Image.Resampling.NEAREST).save(root / 'processed-ui-space-mission-card.png', optimize=True)
 print('ui-space-mission-card.png ->', target)
+
+terrain_sheet = Image.open(root / 'world-terrain-tiles.png').convert('RGBA')
+terrain_names = ['ocean', 'grass', 'dirt', 'forest', 'mountain', 'river']
+cell_width = terrain_sheet.width // 3
+cell_height = terrain_sheet.height // 2
+for index, name in enumerate(terrain_names):
+    x = index % 3
+    y = index // 3
+    tile = terrain_sheet.crop((x * cell_width, y * cell_height, (x + 1) * cell_width, (y + 1) * cell_height))
+    tile = tile.resize((256, 256), Image.Resampling.NEAREST)
+    tile.save(root / f'processed-terrain-{name}.png', optimize=True)
+    print('world-terrain-tiles.png', name, '->', tile.size)
