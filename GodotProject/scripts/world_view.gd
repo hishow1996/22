@@ -5,7 +5,7 @@ const TILE_SIZE := 12.0
 const TERRAIN_NAMES := ["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"]
 var simulation: CivilizationSimulation
 var building_nodes: Array[Sprite2D] = []
-var population_nodes: Array[Sprite2D] = []
+var population_nodes: Array[Node2D] = []
 var textures := {}
 var pulse := 0.0
 var camera_zoom := 1.0
@@ -53,6 +53,10 @@ func _load_textures() -> void:
     for name in names:
         var path := "res://assets/processed-" + name + ".png"
         if ResourceLoader.exists(path): textures[name] = load(path)
+    for prefix in ["primordial-settler-walk", "space-astronaut-walk", "effect-resource-gathering", "effect-rocket-launch"]:
+        for frame in range(1, 5):
+            var frame_path := "res://assets/processed-" + prefix + "-%02d.png" % frame
+            if ResourceLoader.exists(frame_path): textures[prefix + str(frame)] = load(frame_path)
 
 func _process(delta: float) -> void:
     pulse += delta
@@ -123,9 +127,30 @@ func refresh() -> void:
     elif simulation.era == 3: unit_name = "modern-scientist"
     elif simulation.era >= 4: unit_name = "space-astronaut"
     for index in people:
-        var person := Sprite2D.new()
-        person.texture = textures.get(unit_name)
+        var person: Node2D
+        var animation_prefix := "primordial-settler-walk" if simulation.era < 4 else "space-astronaut-walk"
+        var animated := AnimatedSprite2D.new()
+        var frames := _make_frames(animation_prefix)
+        if frames != null:
+            animated.sprite_frames = frames
+            animated.animation = "walk"
+            animated.play()
+            person = animated
+        else:
+            var sprite := Sprite2D.new()
+            sprite.texture = textures.get(unit_name)
+            person = sprite
         person.position = origin + Vector2(27 + (index % 5) * 2.8, 46 + (index / 5) * 3.0) * TILE_SIZE
         person.scale = Vector2.ONE * 0.025
         person.z_index = 30
         add_child(person); population_nodes.append(person)
+
+func _make_frames(prefix: String) -> SpriteFrames:
+    if textures.get(prefix + "1") == null: return null
+    var frames := SpriteFrames.new()
+    frames.remove_animation("default")
+    frames.add_animation("walk")
+    frames.set_animation_speed("walk", 6.0)
+    frames.set_animation_loop("walk", true)
+    for index in range(1, 5): frames.add_frame("walk", textures.get(prefix + str(index)))
+    return frames

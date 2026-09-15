@@ -64,6 +64,7 @@ func tick(days: int = 1) -> void:
     resources.wood += int(max(1, population * 0.22))
     resources.stone += int(max(1, population * 0.12))
     resources.science += int(max(1, population * 0.08 * (era + 1)))
+    events.raise_event("resource_gathered", 0.35)
     if era >= 2: resources.metal += int(max(1, population * 0.16))
     if era >= 3: resources.electricity += int(max(1, population * 0.18))
     if era >= 4: resources.fuel += int(max(1, population * 0.1))
