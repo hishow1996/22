@@ -19,6 +19,10 @@ namespace CivilizationSandbox.Persistence
             SetResource(world, ResourceType.Fuel, data.fuel);
             SetResource(world, ResourceType.Science, data.science);
             world.SpaceProgram.HasLaunchSite = data.hasLaunchSite;
+            world.SpaceProgram.RestoreProgress(
+                (SpaceMission)Math.Max(0, Math.Min((int)SpaceMission.CrewedExploration, data.spaceMission)),
+                data.hasDeepSpaceData,
+                data.discoveredBodies);
             return world;
         }
 

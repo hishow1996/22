@@ -19,6 +19,9 @@ namespace CivilizationSandbox.Persistence
         public int science;
         public bool hasLaunchSite;
         public bool hasLaunched;
+        public int spaceMission;
+        public bool hasDeepSpaceData;
+        public int discoveredBodies;
     }
 
     public static class SaveSystem
@@ -38,7 +41,10 @@ namespace CivilizationSandbox.Persistence
                 fuel = world.Resources.Get(ResourceType.Fuel),
                 science = world.Resources.Get(ResourceType.Science),
                 hasLaunchSite = world.SpaceProgram.HasLaunchSite,
-                hasLaunched = world.SpaceProgram.HasLaunched
+                hasLaunched = world.SpaceProgram.HasLaunched,
+                spaceMission = (int)world.SpaceProgram.Mission,
+                hasDeepSpaceData = world.SpaceProgram.HasDeepSpaceData,
+                discoveredBodies = world.SpaceProgram.DiscoveredBodies
             };
         }
 
