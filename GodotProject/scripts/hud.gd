@@ -7,9 +7,12 @@ var resources_label: Label
 var log_label: Label
 var settings_panel: PanelContainer
 var space_status: Label
+var info_panel: PanelContainer
+var info_label: Label
 var logs: Array[String] = []
 var settings := {"fps": 30, "vsync": false, "particles": true}
 var tick_accumulator := 0.0
+var autosave_timer := 0.0
 
 func setup(source: CivilizationSimulation) -> void:
     simulation = source
@@ -91,6 +94,15 @@ func _build_ui() -> void:
     var vsync := CheckButton.new(); vsync.text = "垂直同步"; vsync.button_pressed = bool(settings.vsync); vsync.toggled.connect(_set_vsync); setting_box.add_child(vsync)
     var particles := CheckButton.new(); particles.text = "粒子效果"; particles.button_pressed = bool(settings.particles); particles.toggled.connect(_set_particles); setting_box.add_child(particles)
     var close := Button.new(); close.text = "关闭"; close.pressed.connect(_toggle_settings); setting_box.add_child(close)
+    info_panel = PanelContainer.new()
+    info_panel.position = Vector2(70, 250); info_panel.size = Vector2(620, 420)
+    info_panel.visible = false
+    root.add_child(info_panel)
+    info_label = Label.new()
+    info_label.position = Vector2(18, 18); info_label.size = Vector2(580, 380)
+    info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    info_label.add_theme_font_size_override("font_size", 18)
+    info_panel.add_child(info_label)
 
 func _button(parent: Container, text: String, callback: Callable) -> void:
     var button := Button.new(); button.text = text; button.custom_minimum_size = Vector2(82, 58); button.pressed.connect(callback); parent.add_child(button)
@@ -119,6 +131,11 @@ func add_log(message: String) -> void:
     refresh()
 
 func _process(delta: float) -> void:
+    autosave_timer += delta
+    if autosave_timer >= 30.0 and simulation != null:
+        SaveManager.save_game(simulation)
+        autosave_timer = 0.0
+        add_log("自动存档完成")
     if simulation == null or simulation.paused or simulation.time_scale <= 0.0: return
     tick_accumulator += delta * simulation.time_scale
     if tick_accumulator >= 1.0:
@@ -153,6 +170,7 @@ func _set_particles(enabled: bool) -> void:
 func _show_diplomacy() -> void:
     simulation.form_alliance()
     add_log("外交面板：已尝试结成联盟")
+    _show_info("外交文明\n" + str(simulation.diplomacy.nations))
 
 func _show_technology() -> void:
     var available := simulation.technology.available(simulation.era)
@@ -160,6 +178,9 @@ func _show_technology() -> void:
         add_log("科技树：当前没有可研究项目")
     else:
         add_log("科技树：可研究 " + str(available[0].name) + "，消耗 " + str(available[0].cost) + " 科研点")
+    var lines := ["科技树 · " + simulation.ERA_NAMES[simulation.era], "已解锁：" + ", ".join(simulation.technology.unlocked)]
+    for item in available: lines.append("可研究：%s（%d 科研点）" % [item.name, item.cost])
+    _show_info("\n".join(lines))
 
 func _research_next() -> void:
     var available := simulation.technology.available(simulation.era)
@@ -170,3 +191,9 @@ func _research_next() -> void:
 
 func _show_jobs() -> void:
     add_log("职业分配：" + simulation.population_system.summary())
+    _show_info("文明信息\n人口：" + str(simulation.population) + "\n职业：" + simulation.population_system.summary() + "\n国家：" + str(simulation.diplomacy.nations.size()))
+
+func _show_info(text: String) -> void:
+    if info_label != null:
+        info_label.text = text + "\n\n点击科技树、外交或职业按钮刷新面板。"
+        info_panel.visible = true

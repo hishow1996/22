@@ -33,8 +33,11 @@ for token in ('processed-" + name', 'primordial-settler', 'agrarian-farmer', 'sp
 main = (root / 'scripts' / 'main.gd').read_text(encoding='utf-8')
 assert 'EventFx' in main and 'event_fx.setup' in main
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'get_display_safe_area', 'try_crewed_exploration'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'get_display_safe_area', 'try_crewed_exploration', 'autosave_timer', '_show_info'):
     assert token in hud, token
+save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8')
+for token in ('SAVE_VERSION := 2', 'saved_at', '_migrate_legacy_save', 'data.get("world", data)'):
+    assert token in save_manager, token
 fx = (root / 'scripts' / 'event_fx.gd').read_text(encoding='utf-8')
 for token in ('降雨', '陨石灾害', 'draw_line', 'draw_circle'):
     assert token in fx, token
