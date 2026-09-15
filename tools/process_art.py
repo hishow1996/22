@@ -12,6 +12,9 @@ outputs = {
     'industrial-engineer.png': 256,
     'industrial-factory.png': 384,
     'industrial-steamworks.png': 384,
+    'modern-scientist.png': 256,
+    'modern-research-center.png': 384,
+    'modern-power-grid.png': 384,
 }
 for name, size in outputs.items():
     source = root / name

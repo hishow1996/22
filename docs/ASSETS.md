@@ -46,3 +46,13 @@
 | 蒸汽动力设施 | `Assets/Art/Generated/industrial-steamworks.png` | `processed-industrial-steamworks.png` | 电力/蒸汽科技建筑 |
 
 工业时代资源加入钢铁、铜、砖墙、煤炭、齿轮、烟囱和蒸汽等视觉语言，让地图从农业生产自然升级为工业化城市。
+
+## 现代时代第一批正式资源
+
+| 资源 | 原始文件 | Unity 使用文件 | 用途 |
+|---|---|---|---|
+| 科学家 | `Assets/Art/Generated/modern-scientist.png` | `processed-modern-scientist.png` | 现代时代科研职业单位 |
+| 研究中心 | `Assets/Art/Generated/modern-research-center.png` | `processed-modern-research-center.png` | 科研和现代科技建筑 |
+| 电力设施 | `Assets/Art/Generated/modern-power-grid.png` | `processed-modern-power-grid.png` | 现代电网和电力生产建筑 |
+
+现代时代资源引入白色混凝土、蓝色玻璃、太阳能板、卫星天线和青色电能光效，形成从工业时代钢铁蒸汽到现代科技社会的视觉升级。
