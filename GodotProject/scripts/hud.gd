@@ -54,6 +54,13 @@ func _build_ui() -> void:
     _button(space, "深空探测", simulation.try_deep_space)
     _button(space, "载人探索", simulation.try_crewed_exploration)
     _button(space, "设置", _toggle_settings)
+    var systems := HBoxContainer.new()
+    systems.position = Vector2(8, 1085); systems.size = Vector2(752, 58)
+    root.add_child(systems)
+    _button(systems, "研究科技", _research_next)
+    _button(systems, "结成联盟", simulation.form_alliance)
+    _button(systems, "进行贸易", simulation.trade)
+    _button(systems, "解决战争", simulation.resolve_war)
     log_label = Label.new()
     log_label.position = Vector2(16, 1060); log_label.size = Vector2(736, 90)
     log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -119,6 +126,13 @@ func _show_technology() -> void:
         add_log("科技树：当前没有可研究项目")
     else:
         add_log("科技树：可研究 " + str(available[0].name) + "，消耗 " + str(available[0].cost) + " 科研点")
+
+func _research_next() -> void:
+    var available := simulation.technology.available(simulation.era)
+    if available.is_empty():
+        add_log("科技树：当前没有可研究项目")
+        return
+    simulation.research(str(available[0].id))
 
 func _show_jobs() -> void:
     add_log("职业分配：" + simulation.population_system.summary())

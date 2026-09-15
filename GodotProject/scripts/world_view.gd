@@ -16,7 +16,7 @@ func setup(source: CivilizationSimulation) -> void:
     refresh()
 
 func _load_textures() -> void:
-    var names := ["campfire", "primordial-hut", "agrarian-farm", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler"]
+    var names := ["campfire", "primordial-hut", "agrarian-farm", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
     for name in names:
         var path := "res://assets/processed-" + name + ".png"
         if ResourceLoader.exists(path): textures[name] = load(path)
@@ -61,9 +61,14 @@ func refresh() -> void:
         node.set_meta("kind", str(building.type))
         add_child(node); building_nodes.append(node)
     var people := min(10, max(2, int(simulation.population / 8)))
+    var unit_name := "primordial-settler"
+    if simulation.era == 1: unit_name = "agrarian-farmer"
+    elif simulation.era == 2: unit_name = "industrial-engineer"
+    elif simulation.era == 3: unit_name = "modern-scientist"
+    elif simulation.era >= 4: unit_name = "space-astronaut"
     for index in people:
         var person := Sprite2D.new()
-        person.texture = textures.get("primordial-settler")
+        person.texture = textures.get(unit_name)
         person.position = origin + Vector2(27 + (index % 5) * 2.8, 46 + (index / 5) * 3.0) * TILE_SIZE
         person.scale = Vector2.ONE * 0.025
         person.z_index = 30
