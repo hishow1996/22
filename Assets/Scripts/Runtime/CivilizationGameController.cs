@@ -11,6 +11,7 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private int mapWidth = 64;
         [SerializeField] private int mapHeight = 96;
         [SerializeField] private int daysPerSecond = 1;
+        [SerializeField] private WorldTilemapRenderer mapRenderer;
 
         public WorldState World { get; private set; }
         public GeneratedWorld Map { get; private set; }
@@ -23,6 +24,7 @@ namespace CivilizationSandbox.Runtime
         {
             World = new WorldState(seed);
             Map = worldGenerator.Generate(mapWidth, mapHeight, seed);
+            if (mapRenderer != null) mapRenderer.Render(Map);
         }
 
         private void Update()
