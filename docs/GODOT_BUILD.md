@@ -2,6 +2,8 @@
 
 本项目目标平台是 **Android 手机竖屏**，不是横屏项目。设计视口为 `768×1365`，导出预设锁定 portrait，HUD 使用 Android 安全区和大触控按钮适配刘海屏、导航栏及不同手机尺寸。
 
+适配策略包括：Godot `canvas_items` 保持比例缩放、禁止窗口自由变形、HUD 使用六列网格而不是固定横向按钮串、按钮最小触控区域为 `116×58`、根据真实窗口和 `DisplayServer.get_display_safe_area()` 计算顶部/底部安全内边距，并为资源图标、日志和状态栏设置固定设计坐标。这样在常见 16:9、19.5:9、20:9、刘海屏和打孔屏上会等比缩放并保留安全边界，而不会把 UI 拉宽。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行

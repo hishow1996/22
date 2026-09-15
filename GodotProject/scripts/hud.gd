@@ -15,6 +15,8 @@ var logs: Array[String] = []
 var settings := {"fps": 30, "vsync": false, "particles": true}
 var tick_accumulator := 0.0
 var autosave_timer := 0.0
+var safe_top := 0.0
+var safe_bottom := 0.0
 
 func setup(source: CivilizationSimulation, map_view: StarMapView = null) -> void:
     simulation = source
@@ -28,14 +30,12 @@ func setup(source: CivilizationSimulation, map_view: StarMapView = null) -> void
 func _build_ui() -> void:
     var root := Control.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    var safe_area := DisplayServer.get_display_safe_area()
-    if safe_area.size.x > 0.0 and safe_area.size.y > 0.0:
-        root.position = safe_area.position
-        root.size = safe_area.size
+    root.size = Vector2(768, 1365)
+    _calculate_safe_insets()
     add_child(root)
     var top := ColorRect.new()
     top.color = Color("#151b2b")
-    top.position = Vector2(0, 0); top.size = Vector2(768, 68)
+    top.position = Vector2(0, safe_top); top.size = Vector2(768, 68)
     root.add_child(top)
     status_label = Label.new()
     status_label.position = Vector2(16, 8); status_label.add_theme_font_size_override("font_size", 22)
@@ -47,11 +47,12 @@ func _build_ui() -> void:
     _add_resource_icon(top, "science", 606)
     _add_resource_icon(top, "space", 652)
     building_status = Label.new()
-    building_status.position = Vector2(16, 82)
+    building_status.position = Vector2(16, 82 + safe_top)
     building_status.add_theme_font_size_override("font_size", 14)
     root.add_child(building_status)
-    var controls := HBoxContainer.new()
-    controls.position = Vector2(8, 1240); controls.size = Vector2(752, 72)
+    var controls := GridContainer.new()
+    controls.columns = 6
+    controls.position = Vector2(8, 1240 - safe_bottom); controls.size = Vector2(752, 118)
     controls.add_theme_constant_override("separation", 6)
     root.add_child(controls)
     _button(controls, "暂停", _toggle_pause)
@@ -66,8 +67,9 @@ func _build_ui() -> void:
     _button(controls, "职业", _show_jobs)
     _button(controls, "保存", func(): add_log("存档成功" if SaveManager.save_game(simulation) else "存档失败"))
     _button(controls, "读取", func(): add_log("读取成功" if SaveManager.load_game(simulation) else "没有存档"))
-    var space := HBoxContainer.new()
-    space.position = Vector2(8, 1160); space.size = Vector2(752, 64)
+    var space := GridContainer.new()
+    space.columns = 6
+    space.position = Vector2(8, 1160 - safe_bottom); space.size = Vector2(752, 64)
     root.add_child(space)
     _button(space, "发射火箭", simulation.try_launch_rocket)
     _button(space, "空间站", simulation.try_build_station)
@@ -76,18 +78,18 @@ func _build_ui() -> void:
     _button(space, "星图", _toggle_starmap)
     _button(space, "设置", _toggle_settings)
     space_status = Label.new()
-    space_status.position = Vector2(16, 1015)
+    space_status.position = Vector2(16, 1015 - safe_bottom)
     space_status.add_theme_font_size_override("font_size", 15)
     root.add_child(space_status)
     var systems := HBoxContainer.new()
-    systems.position = Vector2(8, 1085); systems.size = Vector2(752, 58)
+    systems.position = Vector2(8, 1085 - safe_bottom); systems.size = Vector2(752, 58)
     root.add_child(systems)
     _button(systems, "研究科技", _research_next)
     _button(systems, "结成联盟", simulation.form_alliance)
     _button(systems, "进行贸易", simulation.trade)
     _button(systems, "解决战争", simulation.resolve_war)
     log_label = Label.new()
-    log_label.position = Vector2(16, 1060); log_label.size = Vector2(736, 90)
+    log_label.position = Vector2(16, 960 - safe_bottom); log_label.size = Vector2(736, 110)
     log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     log_label.add_theme_font_size_override("font_size", 15)
     root.add_child(log_label)
@@ -113,7 +115,16 @@ func _build_ui() -> void:
     info_panel.add_child(info_label)
 
 func _button(parent: Container, text: String, callback: Callable) -> void:
-    var button := Button.new(); button.text = text; button.custom_minimum_size = Vector2(82, 58); button.pressed.connect(callback); parent.add_child(button)
+    var button := Button.new(); button.text = text; button.custom_minimum_size = Vector2(116, 58); button.size_flags_horizontal = Control.SIZE_EXPAND_FILL; button.pressed.connect(callback); parent.add_child(button)
+
+func _calculate_safe_insets() -> void:
+    var safe_area := DisplayServer.get_display_safe_area()
+    var window_size := DisplayServer.window_get_size()
+    if safe_area.size.x <= 0.0 or safe_area.size.y <= 0.0 or window_size.y <= 0:
+        return
+    safe_top = clamp(safe_area.position.y / float(window_size.y) * 1365.0, 0.0, 120.0)
+    var safe_bottom_px := float(window_size.y - (safe_area.position.y + safe_area.size.y))
+    safe_bottom = clamp(safe_bottom_px / float(window_size.y) * 1365.0, 0.0, 140.0)
 
 func _add_resource_icon(parent: Control, name: String, x: float) -> void:
     var path := "res://assets/processed-hud-" + name + ".png"

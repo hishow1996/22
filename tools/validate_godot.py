@@ -19,7 +19,7 @@ assert len(assets) >= 78, len(assets)
 project = (root / 'project.godot').read_text(encoding='utf-8')
 scene = (root / 'main.tscn').read_text(encoding='utf-8')
 preset = (root / 'export_presets.cfg').read_text(encoding='utf-8')
-for token in ('run/main_scene="res://main.tscn"', 'size/viewport_width=768', 'size/viewport_height=1365', 'handheld/orientation=1', 'orientation/portrait=true', 'orientation/landscape=false', 'textures/canvas_textures/default_texture_filter=0'):
+for token in ('run/main_scene="res://main.tscn"', 'size/viewport_width=768', 'size/viewport_height=1365', 'stretch/mode="canvas_items"', 'stretch/aspect="keep"', 'size/resizable=false', 'handheld/orientation=1', 'orientation/portrait=true', 'orientation/landscape=false', 'textures/canvas_textures/default_texture_filter=0'):
     assert token in project, token
 assert 'script = ExtResource("1_main")' in scene
 for token in ('name="Android"', 'screen/handheld/orientation=1', 'package/unique_name='):
@@ -36,7 +36,7 @@ assert 'EffectPlayer' in main and 'effect_player.setup' in main
 assert 'StarMapView' in main and 'starmap.setup' in main
 assert 'event_fx.z_index = 40' in main
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
     assert token in hud, token
 save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8')
 for token in ('SAVE_VERSION := 2', 'saved_at', '_migrate_legacy_save', 'data.get("world", data)'):
