@@ -32,6 +32,7 @@ namespace CivilizationSandbox.Runtime
         public PopulationJobManager Jobs { get; } = new PopulationJobManager();
         public event Action<Era> EraAdvanced;
         public event Action<string> TechnologyResearched;
+        public event Action WorldLoaded;
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
         private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
@@ -212,6 +213,7 @@ namespace CivilizationSandbox.Runtime
             }
             RebuildPresentation();
             autoSaveTimer = 0f;
+            WorldLoaded?.Invoke();
             return true;
         }
 
