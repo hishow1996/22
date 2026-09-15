@@ -23,6 +23,7 @@ namespace CivilizationSandbox.Runtime
         public EnvironmentSimulator Environment { get; } = new EnvironmentSimulator();
         public VfxEventBridge VfxEvents { get; } = new VfxEventBridge();
         public PopulationAgent[] Agents { get; private set; }
+        public PopulationMovementSystem Movement { get; } = new PopulationMovementSystem();
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
         private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
@@ -58,6 +59,7 @@ namespace CivilizationSandbox.Runtime
             World.Nations.Add(new NationState("Sol", Era.Primordial));
             Map = worldGenerator.Generate(mapWidth, mapHeight, seed);
             Agents = CreateStartingAgents(World.Population.Count);
+            Movement.Seed(Agents, mapWidth, mapHeight);
             if (mapRenderer != null)
             {
                 mapRenderer.Render(Map);
@@ -74,6 +76,7 @@ namespace CivilizationSandbox.Runtime
             if (elapsedDays <= 0) return;
             dayAccumulator -= elapsedDays;
             World.PopulationSimulator.Tick(World, elapsedDays);
+            Movement.Tick(Map, Agents, elapsedDays);
             Environment.SetWeather(GodControls.Weather);
             economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier,
                 (resource, amount) => VfxEvents.Raise(VfxEventType.ResourceGathered, amount));
