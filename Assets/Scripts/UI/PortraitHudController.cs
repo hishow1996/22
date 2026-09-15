@@ -25,6 +25,7 @@ namespace CivilizationSandbox.UI
         public bool TryLaunchCrewedExploration() => game.World.SpaceProgram.TryLaunchCrewedExploration(game.World);
         public void SaveGame() => game.SaveGame();
         public bool LoadGame() => game.LoadGame();
+        public bool ResearchTechnology(string technologyId) => game.TryResearchTechnology(technologyId);
 
         private void Awake()
         {

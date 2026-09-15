@@ -9,7 +9,8 @@ namespace CivilizationSandbox.Runtime
         MeteorWarning,
         MeteorImpact,
         RocketLaunch,
-        EraAdvanced
+        EraAdvanced,
+        TechnologyResearched
     }
 
     public readonly struct VfxEvent

@@ -30,6 +30,7 @@ namespace CivilizationSandbox.Runtime
         public PopulationAgent[] Agents { get; private set; }
         public PopulationMovementSystem Movement { get; } = new PopulationMovementSystem();
         public event Action<Era> EraAdvanced;
+        public event Action<string> TechnologyResearched;
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
         private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
@@ -56,6 +57,15 @@ namespace CivilizationSandbox.Runtime
         {
             if (World == null || !World.SpaceProgram.TryLaunch(World)) return false;
             VfxEvents.Raise(VfxEventType.RocketLaunch);
+            return true;
+        }
+
+        public bool TryResearchTechnology(string id)
+        {
+            if (World == null || !World.Technologies.TryResearch(id, World)) return false;
+            VfxEvents.Raise(VfxEventType.TechnologyResearched);
+            TechnologyResearched?.Invoke(id);
+            SaveGame();
             return true;
         }
 
