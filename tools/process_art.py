@@ -87,3 +87,19 @@ for index, name in enumerate(transition_names):
     tile = tile.resize((256, 256), Image.Resampling.NEAREST)
     tile.save(root / f'processed-transition-{name}.png', optimize=True)
     print('world-transition-tiles.png', name, '->', tile.size)
+
+animation_sheets = {
+    'primordial-settler-walk-sheet.png': 'primordial-settler-walk',
+    'space-astronaut-walk-sheet.png': 'space-astronaut-walk',
+}
+for sheet_name, prefix in animation_sheets.items():
+    sheet = Image.open(root / sheet_name).convert('RGBA')
+    cell_width = sheet.width // 2
+    cell_height = sheet.height // 2
+    for index in range(4):
+        x = index % 2
+        y = index // 2
+        frame = sheet.crop((x * cell_width, y * cell_height, (x + 1) * cell_width, (y + 1) * cell_height))
+        frame = frame.resize((256, 256), Image.Resampling.NEAREST)
+        frame.save(root / f'processed-{prefix}-{index + 1:02d}.png', optimize=True)
+        print(sheet_name, index + 1, '->', frame.size)

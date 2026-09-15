@@ -99,3 +99,12 @@
 | 石板道路 | `processed-transition-cobblestone-road.png` | 聚落道路 |
 | 石桥 | `processed-transition-stone-bridge.png` | 河流连接 |
 | 城市广场 | `processed-transition-urban-plaza.png` | 现代城市铺装 |
+
+## 角色动画资源
+
+| 资源 | 文件 | 用途 |
+|---|---|---|
+| 原始人行走图集 | `Assets/Art/Generated/primordial-settler-walk-sheet.png` | 四帧原始人行走源图集 |
+| 宇航员行走图集 | `Assets/Art/Generated/space-astronaut-walk-sheet.png` | 四帧宇航员行走源图集 |
+| 原始人动画帧 | `processed-primordial-settler-walk-01.png` 至 `04.png` | Unity Animator |
+| 宇航员动画帧 | `processed-space-astronaut-walk-01.png` 至 `04.png` | Unity Animator |
