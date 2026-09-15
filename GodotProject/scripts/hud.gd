@@ -14,7 +14,7 @@ var info_panel: PanelContainer
 var info_label: Label
 var building_status: Label
 var logs: Array[String] = []
-var settings := {"fps": 30, "vsync": false, "particles": true}
+var settings := {"fps": 30, "vsync": false, "particles": true, "manual_quality": false}
 var tick_accumulator := 0.0
 var autosave_timer := 0.0
 var safe_top := 0.0
@@ -25,7 +25,7 @@ func setup(source: CivilizationSimulation, map_view: StarMapView = null, effects
     starmap = map_view
     effect_player = effects
     diagnostics = diagnostic_runner
-    settings = SaveManager.load_settings()
+    settings = DeviceProfile.resolve(SaveManager.load_settings())
     Engine.max_fps = int(settings.get("fps", 30))
     DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(settings.get("vsync", false)) else DisplayServer.VSYNC_DISABLED)
     if effect_player != null: effect_player.effects_enabled = bool(settings.get("particles", true))

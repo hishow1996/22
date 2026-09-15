@@ -87,9 +87,9 @@ func tick(days: int = 1) -> void:
     if era >= 2: resources.metal += int(max(1, population * 0.16))
     if era >= 3: resources.electricity += int(max(1, population * 0.18))
     if era >= 4: resources.fuel += int(max(1, population * 0.1))
-    if era >= 3 and has_building("现代电网"): resources.electricity += max(1, population / 20)
+    if era >= 3 and has_building("现代电网"): resources.electricity += int(max(1, population / 20))
     if era >= 3 and has_building("医院"): population += 1 if elapsed_days % 12 == 0 else 0
-    if era >= 4 and has_building("空间站"): resources.science += max(1, population / 24)
+    if era >= 4 and has_building("空间站"): resources.science += int(max(1, population / 24))
     resources.food -= int(population * 0.35)
     var farm_output := agriculture.advance(days, environment.season(), environment.weather())
     resources.food += int(farm_output.food)
