@@ -11,6 +11,9 @@ var pulse := 0.0
 var camera_zoom := 1.0
 var dragging := false
 var last_pointer := Vector2.ZERO
+var redraw_pending := true
+var redraw_cooldown := 0.0
+var last_visual_signature := ""
 var palette := [Color("#24517a"), Color("#6fa85c"), Color("#9b7048"), Color("#2e7049"), Color("#707b91"), Color("#3d7191")]
 
 func setup(source: CivilizationSimulation) -> void:
@@ -60,6 +63,11 @@ func _load_textures() -> void:
 
 func _process(delta: float) -> void:
     pulse += delta
+    redraw_cooldown -= delta
+    if redraw_pending and redraw_cooldown <= 0.0:
+        queue_redraw()
+        redraw_pending = false
+        redraw_cooldown = 0.1
     for node in building_nodes:
         if node != null and node.get_meta("kind", "") == "篝火":
             node.scale = Vector2.ONE * (0.92 + sin(pulse * 5.0) * 0.05)
@@ -101,7 +109,10 @@ func _draw_overlays(origin: Vector2) -> void:
 
 func refresh() -> void:
     if simulation == null: return
-    queue_redraw()
+    var signature := str(simulation.era) + ":" + str(simulation.buildings) + ":" + str(min(10, max(2, int(simulation.population / 8))))
+    if signature == last_visual_signature: return
+    last_visual_signature = signature
+    redraw_pending = true
     for node in building_nodes:
         if node != null:
             node.queue_free()

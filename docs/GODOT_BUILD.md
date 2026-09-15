@@ -18,6 +18,8 @@ godot --headless --path GodotProject --script res://tests/headless_runner.gd
 
 该测试覆盖确定性地图、人口初始状态、科技研究、外交行动、卫星和空间站任务、存档恢复以及关键 PNG 资源。
 
+低端 Android 优化包括：地图 `queue_redraw()` 采用 100ms 节流，资源生产但视觉状态未变化时不重绘地图；建筑和人口节点使用时代/建筑/人口签名进行差异更新，避免每个模拟 tick 销毁并重建全部 Sprite；特效仍受粒子设置开关控制。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行
