@@ -32,6 +32,12 @@ for token in ('processed-" + name', 'primordial-settler', 'agrarian-farmer', 'sp
     assert token in world_view, token
 main = (root / 'scripts' / 'main.gd').read_text(encoding='utf-8')
 assert 'EventFx' in main and 'event_fx.setup' in main
+hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'try_crewed_exploration'):
+    assert token in hud, token
+fx = (root / 'scripts' / 'event_fx.gd').read_text(encoding='utf-8')
+for token in ('降雨', '陨石灾害', 'draw_line', 'draw_circle'):
+    assert token in fx, token
 smoke = (root / 'tests' / 'simulation_smoke.gd').read_text(encoding='utf-8')
 for token in ('diplomacy', 'technology', 'space program', 'save restore'):
     assert token in smoke, token

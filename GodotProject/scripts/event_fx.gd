@@ -2,9 +2,11 @@ class_name EventFx
 extends Node2D
 
 var notices: Array[Dictionary] = []
+var weather := "晴朗"
 
 func setup(simulation: CivilizationSimulation) -> void:
     simulation.events.event_raised.connect(_on_event)
+    simulation.changed.connect(func(): weather = simulation.weather; queue_redraw())
 
 func _on_event(event_name: String, intensity: float) -> void:
     notices.append({"name": event_name, "life": 2.2, "intensity": intensity})
@@ -18,6 +20,13 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
     var center := Vector2(384, 640)
+    if weather == "降雨":
+        for index in 28:
+            var x := float((index * 83) % 760)
+            var y := float((index * 47) % 980) + 90.0
+            draw_line(Vector2(x, y), Vector2(x - 7, y + 18), Color(0.45, 0.75, 1.0, 0.42), 2.0)
+    elif weather == "陨石灾害":
+        draw_circle(center, 42.0 + sin(Time.get_ticks_msec() * 0.01) * 8.0, Color(0.9, 0.25, 0.15, 0.2), false, 6.0)
     for index in notices.size():
         var notice: Dictionary = notices[index]
         var radius := (2.2 - notice.life) * 70.0

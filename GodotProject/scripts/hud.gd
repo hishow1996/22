@@ -6,8 +6,10 @@ var status_label: Label
 var resources_label: Label
 var log_label: Label
 var settings_panel: PanelContainer
+var space_status: Label
 var logs: Array[String] = []
 var settings := {"fps": 30, "vsync": false, "particles": true}
+var tick_accumulator := 0.0
 
 func setup(source: CivilizationSimulation) -> void:
     simulation = source
@@ -31,13 +33,17 @@ func _build_ui() -> void:
     resources_label = Label.new()
     resources_label.position = Vector2(16, 38); resources_label.add_theme_font_size_override("font_size", 13)
     top.add_child(resources_label)
+    _add_resource_icon(top, "food", 560)
+    _add_resource_icon(top, "science", 606)
+    _add_resource_icon(top, "space", 652)
     var controls := HBoxContainer.new()
     controls.position = Vector2(8, 1240); controls.size = Vector2(752, 72)
     controls.add_theme_constant_override("separation", 6)
     root.add_child(controls)
     _button(controls, "暂停", _toggle_pause)
-    _button(controls, "慢速", func(): simulation.time_scale = 0.5)
-    _button(controls, "正常", func(): simulation.time_scale = 1.0)
+    _button(controls, "慢速", func(): _set_speed(0.5))
+    _button(controls, "正常", func(): _set_speed(1.0))
+    _button(controls, "加速", func(): _set_speed(2.0))
     _button(controls, "加食物", simulation.grant_food)
     _button(controls, "降雨", simulation.set_rain)
     _button(controls, "陨石", simulation.trigger_meteor)
@@ -54,6 +60,10 @@ func _build_ui() -> void:
     _button(space, "深空探测", simulation.try_deep_space)
     _button(space, "载人探索", simulation.try_crewed_exploration)
     _button(space, "设置", _toggle_settings)
+    space_status = Label.new()
+    space_status.position = Vector2(16, 1015)
+    space_status.add_theme_font_size_override("font_size", 15)
+    root.add_child(space_status)
     var systems := HBoxContainer.new()
     systems.position = Vector2(8, 1085); systems.size = Vector2(752, 58)
     root.add_child(systems)
@@ -81,23 +91,43 @@ func _build_ui() -> void:
 func _button(parent: Container, text: String, callback: Callable) -> void:
     var button := Button.new(); button.text = text; button.custom_minimum_size = Vector2(82, 58); button.pressed.connect(callback); parent.add_child(button)
 
+func _add_resource_icon(parent: Control, name: String, x: float) -> void:
+    var path := "res://assets/processed-hud-" + name + ".png"
+    if not ResourceLoader.exists(path): return
+    var icon := TextureRect.new()
+    icon.texture = load(path)
+    icon.position = Vector2(x, 8)
+    icon.size = Vector2(36, 36)
+    icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    parent.add_child(icon)
+
 func refresh() -> void:
     if simulation == null or status_label == null: return
     status_label.text = "文明沙盒 · " + simulation.ERA_NAMES[simulation.era] + " · 第 " + str(simulation.elapsed_days) + " 天 · 人口 " + str(simulation.population)
     resources_label.text = "食物 %d  木材 %d  石材 %d  金属 %d  电力 %d  燃料 %d  科研 %d  | %s" % [simulation.resources.food, simulation.resources.wood, simulation.resources.stone, simulation.resources.metal, simulation.resources.electricity, simulation.resources.fuel, simulation.resources.science, simulation.weather]
     if log_label != null: log_label.text = "\n".join(logs.slice(max(0, logs.size() - 4)))
+    if space_status != null:
+        space_status.text = "太空任务：" + ", ".join(simulation.space_program.discovered_bodies) if not simulation.space_program.discovered_bodies.is_empty() else "太空任务：尚未完成"
 
 func add_log(message: String) -> void:
     logs.append(message)
     refresh()
 
-func _process(_delta: float) -> void:
-    if simulation != null and not simulation.paused:
-        simulation.tick(max(1, int(simulation.time_scale * 1.0)))
+func _process(delta: float) -> void:
+    if simulation == null or simulation.paused or simulation.time_scale <= 0.0: return
+    tick_accumulator += delta * simulation.time_scale
+    if tick_accumulator >= 1.0:
+        simulation.tick(1)
+        tick_accumulator -= 1.0
 
 func _toggle_pause() -> void:
     simulation.paused = not simulation.paused
     add_log("游戏已暂停" if simulation.paused else "游戏继续")
+
+func _set_speed(value: float) -> void:
+    simulation.time_scale = value
+    add_log("速度：" + str(value) + "x")
 
 func _toggle_settings() -> void:
     settings_panel.visible = not settings_panel.visible
