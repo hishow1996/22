@@ -15,12 +15,14 @@ namespace CivilizationSandbox.Simulation
 
         public IReadOnlyList<string> Entries => entries;
         public string Latest => entries.Count == 0 ? "暂无文明事件" : entries[entries.Count - 1];
+        public event Action<string> Changed;
 
         public void Add(string message)
         {
             if (string.IsNullOrEmpty(message)) return;
             entries.Add(message);
             while (entries.Count > capacity) entries.RemoveAt(0);
+            Changed?.Invoke(message);
         }
 
         public void Restore(IEnumerable<string> restoredEntries)

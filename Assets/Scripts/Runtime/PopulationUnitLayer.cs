@@ -10,6 +10,7 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private PopulationUnitPresenter unitPrefab;
         [SerializeField] private Transform unitRoot;
         private readonly Dictionary<int, PopulationUnitPresenter> presenters = new Dictionary<int, PopulationUnitPresenter>();
+        private int lastMovementRevision = -1;
 
         public void Initialize(CivilizationGameController controller)
         {
@@ -22,16 +23,18 @@ namespace CivilizationSandbox.Runtime
             foreach (var presenter in presenters.Values)
                 if (presenter != null) Destroy(presenter.gameObject);
             presenters.Clear();
+            lastMovementRevision = -1;
         }
 
         private void Update()
         {
-            if (game != null && game.World != null) SyncUnits();
+            if (game != null && game.World != null && game.Movement.Revision != lastMovementRevision) SyncUnits();
         }
 
         private void SyncUnits()
         {
             if (game == null || game.Agents == null || game.Map == null) return;
+            lastMovementRevision = game.Movement.Revision;
             foreach (var agent in game.Agents)
             {
                 if (agent == null || !agent.IsAlive) continue;

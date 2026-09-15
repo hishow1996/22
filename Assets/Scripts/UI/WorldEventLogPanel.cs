@@ -14,18 +14,23 @@ namespace CivilizationSandbox.UI
 
         private void OnEnable()
         {
-            if (game != null) game.EraAdvanced += OnEraAdvanced;
+            if (game != null)
+            {
+                game.EraAdvanced += OnEraAdvanced;
+                game.WorldLoaded += OnWorldLoaded;
+                SubscribeToLog();
+            }
             Refresh();
         }
 
         private void OnDisable()
         {
-            if (game != null) game.EraAdvanced -= OnEraAdvanced;
-        }
-
-        private void Update()
-        {
-            if (game != null && game.World != null) Refresh();
+            if (game != null)
+            {
+                game.EraAdvanced -= OnEraAdvanced;
+                game.WorldLoaded -= OnWorldLoaded;
+                UnsubscribeFromLog();
+            }
         }
 
         public void Refresh()
@@ -44,6 +49,28 @@ namespace CivilizationSandbox.UI
         }
 
         private void OnEraAdvanced(CivilizationSandbox.Simulation.Era era)
+        {
+            Refresh();
+        }
+
+        private void OnWorldLoaded()
+        {
+            UnsubscribeFromLog();
+            SubscribeToLog();
+            Refresh();
+        }
+
+        private void SubscribeToLog()
+        {
+            if (game != null && game.World != null) game.World.EventLog.Changed += OnLogChanged;
+        }
+
+        private void UnsubscribeFromLog()
+        {
+            if (game != null && game.World != null) game.World.EventLog.Changed -= OnLogChanged;
+        }
+
+        private void OnLogChanged(string message)
         {
             Refresh();
         }

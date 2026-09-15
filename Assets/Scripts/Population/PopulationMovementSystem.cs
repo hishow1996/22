@@ -19,10 +19,12 @@ namespace CivilizationSandbox.Population
     {
         private readonly Dictionary<int, AgentGridPosition> positions = new Dictionary<int, AgentGridPosition>();
         public IReadOnlyDictionary<int, AgentGridPosition> Positions => positions;
+        public int Revision { get; private set; }
 
         public void Seed(PopulationAgent[] agents, int width, int height)
         {
             positions.Clear();
+            Revision++;
             if (agents == null) return;
             for (var i = 0; i < agents.Length; i++)
             {
@@ -35,6 +37,7 @@ namespace CivilizationSandbox.Population
         public void Tick(GeneratedWorld world, PopulationAgent[] agents, int elapsedDays)
         {
             if (world == null || agents == null || elapsedDays <= 0) return;
+            var changed = false;
             foreach (var agent in agents)
             {
                 if (agent == null || !agent.IsAlive || !positions.TryGetValue(agent.Id, out var current)) continue;
@@ -46,8 +49,13 @@ namespace CivilizationSandbox.Population
                     2 => new AgentGridPosition(current.X - 1, current.Y),
                     _ => new AgentGridPosition(current.X, current.Y - 1)
                 };
-                if (IsWalkable(world, next)) positions[agent.Id] = next;
+                if (IsWalkable(world, next) && (next.X != current.X || next.Y != current.Y))
+                {
+                    positions[agent.Id] = next;
+                    changed = true;
+                }
             }
+            if (changed) Revision++;
         }
 
         private static bool IsWalkable(GeneratedWorld world, AgentGridPosition position)
