@@ -25,6 +25,7 @@ namespace CivilizationSandbox.Persistence
                 data.hasDeepSpaceData,
                 data.discoveredBodies);
             world.Technologies.Restore(data.unlockedTechnologyIds);
+            world.Diplomacy.Restore(data.tradeCount, data.allianceCount, data.warCount, data.lastDiplomacyAction);
             return world;
         }
 

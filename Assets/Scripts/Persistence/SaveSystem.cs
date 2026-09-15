@@ -23,6 +23,10 @@ namespace CivilizationSandbox.Persistence
         public bool hasDeepSpaceData;
         public int discoveredBodies;
         public string[] unlockedTechnologyIds = new string[0];
+        public int tradeCount;
+        public int allianceCount;
+        public int warCount;
+        public string lastDiplomacyAction;
     }
 
     public static class SaveSystem
@@ -49,7 +53,11 @@ namespace CivilizationSandbox.Persistence
                 spaceMission = (int)world.SpaceProgram.Mission,
                 hasDeepSpaceData = world.SpaceProgram.HasDeepSpaceData,
                 discoveredBodies = world.SpaceProgram.DiscoveredBodies,
-                unlockedTechnologyIds = unlocked
+                unlockedTechnologyIds = unlocked,
+                tradeCount = world.Diplomacy.TradeCount,
+                allianceCount = world.Diplomacy.AllianceCount,
+                warCount = world.Diplomacy.WarCount,
+                lastDiplomacyAction = world.Diplomacy.LastAction
             };
         }
 

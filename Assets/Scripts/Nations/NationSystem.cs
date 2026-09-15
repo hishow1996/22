@@ -47,6 +47,15 @@ namespace CivilizationSandbox.Nations
             return true;
         }
 
+        public bool ExecuteTrade(NationState buyer, NationState seller, int amount)
+        {
+            if (buyer == null || seller == null || ReferenceEquals(buyer, seller) || amount <= 0) return false;
+            if (buyer.Treasury < amount) return false;
+            buyer.Treasury -= amount;
+            seller.Treasury += amount;
+            return true;
+        }
+
         public WarResult ResolveWar(NationState attacker, NationState defender)
         {
             if (attacker == null || defender == null) throw new ArgumentNullException();

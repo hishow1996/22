@@ -14,7 +14,8 @@ namespace CivilizationSandbox.Runtime
         SpaceStationBuilt,
         DeepSpaceProbeLaunched,
         CrewedExplorationLaunched,
-        CelestialBodyDiscovered
+        CelestialBodyDiscovered,
+        DiplomacyAction
     }
 
     public readonly struct VfxEvent

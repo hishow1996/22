@@ -17,6 +17,7 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private UnityEvent<int> onDeepSpaceProbeLaunched;
         [SerializeField] private UnityEvent<int> onCrewedExplorationLaunched;
         [SerializeField] private UnityEvent<int> onCelestialBodyDiscovered;
+        [SerializeField] private UnityEvent<int> onDiplomacyAction;
 
         private void OnEnable()
         {
@@ -43,6 +44,7 @@ namespace CivilizationSandbox.Runtime
                 case VfxEventType.DeepSpaceProbeLaunched: onDeepSpaceProbeLaunched?.Invoke(value.Intensity); break;
                 case VfxEventType.CrewedExplorationLaunched: onCrewedExplorationLaunched?.Invoke(value.Intensity); break;
                 case VfxEventType.CelestialBodyDiscovered: onCelestialBodyDiscovered?.Invoke(value.Intensity); break;
+                case VfxEventType.DiplomacyAction: onDiplomacyAction?.Invoke(value.Intensity); break;
             }
         }
     }

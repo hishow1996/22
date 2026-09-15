@@ -26,6 +26,9 @@ namespace CivilizationSandbox.UI
         public void SaveGame() => game.SaveGame();
         public bool LoadGame() => game.LoadGame();
         public bool ResearchTechnology(string technologyId) => game.TryResearchTechnology(technologyId);
+        public bool FormAlliance(int firstNation, int secondNation) => game.TryFormAlliance(firstNation, secondNation);
+        public bool Trade(int buyerNation, int sellerNation, int amount) => game.TryTrade(buyerNation, sellerNation, amount);
+        public bool ResolveWar(int attackerNation, int defenderNation) => game.TryResolveWar(attackerNation, defenderNation);
 
         private void Awake()
         {

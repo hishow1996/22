@@ -120,6 +120,7 @@ namespace CivilizationSandbox.Simulation
         public TechnologyState Technologies { get; } = new TechnologyState();
         public PopulationSimulator PopulationSimulator { get; } = new PopulationSimulator();
         public List<NationState> Nations { get; } = new List<NationState>();
+        public DiplomacyState Diplomacy { get; } = new DiplomacyState();
 
         public WorldState(int seed)
         {

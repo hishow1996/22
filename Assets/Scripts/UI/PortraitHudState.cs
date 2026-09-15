@@ -18,6 +18,11 @@ namespace CivilizationSandbox.UI
         public int DiscoveredBodies { get; private set; }
         public int UnlockedTechnologyCount { get; private set; }
         public int AvailableTechnologyCount { get; private set; }
+        public int NationCount { get; private set; }
+        public int TradeCount { get; private set; }
+        public int AllianceCount { get; private set; }
+        public int WarCount { get; private set; }
+        public string LastDiplomacyAction { get; private set; }
 
         public static PortraitHudState FromWorld(WorldState world)
         {
@@ -36,7 +41,12 @@ namespace CivilizationSandbox.UI
                 HasDeepSpaceData = world.SpaceProgram.HasDeepSpaceData,
                 DiscoveredBodies = world.SpaceProgram.DiscoveredBodies,
                 UnlockedTechnologyCount = world.Technologies.Unlocked.Count,
-                AvailableTechnologyCount = world.Technologies.CountAvailable(world.Progression.CurrentEra)
+                AvailableTechnologyCount = world.Technologies.CountAvailable(world.Progression.CurrentEra),
+                NationCount = world.Nations.Count,
+                TradeCount = world.Diplomacy.TradeCount,
+                AllianceCount = world.Diplomacy.AllianceCount,
+                WarCount = world.Diplomacy.WarCount,
+                LastDiplomacyAction = world.Diplomacy.LastAction
             };
             if (world.Progression.CurrentEra != Era.Space) state.SpaceMissionLabel = "尚未进入太空时代";
             return state;

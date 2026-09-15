@@ -36,6 +36,7 @@ namespace CivilizationSandbox.Runtime
         private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
         private readonly SettlementLayoutPlanner settlementPlanner = new SettlementLayoutPlanner();
         private readonly EconomySimulator economySimulator = new EconomySimulator();
+        private readonly DiplomacySystem diplomacySystem = new DiplomacySystem();
         private float dayAccumulator;
         private float autoSaveTimer;
 
@@ -65,6 +66,36 @@ namespace CivilizationSandbox.Runtime
             if (World == null || !World.Technologies.TryResearch(id, World)) return false;
             VfxEvents.Raise(VfxEventType.TechnologyResearched);
             TechnologyResearched?.Invoke(id);
+            SaveGame();
+            return true;
+        }
+
+        public bool TryFormAlliance(int firstIndex, int secondIndex)
+        {
+            if (!TryGetNations(firstIndex, secondIndex, out var first, out var second)) return false;
+            if (!diplomacySystem.FormAlliance(first, second)) return false;
+            World.Diplomacy.RecordAlliance();
+            VfxEvents.Raise(VfxEventType.DiplomacyAction);
+            SaveGame();
+            return true;
+        }
+
+        public bool TryTrade(int buyerIndex, int sellerIndex, int amount)
+        {
+            if (!TryGetNations(buyerIndex, sellerIndex, out var buyer, out var seller)) return false;
+            if (!diplomacySystem.ExecuteTrade(buyer, seller, amount)) return false;
+            World.Diplomacy.RecordTrade();
+            VfxEvents.Raise(VfxEventType.DiplomacyAction);
+            SaveGame();
+            return true;
+        }
+
+        public bool TryResolveWar(int attackerIndex, int defenderIndex)
+        {
+            if (!TryGetNations(attackerIndex, defenderIndex, out var attacker, out var defender)) return false;
+            var result = diplomacySystem.ResolveWar(attacker, defender);
+            World.Diplomacy.RecordWar(result.Winner.Name);
+            VfxEvents.Raise(VfxEventType.DiplomacyAction, result.Damage);
             SaveGame();
             return true;
         }
@@ -147,6 +178,7 @@ namespace CivilizationSandbox.Runtime
         {
             if (!SaveFileService.TryLoad(out var data)) return false;
             World = SaveRestore.Restore(data);
+            EnsureDefaultNations();
             Map = worldGenerator.Generate(mapWidth, mapHeight, World.Seed);
             Agents = CreateStartingAgents(World.Population.Count);
             Movement.Seed(Agents, mapWidth, mapHeight);
@@ -166,6 +198,24 @@ namespace CivilizationSandbox.Runtime
             mapRenderer.Render(Map);
             mapRenderer.RenderOverlays(overlayPlanner.Plan(Map, World.Progression.CurrentEra));
             mapRenderer.RenderBuildings(settlementPlanner.Plan(Map, World.Progression.CurrentEra));
+        }
+
+        private bool TryGetNations(int firstIndex, int secondIndex, out NationState first, out NationState second)
+        {
+            first = null;
+            second = null;
+            if (World == null || firstIndex < 0 || secondIndex < 0 || firstIndex >= World.Nations.Count || secondIndex >= World.Nations.Count)
+                return false;
+            first = World.Nations[firstIndex];
+            second = World.Nations[secondIndex];
+            return true;
+        }
+
+        private void EnsureDefaultNations()
+        {
+            if (World.Nations.Count > 0) return;
+            World.Nations.Add(new NationState("Aurora", World.Progression.CurrentEra));
+            World.Nations.Add(new NationState("Sol", World.Progression.CurrentEra));
         }
 
         private void OnApplicationPause(bool paused)
