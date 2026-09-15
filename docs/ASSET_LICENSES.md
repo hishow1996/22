@@ -39,3 +39,7 @@
 ## 太空时代生成素材
 
 `space-astronaut.png`、`space-launch-site.png` 和 `space-station.png` 来自本项目生成流程，使用当前账户与图像生成工具条款。它们不是从第三方游戏、网站或搜索图片复制而来；正式商业发布前仍需按实际发布渠道和工具最新条款复核商业使用与署名要求。
+
+## HUD 图标生成素材
+
+`hud-resource-icons.png`、`hud-era-badges.png`、`hud-space-mission-icons.png` 及其拆分后的 `processed-hud-*.png` 来自本项目生成流程，使用当前账户与图像生成工具条款。它们不是从第三方游戏、网站或搜索图片复制而来；正式商业发布前仍需按实际发布渠道和工具最新条款复核商业使用与署名要求。

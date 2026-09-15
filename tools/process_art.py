@@ -31,3 +31,23 @@ for name, size in outputs.items():
     image = image.resize(target, Image.Resampling.NEAREST)
     image.save(root / f'processed-{name}', optimize=True)
     print(name, '->', target, 'alpha_bbox=', bbox)
+
+sprite_sheets = {
+    'hud-resource-icons.png': ['population', 'food', 'wood', 'stone', 'metal', 'electricity', 'science'],
+    'hud-era-badges.png': ['primordial', 'agrarian', 'industrial', 'modern', 'space'],
+    'hud-space-mission-icons.png': ['satellite', 'space-station', 'deep-space-probe', 'crewed-exploration'],
+}
+for sheet_name, labels in sprite_sheets.items():
+    image = Image.open(root / sheet_name).convert('RGBA')
+    cell_width = image.width // len(labels)
+    for index, label in enumerate(labels):
+        left = index * cell_width
+        right = image.width if index == len(labels) - 1 else (index + 1) * cell_width
+        cell = image.crop((left, 0, right, image.height))
+        bbox = cell.getchannel('A').getbbox()
+        if bbox is not None:
+            cell = cell.crop(bbox)
+        scale = min(1.0, 96 / max(cell.size))
+        target = (max(1, int(cell.width * scale)), max(1, int(cell.height * scale)))
+        cell.resize(target, Image.Resampling.NEAREST).save(root / f'processed-hud-{label}.png', optimize=True)
+        print(sheet_name, label, '->', target)
