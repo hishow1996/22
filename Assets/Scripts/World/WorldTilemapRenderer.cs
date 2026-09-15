@@ -13,6 +13,13 @@ namespace CivilizationSandbox.World
         [SerializeField] private TileBase forestTile;
         [SerializeField] private TileBase mountainTile;
         [SerializeField] private TileBase riverTile;
+        [SerializeField] private Tilemap overlayTilemap;
+        [SerializeField] private TileBase shorelineTile;
+        [SerializeField] private TileBase riverbankTile;
+        [SerializeField] private TileBase grassDirtEdgeTile;
+        [SerializeField] private TileBase cobblestoneRoadTile;
+        [SerializeField] private TileBase stoneBridgeTile;
+        [SerializeField] private TileBase urbanPlazaTile;
 
         public void Render(GeneratedWorld world)
         {
@@ -26,6 +33,28 @@ namespace CivilizationSandbox.World
                     targetTilemap.SetTile(position, ResolveTile(world.Get(x, y).Terrain));
                 }
             }
+        }
+
+        public void RenderOverlays(IEnumerable<WorldOverlayPlacement> placements)
+        {
+            if (overlayTilemap == null || placements == null) return;
+            overlayTilemap.ClearAllTiles();
+            foreach (var placement in placements)
+                overlayTilemap.SetTile(placement.Position, ResolveOverlayTile(placement.Type));
+        }
+
+        private TileBase ResolveOverlayTile(WorldOverlayType type)
+        {
+            return type switch
+            {
+                WorldOverlayType.Shoreline => shorelineTile,
+                WorldOverlayType.Riverbank => riverbankTile,
+                WorldOverlayType.GrassDirtEdge => grassDirtEdgeTile,
+                WorldOverlayType.CobblestoneRoad => cobblestoneRoadTile,
+                WorldOverlayType.StoneBridge => stoneBridgeTile,
+                WorldOverlayType.UrbanPlaza => urbanPlazaTile,
+                _ => null
+            };
         }
 
         private TileBase ResolveTile(TerrainType terrain)

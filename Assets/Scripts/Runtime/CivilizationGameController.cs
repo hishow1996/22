@@ -67,7 +67,8 @@ namespace CivilizationSandbox.Runtime
             dayAccumulator -= elapsedDays;
             World.PopulationSimulator.Tick(World, elapsedDays);
             Environment.SetWeather(GodControls.Weather);
-            economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier);
+            economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier,
+                (resource, amount) => VfxEvents.Raise(VfxEventType.ResourceGathered, amount));
             World.Progression.TryAdvance(World);
         }
 
