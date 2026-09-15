@@ -2,6 +2,7 @@ using CivilizationSandbox.GodControls;
 using CivilizationSandbox.Runtime;
 using CivilizationSandbox.Simulation;
 using UnityEngine;
+using System;
 
 namespace CivilizationSandbox.UI
 {
@@ -9,6 +10,8 @@ namespace CivilizationSandbox.UI
     {
         [SerializeField] private CivilizationGameController game;
         [SerializeField] private Canvas portraitCanvas;
+        public PortraitHudState CurrentState { get; private set; }
+        public event Action<PortraitHudState> StateChanged;
 
         public void TogglePause() => game.GodControls.TogglePause();
         public void SetSpeed(float speed) => game.GodControls.SetTimeScale(speed);
@@ -28,6 +31,19 @@ namespace CivilizationSandbox.UI
             Screen.orientation = ScreenOrientation.Portrait;
             Screen.autorotateToLandscapeLeft = false;
             Screen.autorotateToLandscapeRight = false;
+            RefreshState();
+        }
+
+        private void Update()
+        {
+            if (game != null && game.World != null) RefreshState();
+        }
+
+        public void RefreshState()
+        {
+            if (game == null || game.World == null) return;
+            CurrentState = PortraitHudState.FromWorld(game.World);
+            StateChanged?.Invoke(CurrentState);
         }
     }
 }
