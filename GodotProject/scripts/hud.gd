@@ -22,6 +22,10 @@ func setup(source: CivilizationSimulation) -> void:
 func _build_ui() -> void:
     var root := Control.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    var safe_area := DisplayServer.get_display_safe_area()
+    if safe_area.size.x > 0.0 and safe_area.size.y > 0.0:
+        root.position = safe_area.position
+        root.size = safe_area.size
     add_child(root)
     var top := ColorRect.new()
     top.color = Color("#151b2b")

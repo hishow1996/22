@@ -7,6 +7,9 @@ var building_nodes: Array[Sprite2D] = []
 var population_nodes: Array[Sprite2D] = []
 var textures := {}
 var pulse := 0.0
+var camera_zoom := 1.0
+var dragging := false
+var last_pointer := Vector2.ZERO
 var palette := [Color("#24517a"), Color("#6fa85c"), Color("#9b7048"), Color("#2e7049"), Color("#707b91"), Color("#3d7191")]
 
 func setup(source: CivilizationSimulation) -> void:
@@ -14,6 +17,33 @@ func setup(source: CivilizationSimulation) -> void:
     _load_textures()
     simulation.changed.connect(refresh)
     refresh()
+
+func _unhandled_input(event: InputEvent) -> void:
+    if event is InputEventScreenTouch:
+        dragging = event.pressed
+        last_pointer = event.position
+    elif event is InputEventScreenDrag and dragging:
+        position += event.relative
+        _clamp_position()
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        dragging = event.pressed
+        last_pointer = event.position
+    elif event is InputEventMouseMotion and dragging:
+        position += event.relative
+        _clamp_position()
+    elif event is InputEventMouseButton and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and event.pressed:
+        var direction := 1.08 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 0.92
+        camera_zoom = clamp(camera_zoom * direction, 0.65, 1.7)
+        scale = Vector2.ONE * camera_zoom
+        _clamp_position()
+    elif event is InputEventMagnifyGesture:
+        camera_zoom = clamp(camera_zoom * event.factor, 0.65, 1.7)
+        scale = Vector2.ONE * camera_zoom
+        _clamp_position()
+
+func _clamp_position() -> void:
+    position.x = clamp(position.x, -520.0, 260.0)
+    position.y = clamp(position.y, -680.0, 160.0)
 
 func _load_textures() -> void:
     var names := ["campfire", "primordial-hut", "agrarian-farm", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
