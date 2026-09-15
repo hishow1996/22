@@ -3,7 +3,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
 required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd')]
-required.append(root / 'tests' / 'simulation_smoke.gd')
+required += [root / 'tests' / name for name in ('simulation_smoke.gd', 'headless_runner.gd')]
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
@@ -54,6 +54,9 @@ for token in ('卫星', '空间站', '深空探测', '载人探索', 'simulation
 smoke = (root / 'tests' / 'simulation_smoke.gd').read_text(encoding='utf-8')
 for token in ('diplomacy', 'technology', 'space program', 'save restore'):
     assert token in smoke, token
+headless = (root / 'tests' / 'headless_runner.gd').read_text(encoding='utf-8')
+for token in ('extends SceneTree', 'HEADLESS PASS', 'save restore', 'diplomacy actions', 'space station mission', 'ResourceLoader.exists'):
+    assert token in headless, token
 effect_player = (root / 'scripts' / 'effect_player.gd').read_text(encoding='utf-8')
 for token in ('effect-resource-gathering', 'effect-rocket-launch', 'effect-weather-disaster', 'AnimatedSprite2D', 'animation_finished'):
     assert token in effect_player, token

@@ -10,6 +10,14 @@ Android 生命周期也已处理：切入后台会暂停模拟并自动保存，
 
 启动时会运行资源诊断器，检查地形、篝火、时代建筑等关键 PNG 是否存在，并写入 `user://civilization_diagnostics.log`。游戏内“运行诊断”按钮会把报告显示在信息面板中，便于在 Android 真机上排查黑屏、缺图和导出资源遗漏。
 
+如果本机安装了 Godot 4，可运行无头验收：
+
+```bash
+godot --headless --path GodotProject --script res://tests/headless_runner.gd
+```
+
+该测试覆盖确定性地图、人口初始状态、科技研究、外交行动、卫星和空间站任务、存档恢复以及关键 PNG 资源。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行
