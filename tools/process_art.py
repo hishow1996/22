@@ -15,6 +15,9 @@ outputs = {
     'modern-scientist.png': 256,
     'modern-research-center.png': 384,
     'modern-power-grid.png': 384,
+    'space-astronaut.png': 256,
+    'space-launch-site.png': 384,
+    'space-station.png': 384,
 }
 for name, size in outputs.items():
     source = root / name

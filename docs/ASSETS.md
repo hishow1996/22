@@ -56,3 +56,13 @@
 | 电力设施 | `Assets/Art/Generated/modern-power-grid.png` | `processed-modern-power-grid.png` | 现代电网和电力生产建筑 |
 
 现代时代资源引入白色混凝土、蓝色玻璃、太阳能板、卫星天线和青色电能光效，形成从工业时代钢铁蒸汽到现代科技社会的视觉升级。
+
+## 太空时代第一批正式资源
+
+| 资源 | 原始文件 | Unity 使用文件 | 用途 |
+|---|---|---|---|
+| 宇航员 | `Assets/Art/Generated/space-astronaut.png` | `processed-space-astronaut.png` | 太空时代职业单位 |
+| 火箭发射场 | `Assets/Art/Generated/space-launch-site.png` | `processed-space-launch-site.png` | 火箭制造与发射建筑 |
+| 空间站 | `Assets/Art/Generated/space-station.png` | `processed-space-station.png` | 轨道设施与深空探索建筑 |
+
+太空时代资源引入白色与深海军蓝结构、青色灯光、太阳能板、天线和轨道舱体，完成原始、农业、工业、现代、太空五个时代的第一批视觉基准。
