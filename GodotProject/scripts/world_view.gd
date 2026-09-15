@@ -2,6 +2,7 @@ class_name WorldView
 extends Node2D
 
 const TILE_SIZE := 12.0
+const TERRAIN_NAMES := ["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"]
 var simulation: CivilizationSimulation
 var building_nodes: Array[Sprite2D] = []
 var population_nodes: Array[Sprite2D] = []
@@ -47,6 +48,7 @@ func _clamp_position() -> void:
 
 func _load_textures() -> void:
     var names := ["campfire", "primordial-hut", "agrarian-farm", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
+    names.append_array(["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"])
     for name in names:
         var path := "res://assets/processed-" + name + ".png"
         if ResourceLoader.exists(path): textures[name] = load(path)
@@ -66,7 +68,12 @@ func _draw() -> void:
     for y in simulation.HEIGHT:
         for x in simulation.WIDTH:
             var index := y * simulation.WIDTH + x
-            draw_rect(Rect2(origin + Vector2(x, y) * TILE_SIZE, Vector2(TILE_SIZE + 0.4, TILE_SIZE + 0.4)), palette[simulation.terrain[index]])
+            var terrain_texture = textures.get(TERRAIN_NAMES[simulation.terrain[index]])
+            var rect := Rect2(origin + Vector2(x, y) * TILE_SIZE, Vector2(TILE_SIZE + 0.4, TILE_SIZE + 0.4))
+            if terrain_texture != null:
+                draw_texture_rect(terrain_texture, rect, false)
+            else:
+                draw_rect(rect, palette[simulation.terrain[index]])
     draw_rect(Rect2(origin, Vector2(simulation.WIDTH, simulation.HEIGHT) * TILE_SIZE), Color("#10152a"), false, 2.0)
 
 func refresh() -> void:

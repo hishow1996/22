@@ -10,6 +10,7 @@ var settings_panel: PanelContainer
 var space_status: Label
 var info_panel: PanelContainer
 var info_label: Label
+var building_status: Label
 var logs: Array[String] = []
 var settings := {"fps": 30, "vsync": false, "particles": true}
 var tick_accumulator := 0.0
@@ -45,6 +46,10 @@ func _build_ui() -> void:
     _add_resource_icon(top, "food", 560)
     _add_resource_icon(top, "science", 606)
     _add_resource_icon(top, "space", 652)
+    building_status = Label.new()
+    building_status.position = Vector2(16, 82)
+    building_status.add_theme_font_size_override("font_size", 14)
+    root.add_child(building_status)
     var controls := HBoxContainer.new()
     controls.position = Vector2(8, 1240); controls.size = Vector2(752, 72)
     controls.add_theme_constant_override("separation", 6)
@@ -128,6 +133,11 @@ func refresh() -> void:
     if log_label != null: log_label.text = "\n".join(logs.slice(max(0, logs.size() - 4)))
     if space_status != null:
         space_status.text = "太空任务：" + ", ".join(simulation.space_program.discovered_bodies) if not simulation.space_program.discovered_bodies.is_empty() else "太空任务：尚未完成"
+    if building_status != null:
+        var names: Array[String] = []
+        for building in simulation.buildings:
+            names.append(str(building.type))
+        building_status.text = "时代建筑：" + " · ".join(names)
 
 func add_log(message: String) -> void:
     logs.append(message)
