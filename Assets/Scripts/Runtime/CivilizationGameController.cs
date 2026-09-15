@@ -24,6 +24,7 @@ namespace CivilizationSandbox.Runtime
         public PopulationAgent[] Agents { get; private set; }
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
+        private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
         private readonly EconomySimulator economySimulator = new EconomySimulator();
         private float dayAccumulator;
 
@@ -55,7 +56,11 @@ namespace CivilizationSandbox.Runtime
             World.Nations.Add(new NationState("Sol", Era.Primordial));
             Map = worldGenerator.Generate(mapWidth, mapHeight, seed);
             Agents = CreateStartingAgents(World.Population.Count);
-            if (mapRenderer != null) mapRenderer.Render(Map);
+            if (mapRenderer != null)
+            {
+                mapRenderer.Render(Map);
+                mapRenderer.RenderOverlays(overlayPlanner.Plan(Map, World.Progression.CurrentEra));
+            }
         }
 
         private void Update()
