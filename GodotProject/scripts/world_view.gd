@@ -51,7 +51,7 @@ func _clamp_position() -> void:
     position.y = clamp(position.y, -680.0, 160.0)
 
 func _load_textures() -> void:
-    var names := ["campfire", "primordial-hut", "agrarian-farm", "farm-tilled", "crop-seedling", "crop-wheat-ripe", "barn", "animal-pasture", "animal-chicken", "animal-sheep", "animal-cow", "crafting-bench", "forge", "anvil", "tool-stone-axe", "tool-stone-pickaxe", "tool-stone-hoe", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
+    var names := ["campfire", "primordial-hut", "agrarian-farm", "farm-tilled", "crop-seedling", "crop-wheat-ripe", "barn", "animal-pasture", "animal-chicken", "animal-sheep", "animal-cow", "crafting-bench", "forge", "anvil", "tool-stone-axe", "tool-stone-pickaxe", "tool-stone-hoe", "industrial-factory", "modern-research-center", "modern-power-grid", "space-launch-site", "space-station", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
     names.append_array(["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"])
     names.append_array(["transition-shoreline", "transition-riverbank", "transition-cobblestone-road", "transition-stone-bridge", "transition-urban-plaza"])
     for name in names:
@@ -125,7 +125,7 @@ func refresh() -> void:
             node.visible = false
     building_nodes.clear()
     var origin := Vector2(8, 72)
-    var texture_by_type := {"篝火": "campfire", "木屋": "primordial-hut", "农田": "farm-tilled", "工坊": "industrial-factory", "工厂": "industrial-factory", "研究中心": "modern-research-center", "发射场": "space-launch-site"}
+    var texture_by_type := {"篝火": "campfire", "木屋": "primordial-hut", "农田": "farm-tilled", "工坊": "industrial-factory", "工厂": "industrial-factory", "研究中心": "modern-research-center", "现代电网": "modern-power-grid", "医院": "modern-research-center", "发射场": "space-launch-site", "空间站": "space-station"}
     for building in simulation.buildings:
         var node := Sprite2D.new()
         var texture_name: String = texture_by_type.get(str(building.type), "primordial-hut")

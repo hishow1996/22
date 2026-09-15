@@ -55,9 +55,23 @@ func _plan_buildings() -> void:
     var types: Array[String] = ["篝火", "木屋"]
     if era >= 1: types.append("农田")
     if era >= 2: types.append("工坊"); types.append("工厂")
-    if era >= 3: types.append("研究中心")
-    if era >= 4: types.append("发射场")
+    if era >= 3:
+        types.append("研究中心")
+        types.append("现代电网")
+        types.append("医院")
+    if era >= 4:
+        types.append("发射场")
+        types.append("空间站")
     for i in types.size(): buildings.append({"type": types[i], "x": 18 + i * 8, "y": 24 + (i % 3) * 10})
+    population_system.assign_for_era(era, population)
+
+func has_building(building_type: String) -> bool:
+    for building in buildings:
+        if str(building.get("type", "")) == building_type: return true
+    return false
+
+func unit_behavior(unit_type: String) -> String:
+    return {"采集者": "资源采集", "农民": "农业生产", "工程师": "工业生产", "科学家": "科研产出", "宇航员": "太空任务"}.get(unit_type, "待命")
 
 func tick(days: int = 1) -> void:
     if paused or days <= 0: return
@@ -73,6 +87,9 @@ func tick(days: int = 1) -> void:
     if era >= 2: resources.metal += int(max(1, population * 0.16))
     if era >= 3: resources.electricity += int(max(1, population * 0.18))
     if era >= 4: resources.fuel += int(max(1, population * 0.1))
+    if era >= 3 and has_building("现代电网"): resources.electricity += max(1, population / 20)
+    if era >= 3 and has_building("医院"): population += 1 if elapsed_days % 12 == 0 else 0
+    if era >= 4 and has_building("空间站"): resources.science += max(1, population / 24)
     resources.food -= int(population * 0.35)
     var farm_output := agriculture.advance(days, environment.season(), environment.weather())
     resources.food += int(farm_output.food)

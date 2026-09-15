@@ -17,6 +17,11 @@ static func run() -> Array[String]:
     assert(simulation.research("farming"))
     results.append("technology")
     simulation.era = 4
+    simulation._plan_buildings()
+    assert(simulation.has_building("现代电网"))
+    assert(simulation.has_building("空间站"))
+    assert(simulation.population_system.jobs["宇航员"] > 0)
+    assert(simulation.unit_behavior("科学家") == "科研产出")
     simulation.resources.metal = 500
     simulation.resources.fuel = 500
     simulation.resources.science = 500

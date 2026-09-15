@@ -23,6 +23,11 @@ func _init() -> void:
     simulation.trade()
     _check(simulation.diplomacy.action_log.size() == 2, "diplomacy actions", failures)
     simulation.era = 4
+    simulation._plan_buildings()
+    _check(simulation.has_building("现代电网"), "modern power grid", failures)
+    _check(simulation.has_building("空间站"), "space station building", failures)
+    _check(simulation.unit_behavior("科学家") == "科研产出", "scientist behavior", failures)
+    _check(simulation.population_system.jobs["宇航员"] > 0, "astronaut assignment", failures)
     simulation.resources.metal = 500
     simulation.resources.fuel = 500
     simulation.resources.science = 500
