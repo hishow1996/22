@@ -3,6 +3,7 @@ extends CanvasLayer
 
 var simulation: CivilizationSimulation
 var starmap: StarMapView
+var effect_player: EffectPlayer
 var status_label: Label
 var resources_label: Label
 var log_label: Label
@@ -18,10 +19,14 @@ var autosave_timer := 0.0
 var safe_top := 0.0
 var safe_bottom := 0.0
 
-func setup(source: CivilizationSimulation, map_view: StarMapView = null) -> void:
+func setup(source: CivilizationSimulation, map_view: StarMapView = null, effects: EffectPlayer = null) -> void:
     simulation = source
     starmap = map_view
+    effect_player = effects
     settings = SaveManager.load_settings()
+    Engine.max_fps = int(settings.get("fps", 30))
+    DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(settings.get("vsync", false)) else DisplayServer.VSYNC_DISABLED)
+    if effect_player != null: effect_player.effects_enabled = bool(settings.get("particles", true))
     simulation.changed.connect(refresh)
     simulation.event_logged.connect(add_log)
     _build_ui()
@@ -101,7 +106,7 @@ func _build_ui() -> void:
     var setting_box := VBoxContainer.new()
     settings_panel.add_child(setting_box)
     var title := Label.new(); title.text = "性能设置"; title.add_theme_font_size_override("font_size", 24); setting_box.add_child(title)
-    var fps := OptionButton.new(); fps.add_item("30 FPS"); fps.add_item("45 FPS"); fps.add_item("60 FPS"); fps.selected = 0; fps.item_selected.connect(_set_fps); setting_box.add_child(fps)
+    var fps := OptionButton.new(); fps.add_item("30 FPS"); fps.add_item("45 FPS"); fps.add_item("60 FPS"); fps.selected = max(0, [30, 45, 60].find(int(settings.get("fps", 30)))); fps.item_selected.connect(_set_fps); setting_box.add_child(fps)
     var vsync := CheckButton.new(); vsync.text = "垂直同步"; vsync.button_pressed = bool(settings.vsync); vsync.toggled.connect(_set_vsync); setting_box.add_child(vsync)
     var particles := CheckButton.new(); particles.text = "粒子效果"; particles.button_pressed = bool(settings.particles); particles.toggled.connect(_set_particles); setting_box.add_child(particles)
     var close := Button.new(); close.text = "关闭"; close.pressed.connect(_toggle_settings); setting_box.add_child(close)
@@ -209,6 +214,7 @@ func _set_vsync(enabled: bool) -> void:
 
 func _set_particles(enabled: bool) -> void:
     settings.particles = enabled
+    if effect_player != null: effect_player.effects_enabled = enabled
     SaveManager.save_settings(settings)
 
 func _show_diplomacy() -> void:

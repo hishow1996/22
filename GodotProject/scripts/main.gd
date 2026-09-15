@@ -30,7 +30,7 @@ func _ready() -> void:
     hud = CivilizationHud.new()
     hud.name = "CivilizationHud"
     add_child(hud)
-    hud.setup(simulation, starmap)
+    hud.setup(simulation, starmap, effect_player)
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_APPLICATION_PAUSED:

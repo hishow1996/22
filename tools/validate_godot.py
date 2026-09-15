@@ -38,7 +38,7 @@ assert 'event_fx.z_index = 40' in main
 for token in ('NOTIFICATION_APPLICATION_PAUSED', 'NOTIFICATION_APPLICATION_RESUMED', 'NOTIFICATION_WM_GO_BACK_REQUEST', 'SaveManager.save_game'):
     assert token in main, token
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
     assert token in hud, token
 assert 'handle_back_request' in hud
 save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8')

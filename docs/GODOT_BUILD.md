@@ -6,6 +6,8 @@
 
 Android 生命周期也已处理：切入后台会暂停模拟并自动保存，恢复时保留当前状态；系统返回键会依次关闭设置、文明信息或星图面板，面板关闭后再次返回会暂停游戏，再次返回才退出并保存。
 
+图形设置启动时会从 `user://civilization_settings.json` 恢复，FPS 和垂直同步立即应用，粒子开关会同步控制火箭、灾害和采集动画播放器；设置面板的当前选项会显示已保存值。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行
