@@ -20,6 +20,8 @@ godot --headless --path GodotProject --script res://tests/headless_runner.gd
 
 低端 Android 优化包括：地图 `queue_redraw()` 采用 100ms 节流，资源生产但视觉状态未变化时不重绘地图；建筑和人口节点使用时代/建筑/人口签名进行差异更新，避免每个模拟 tick 销毁并重建全部 Sprite；特效仍受粒子设置开关控制。
 
+纹理通过 `TextureCache` 按路径缓存，角色行走帧和特效帧按需加载，避免同一 PNG 被重复载入。地图绘制还会根据当前拖动/缩放位置裁剪到屏幕可见 Tile，减少远离屏幕区域的绘制调用。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行

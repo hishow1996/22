@@ -55,11 +55,7 @@ func _load_textures() -> void:
     names.append_array(["transition-shoreline", "transition-riverbank", "transition-cobblestone-road", "transition-stone-bridge", "transition-urban-plaza"])
     for name in names:
         var path := "res://assets/processed-" + name + ".png"
-        if ResourceLoader.exists(path): textures[name] = load(path)
-    for prefix in ["primordial-settler-walk", "space-astronaut-walk", "effect-resource-gathering", "effect-rocket-launch"]:
-        for frame in range(1, 5):
-            var frame_path := "res://assets/processed-" + prefix + "-%02d.png" % frame
-            if ResourceLoader.exists(frame_path): textures[prefix + str(frame)] = load(frame_path)
+        textures[name] = TextureCache.get_texture(path)
 
 func _process(delta: float) -> void:
     pulse += delta
@@ -78,8 +74,12 @@ func _process(delta: float) -> void:
 func _draw() -> void:
     if simulation == null: return
     var origin := Vector2(8, 72)
-    for y in simulation.HEIGHT:
-        for x in simulation.WIDTH:
+    var x_start := clampi(int((-position.x / camera_zoom - origin.x) / TILE_SIZE) - 2, 0, simulation.WIDTH - 1)
+    var x_end := clampi(int(((768.0 - position.x) / camera_zoom - origin.x) / TILE_SIZE) + 3, 1, simulation.WIDTH)
+    var y_start := clampi(int((-position.y / camera_zoom - origin.y) / TILE_SIZE) - 2, 0, simulation.HEIGHT - 1)
+    var y_end := clampi(int(((1365.0 - position.y) / camera_zoom - origin.y) / TILE_SIZE) + 3, 1, simulation.HEIGHT)
+    for y in range(y_start, y_end):
+        for x in range(x_start, x_end):
             var index := y * simulation.WIDTH + x
             var terrain_texture = textures.get(TERRAIN_NAMES[simulation.terrain[index]])
             var rect := Rect2(origin + Vector2(x, y) * TILE_SIZE, Vector2(TILE_SIZE + 0.4, TILE_SIZE + 0.4))
@@ -157,11 +157,14 @@ func refresh() -> void:
         add_child(person); population_nodes.append(person)
 
 func _make_frames(prefix: String) -> SpriteFrames:
-    if textures.get(prefix + "1") == null: return null
+    var first_path := "res://assets/processed-" + prefix + "-01.png"
+    if TextureCache.get_texture(first_path) == null: return null
     var frames := SpriteFrames.new()
     frames.remove_animation("default")
     frames.add_animation("walk")
     frames.set_animation_speed("walk", 6.0)
     frames.set_animation_loop("walk", true)
-    for index in range(1, 5): frames.add_frame("walk", textures.get(prefix + str(index)))
+    for index in range(1, 5):
+        var frame_path := "res://assets/processed-" + prefix + "-%02d.png" % index
+        frames.add_frame("walk", TextureCache.get_texture(frame_path))
     return frames

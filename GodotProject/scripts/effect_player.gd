@@ -8,7 +8,7 @@ func setup(simulation: CivilizationSimulation) -> void:
     for prefix in ["effect-resource-gathering", "effect-rocket-launch", "effect-weather-disaster"]:
         for frame in range(1, 5):
             var path := "res://assets/processed-" + prefix + "-%02d.png" % frame
-            if ResourceLoader.exists(path): textures[prefix + str(frame)] = load(path)
+            textures[prefix + str(frame)] = TextureCache.get_texture(path)
     simulation.events.event_raised.connect(_on_event)
 
 func _on_event(event_name: String, _intensity: float) -> void:

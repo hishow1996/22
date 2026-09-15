@@ -2,13 +2,13 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd')]
 required += [root / 'tests' / name for name in ('simulation_smoke.gd', 'headless_runner.gd')]
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 15
+assert len(gd) >= 16
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -28,7 +28,7 @@ simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encodin
 for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'try_crewed_exploration'):
     assert token in simulation, token
 world_view = (root / 'scripts' / 'world_view.gd').read_text(encoding='utf-8')
-for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'redraw_cooldown', 'last_visual_signature', 'primordial-settler-walk', 'AnimatedSprite2D', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
+for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'redraw_cooldown', 'last_visual_signature', 'x_start', 'y_start', 'primordial-settler-walk', 'AnimatedSprite2D', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
     assert token in world_view, token
 main = (root / 'scripts' / 'main.gd').read_text(encoding='utf-8')
 assert 'EventFx' in main and 'event_fx.setup' in main
@@ -63,6 +63,9 @@ for token in ('effect-resource-gathering', 'effect-rocket-launch', 'effect-weath
 diagnostics = (root / 'scripts' / 'diagnostics.gd').read_text(encoding='utf-8')
 for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'assets=OK'):
     assert token in diagnostics, token
+cache = (root / 'scripts' / 'texture_cache.gd').read_text(encoding='utf-8')
+for token in ('static var _cache', 'ResourceLoader.exists', '_cache.has', 'get_texture'):
+    assert token in cache, token
 ui_theme = (root / 'scripts' / 'ui_theme.gd').read_text(encoding='utf-8')
 for token in ('font_hover_color', 'font_pressed_color', 'set_stylebox("hover", "Button"', 'corner_radius_top_left = 0'):
     assert token in ui_theme, token
