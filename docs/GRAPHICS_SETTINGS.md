@@ -19,3 +19,5 @@
 在设置 Canvas 中添加 `GraphicsSettingsPanel`，绑定一个 `MobilePerformanceSettings`、六个 `Toggle`、两个 `Dropdown` 和一个摘要 `Text`。纹理下拉值使用 0–3，帧率下拉值依次代表 30、45、60 FPS。预设按钮分别绑定 `UseLowEndPreset` 与 `UseBalancedPreset`。
 
 推荐保留“恢复低端预设”和“恢复平衡预设”两个按钮，方便玩家在画质和流畅度之间快速切换。
+
+面板会在启用时自动补充纹理质量和帧率下拉选项，即使场景中没有预先填写 Dropdown 内容也能正常使用。可额外绑定 `ResetToRecommended` 按钮，将设置恢复为低端设备推荐值。

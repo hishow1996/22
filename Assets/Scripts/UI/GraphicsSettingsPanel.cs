@@ -30,6 +30,7 @@ namespace CivilizationSandbox.UI
 
         public void UseLowEndPreset() { settings.ApplyLowEndPreset(); RefreshControls(); }
         public void UseBalancedPreset() { settings.ApplyBalancedPreset(); RefreshControls(); }
+        public void ResetToRecommended() { settings.ApplyLowEndPreset(); RefreshControls(); }
 
         private void BindListeners(bool bind)
         {
@@ -60,6 +61,7 @@ namespace CivilizationSandbox.UI
         private void RefreshControls()
         {
             if (settings == null) return;
+            EnsureDropdownOptions();
             SetToggleValue(antiAliasingToggle, settings.AntiAliasingEnabled);
             SetToggleValue(shadowsToggle, settings.ShadowsEnabled);
             SetToggleValue(particlesToggle, settings.ParticlesEnabled);
@@ -68,6 +70,20 @@ namespace CivilizationSandbox.UI
             if (textureQualityDropdown != null) textureQualityDropdown.SetValueWithoutNotify(settings.TextureLimit);
             if (frameRateDropdown != null) frameRateDropdown.SetValueWithoutNotify(FrameRateToIndex(settings.TargetFrameRate));
             if (presetSummary != null) presetSummary.text = "帧率 " + settings.TargetFrameRate + " FPS｜纹理等级 " + settings.TextureLimit;
+        }
+
+        private void EnsureDropdownOptions()
+        {
+            if (textureQualityDropdown != null && textureQualityDropdown.options.Count == 0)
+            {
+                textureQualityDropdown.AddOptions(new System.Collections.Generic.List<string>
+                { "高", "中", "低", "极低" });
+            }
+            if (frameRateDropdown != null && frameRateDropdown.options.Count == 0)
+            {
+                frameRateDropdown.AddOptions(new System.Collections.Generic.List<string>
+                { "30 FPS", "45 FPS", "60 FPS" });
+            }
         }
 
         private static void SetToggleValue(Toggle toggle, bool value)
