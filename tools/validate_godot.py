@@ -19,7 +19,7 @@ assert len(assets) >= 78, len(assets)
 project = (root / 'project.godot').read_text(encoding='utf-8')
 scene = (root / 'main.tscn').read_text(encoding='utf-8')
 preset = (root / 'export_presets.cfg').read_text(encoding='utf-8')
-for token in ('run/main_scene="res://main.tscn"', 'size/viewport_width=768', 'size/viewport_height=1365', 'textures/canvas_textures/default_texture_filter=0'):
+for token in ('run/main_scene="res://main.tscn"', 'size/viewport_width=768', 'size/viewport_height=1365', 'handheld/orientation=1', 'orientation/portrait=true', 'orientation/landscape=false', 'textures/canvas_textures/default_texture_filter=0'):
     assert token in project, token
 assert 'script = ExtResource("1_main")' in scene
 for token in ('name="Android"', 'screen/handheld/orientation=1', 'package/unique_name='):

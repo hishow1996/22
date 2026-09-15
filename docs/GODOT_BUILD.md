@@ -1,5 +1,7 @@
 # Godot 4 构建说明
 
+本项目目标平台是 **Android 手机竖屏**，不是横屏项目。设计视口为 `768×1365`，导出预设锁定 portrait，HUD 使用 Android 安全区和大触控按钮适配刘海屏、导航栏及不同手机尺寸。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行
