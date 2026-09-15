@@ -181,7 +181,8 @@ func repair_tool(tool := "石斧") -> bool:
     return success
 
 func research(id: String) -> bool:
-    var result := technology.research(id, era, resources.science)
+    _check_era()
+    var result = technology.research(id, era, resources.science)
     if not result.ok:
         event_logged.emit("科技研究条件不足：" + result.name)
         return false
@@ -206,7 +207,7 @@ func trade() -> void:
 
 func resolve_war() -> void:
     var population_before := population
-    var winner := diplomacy.resolve_war()
+    var winner = diplomacy.resolve_war()
     population = max(4, population - max(1, int(population * 0.04)))
     resources.metal += 12
     event_logged.emit("外交行动：战争结束，胜者为 " + winner + "，人口损失 " + str(population_before - population) + "，获得 12 金属")

@@ -29,7 +29,7 @@ func trade(amount := 20) -> bool:
     return true
 
 func resolve_war() -> String:
-    var winner := nations[0].name if nations[0].power >= nations[1].power else nations[1].name
+    var winner = nations[0].name if nations[0].power >= nations[1].power else nations[1].name
     nations[0].relation -= 20
     nations[1].relation -= 20
     action_log.append("战争结束：胜者为 " + winner)

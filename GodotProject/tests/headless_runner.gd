@@ -6,8 +6,8 @@ func _init() -> void:
     _check(simulation.terrain.size() == 6144, "deterministic 64x96 terrain", failures)
     _check(simulation.population == 24, "initial population", failures)
     _check(simulation.unit_behavior("未知") == "待命", "unknown unit fallback", failures)
-    var initial_clock := simulation.environment.clock_text()
-    simulation.tick(48)
+    var initial_clock = simulation.environment.clock_text()
+    simulation.tick(49)
     _check(simulation.environment.clock_text() != initial_clock, "day night clock", failures)
     _check(simulation.environment.season() == "春季" or simulation.environment.season() == "夏季", "season cycle", failures)
     simulation.set_rain()
@@ -21,7 +21,7 @@ func _init() -> void:
     simulation.resources.science = 500
     _check(simulation.research("farming"), "farming research", failures)
     simulation.form_alliance()
-    var food_before_trade := simulation.resources.food
+    var food_before_trade = simulation.resources.food
     simulation.trade()
     _check(simulation.resources.food > food_before_trade, "trade rewards resources", failures)
     _check(simulation.diplomacy.action_log.size() == 2, "diplomacy actions", failures)
@@ -37,7 +37,7 @@ func _init() -> void:
     _check(simulation.try_launch_rocket(), "satellite mission", failures)
     _check(simulation.try_build_station(), "space station mission", failures)
     _check(simulation.resources.electricity > 0, "satellite unlocks electricity", failures)
-    var snapshot := simulation.snapshot()
+    var snapshot = simulation.snapshot()
     var restored := CivilizationSimulation.new(7)
     restored.restore(snapshot)
     _check(restored.resources.has("鸡蛋"), "save resource compatibility", failures)

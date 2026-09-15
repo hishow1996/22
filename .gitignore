@@ -22,3 +22,4 @@
 *.keystore
 *.aab
 *.apk
+.godot/

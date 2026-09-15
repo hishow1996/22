@@ -12,7 +12,7 @@ func set_quality_cap(value: int) -> void:
 func setup(simulation: CivilizationSimulation) -> void:
     for prefix in ["effect-resource-gathering", "effect-rocket-launch", "effect-weather-disaster"]:
         for frame in range(1, 5):
-            var path := "res://assets/processed-" + prefix + "-%02d.png" % frame
+            var path = "res://assets/processed-" + prefix + "-%02d.png" % frame
             textures[prefix + str(frame)] = TextureCache.get_texture(path)
     simulation.events.event_raised.connect(_on_event)
 
@@ -34,7 +34,7 @@ func _on_event(event_name: String, _intensity: float) -> void:
     for item in active_effects:
         if not is_instance_valid(item): active_effects.erase(item)
     if active_effects.size() >= max_active_effects:
-        var oldest := active_effects.pop_front()
+        var oldest = active_effects.pop_front()
         if is_instance_valid(oldest): oldest.queue_free()
     var sprite := AnimatedSprite2D.new()
     sprite.sprite_frames = frames

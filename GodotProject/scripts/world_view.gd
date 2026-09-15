@@ -55,7 +55,7 @@ func _load_textures() -> void:
     names.append_array(["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"])
     names.append_array(["transition-shoreline", "transition-riverbank", "transition-cobblestone-road", "transition-stone-bridge", "transition-urban-plaza"])
     for name in names:
-        var path := "res://assets/processed-" + name + ".png"
+        var path = "res://assets/processed-" + name + ".png"
         textures[name] = TextureCache.get_texture(path)
 
 func _process(delta: float) -> void:
@@ -138,7 +138,7 @@ func refresh() -> void:
     for node in animal_nodes:
         if node != null: node.visible = false
     var animal_types := ["animal-chicken", "animal-sheep", "animal-cow"]
-    var animal_count := min(6, simulation.agriculture.total_animals())
+    var animal_count = min(6, simulation.agriculture.total_animals())
     for index in animal_count:
         var animal: Sprite2D = animal_nodes[index] if index < animal_nodes.size() else Sprite2D.new()
         animal.texture = textures.get(animal_types[index % animal_types.size()])
@@ -165,7 +165,7 @@ func refresh() -> void:
         workshop.z_index = 24
         add_child(workshop)
         building_nodes.append(workshop)
-    var people := min(10, max(2, int(simulation.population / 8)))
+    var people = min(10, max(2, int(simulation.population / 8)))
     var unit_name := "primordial-settler"
     if simulation.era == 1: unit_name = "agrarian-farmer"
     elif simulation.era == 2: unit_name = "industrial-engineer"
@@ -202,7 +202,7 @@ func refresh() -> void:
         person.z_index = 30
 
 func _make_frames(prefix: String) -> SpriteFrames:
-    var first_path := "res://assets/processed-" + prefix + "-01.png"
+    var first_path = "res://assets/processed-" + prefix + "-01.png"
     if TextureCache.get_texture(first_path) == null: return null
     var frames := SpriteFrames.new()
     frames.remove_animation("default")
@@ -210,6 +210,6 @@ func _make_frames(prefix: String) -> SpriteFrames:
     frames.set_animation_speed("walk", 6.0)
     frames.set_animation_loop("walk", true)
     for index in range(1, 5):
-        var frame_path := "res://assets/processed-" + prefix + "-%02d.png" % index
+        var frame_path = "res://assets/processed-" + prefix + "-%02d.png" % index
         frames.add_frame("walk", TextureCache.get_texture(frame_path))
     return frames

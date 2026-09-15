@@ -158,7 +158,7 @@ func _calculate_safe_insets() -> void:
     safe_bottom = clamp(safe_bottom_px / float(window_size.y) * 1365.0, 0.0, 140.0)
 
 func _add_resource_icon(parent: Control, name: String, x: float) -> void:
-    var path := "res://assets/processed-hud-" + name + ".png"
+    var path = "res://assets/processed-hud-" + name + ".png"
     if not ResourceLoader.exists(path): return
     var icon := TextureRect.new()
     icon.texture = load(path)

@@ -36,8 +36,8 @@ func _draw() -> void:
         draw_circle(center, 42.0 + sin(Time.get_ticks_msec() * 0.01) * 8.0, Color(0.9, 0.25, 0.15, 0.2), false, 6.0)
     for index in notices.size():
         var notice: Dictionary = notices[index]
-        var radius := (2.2 - notice.life) * 70.0
-        var alpha := min(1.0, notice.life)
+        var radius = (2.2 - notice.life) * 70.0
+        var alpha = min(1.0, notice.life)
         var color := Color("#ffd35a", alpha)
         if str(notice.name).contains("meteor"): color = Color("#ed6b57", alpha)
         elif str(notice.name).contains("space"): color = Color("#8fe8ff", alpha)

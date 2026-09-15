@@ -10,41 +10,41 @@ var diagnostics := CivilizationDiagnostics.new()
 var runtime_settings := {}
 
 func _ready() -> void:
-    simulation = CivilizationSimulation.new(20260915)
-    diagnostics.run()
-    runtime_settings = DeviceProfile.resolve(SaveManager.load_settings())
-    SaveManager.save_settings(runtime_settings)
-    world_view = WorldView.new()
-    world_view.name = "WorldView"
-    add_child(world_view)
-    world_view.setup(simulation)
-    simulation.changed.connect(world_view.refresh)
-    event_fx = EventFx.new()
-    event_fx.name = "EventFx"
-    event_fx.z_index = 40
-    add_child(event_fx)
-    event_fx.setup(simulation)
-    effect_player = EffectPlayer.new()
-    effect_player.name = "EffectPlayer"
-    add_child(effect_player)
-    effect_player.setup(simulation)
-    effect_player.set_quality_cap(int(runtime_settings.get("effect_cap", 4)))
-    starmap = StarMapView.new()
-    starmap.name = "StarMap"
-    add_child(starmap)
-    starmap.setup(simulation)
-    hud = CivilizationHud.new()
-    hud.name = "CivilizationHud"
-    add_child(hud)
-    hud.setup(simulation, starmap, effect_player, diagnostics)
+	simulation = CivilizationSimulation.new(20260915)
+	diagnostics.run()
+	runtime_settings = DeviceProfile.resolve(SaveManager.load_settings())
+	SaveManager.save_settings(runtime_settings)
+	world_view = WorldView.new()
+	world_view.name = "WorldView"
+	add_child(world_view)
+	world_view.setup(simulation)
+	simulation.changed.connect(world_view.refresh)
+	event_fx = EventFx.new()
+	event_fx.name = "EventFx"
+	event_fx.z_index = 40
+	add_child(event_fx)
+	event_fx.setup(simulation)
+	effect_player = EffectPlayer.new()
+	effect_player.name = "EffectPlayer"
+	add_child(effect_player)
+	effect_player.setup(simulation)
+	effect_player.set_quality_cap(int(runtime_settings.get("effect_cap", 4)))
+	starmap = StarMapView.new()
+	starmap.name = "StarMap"
+	add_child(starmap)
+	starmap.setup(simulation)
+	hud = CivilizationHud.new()
+	hud.name = "CivilizationHud"
+	add_child(hud)
+	hud.setup(simulation, starmap, effect_player, diagnostics)
 
 func _notification(what: int) -> void:
-    if what == NOTIFICATION_APPLICATION_PAUSED:
-        simulation.paused = true
-        SaveManager.save_game(simulation)
-    elif what == NOTIFICATION_APPLICATION_RESUMED:
-        event_fx.queue_redraw()
-    elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
-        if hud != null and hud.handle_back_request(): return
-        SaveManager.save_game(simulation)
-        get_tree().quit()
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		simulation.paused = true
+		SaveManager.save_game(simulation)
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		event_fx.queue_redraw()
+	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if hud != null and hud.handle_back_request(): return
+		SaveManager.save_game(simulation)
+		get_tree().quit()
