@@ -11,6 +11,7 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private UnityEvent<int> onMeteorWarning;
         [SerializeField] private UnityEvent<int> onMeteorImpact;
         [SerializeField] private UnityEvent<int> onRocketLaunch;
+        [SerializeField] private UnityEvent<int> onEraAdvanced;
 
         private void OnEnable()
         {
@@ -31,6 +32,7 @@ namespace CivilizationSandbox.Runtime
                 case VfxEventType.MeteorWarning: onMeteorWarning?.Invoke(value.Intensity); break;
                 case VfxEventType.MeteorImpact: onMeteorImpact?.Invoke(value.Intensity); break;
                 case VfxEventType.RocketLaunch: onRocketLaunch?.Invoke(value.Intensity); break;
+                case VfxEventType.EraAdvanced: onEraAdvanced?.Invoke(value.Intensity); break;
             }
         }
     }

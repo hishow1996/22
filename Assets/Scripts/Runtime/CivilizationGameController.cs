@@ -5,6 +5,8 @@ using CivilizationSandbox.Population;
 using CivilizationSandbox.Persistence;
 using CivilizationSandbox.Settlement;
 using CivilizationSandbox.Simulation;
+using CivilizationSandbox.Technology;
+using System;
 using CivilizationSandbox.World;
 using UnityEngine;
 
@@ -27,6 +29,7 @@ namespace CivilizationSandbox.Runtime
         public VfxEventBridge VfxEvents { get; } = new VfxEventBridge();
         public PopulationAgent[] Agents { get; private set; }
         public PopulationMovementSystem Movement { get; } = new PopulationMovementSystem();
+        public event Action<Era> EraAdvanced;
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
         private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
@@ -86,7 +89,13 @@ namespace CivilizationSandbox.Runtime
             Environment.SetWeather(GodControls.Weather);
             economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier,
                 (resource, amount) => VfxEvents.Raise(VfxEventType.ResourceGathered, amount));
-            World.Progression.TryAdvance(World);
+            if (World.Progression.TryAdvance(World))
+            {
+                World.Technologies.UnlockEra(World.Progression.CurrentEra);
+                RebuildPresentation();
+                VfxEvents.Raise(VfxEventType.EraAdvanced, (int)World.Progression.CurrentEra + 1);
+                EraAdvanced?.Invoke(World.Progression.CurrentEra);
+            }
         }
 
         public void SaveGame()

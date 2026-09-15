@@ -14,6 +14,8 @@ namespace CivilizationSandbox.UI
         public int Electricity { get; private set; }
         public int Science { get; private set; }
         public bool CanLaunch { get; private set; }
+        public int UnlockedTechnologyCount { get; private set; }
+        public int AvailableTechnologyCount { get; private set; }
 
         public static PortraitHudState FromWorld(WorldState world)
         {
@@ -28,7 +30,9 @@ namespace CivilizationSandbox.UI
                 Metal = world.Resources.Get(ResourceType.Metal),
                 Electricity = world.Resources.Get(ResourceType.Electricity),
                 Science = world.Resources.Get(ResourceType.Science),
-                CanLaunch = world.SpaceProgram.CanLaunch(world)
+                CanLaunch = world.SpaceProgram.CanLaunch(world),
+                UnlockedTechnologyCount = world.Technologies.Unlocked.Count,
+                AvailableTechnologyCount = world.Technologies.CountAvailable(world.Progression.CurrentEra)
             };
             if (world.Progression.CurrentEra != Era.Space) state.SpaceMissionLabel = "尚未进入太空时代";
             return state;

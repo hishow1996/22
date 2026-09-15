@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using CivilizationSandbox.Nations;
+using CivilizationSandbox.Technology;
 
 namespace CivilizationSandbox.Simulation
 {
@@ -116,6 +117,7 @@ namespace CivilizationSandbox.Simulation
         public PopulationState Population { get; } = new PopulationState();
         public EraProgression Progression { get; } = new EraProgression();
         public SpaceProgramState SpaceProgram { get; } = new SpaceProgramState();
+        public TechnologyState Technologies { get; } = new TechnologyState();
         public PopulationSimulator PopulationSimulator { get; } = new PopulationSimulator();
         public List<NationState> Nations { get; } = new List<NationState>();
 
@@ -125,6 +127,7 @@ namespace CivilizationSandbox.Simulation
             Population.Count = 8;
             Resources.Add(ResourceType.Food, 40);
             Resources.Add(ResourceType.Wood, 40);
+            Technologies.UnlockEra(Era.Primordial);
         }
     }
 

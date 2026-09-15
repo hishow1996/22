@@ -24,6 +24,7 @@ namespace CivilizationSandbox.Persistence
                 data.hasLaunched,
                 data.hasDeepSpaceData,
                 data.discoveredBodies);
+            world.Technologies.Restore(data.unlockedTechnologyIds);
             return world;
         }
 

@@ -22,12 +22,16 @@ namespace CivilizationSandbox.Persistence
         public int spaceMission;
         public bool hasDeepSpaceData;
         public int discoveredBodies;
+        public string[] unlockedTechnologyIds = new string[0];
     }
 
     public static class SaveSystem
     {
         public static SaveData Capture(WorldState world)
         {
+            var unlocked = new string[world.Technologies.Unlocked.Count];
+            var index = 0;
+            foreach (var id in world.Technologies.Unlocked) unlocked[index++] = id;
             return new SaveData
             {
                 seed = world.Seed,
@@ -44,7 +48,8 @@ namespace CivilizationSandbox.Persistence
                 hasLaunched = world.SpaceProgram.HasLaunched,
                 spaceMission = (int)world.SpaceProgram.Mission,
                 hasDeepSpaceData = world.SpaceProgram.HasDeepSpaceData,
-                discoveredBodies = world.SpaceProgram.DiscoveredBodies
+                discoveredBodies = world.SpaceProgram.DiscoveredBodies,
+                unlockedTechnologyIds = unlocked
             };
         }
 
