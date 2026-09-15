@@ -50,9 +50,10 @@ namespace CivilizationSandbox.Simulation
             return true;
         }
 
-        internal void RestoreProgress(SpaceMission mission, bool hasDeepSpaceData, int discoveredBodies)
+        internal void RestoreProgress(SpaceMission mission, bool hasLaunched, bool hasDeepSpaceData, int discoveredBodies)
         {
             Mission = mission;
+            HasLaunched = hasLaunched;
             HasDeepSpaceData = hasDeepSpaceData;
             DiscoveredBodies = Math.Max(0, Math.Min(StarMap.Count, discoveredBodies));
             for (var i = 0; i < DiscoveredBodies; i++) StarMap[i].Discovered = true;

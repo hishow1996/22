@@ -21,6 +21,7 @@ namespace CivilizationSandbox.Persistence
             world.SpaceProgram.HasLaunchSite = data.hasLaunchSite;
             world.SpaceProgram.RestoreProgress(
                 (SpaceMission)Math.Max(0, Math.Min((int)SpaceMission.CrewedExploration, data.spaceMission)),
+                data.hasLaunched,
                 data.hasDeepSpaceData,
                 data.discoveredBodies);
             return world;

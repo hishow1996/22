@@ -23,6 +23,8 @@ namespace CivilizationSandbox.UI
         public bool TryBuildSpaceStation() => game.World.SpaceProgram.TryBuildSpaceStation(game.World);
         public bool TryLaunchDeepSpaceProbe() => game.World.SpaceProgram.TryLaunchDeepSpaceProbe(game.World);
         public bool TryLaunchCrewedExploration() => game.World.SpaceProgram.TryLaunchCrewedExploration(game.World);
+        public void SaveGame() => game.SaveGame();
+        public bool LoadGame() => game.LoadGame();
 
         private void Awake()
         {

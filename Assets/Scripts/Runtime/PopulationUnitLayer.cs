@@ -17,6 +17,13 @@ namespace CivilizationSandbox.Runtime
             SyncUnits();
         }
 
+        public void ResetUnits()
+        {
+            foreach (var presenter in presenters.Values)
+                if (presenter != null) Destroy(presenter.gameObject);
+            presenters.Clear();
+        }
+
         private void Update()
         {
             if (game != null && game.World != null) SyncUnits();

@@ -2,6 +2,7 @@ using CivilizationSandbox.GodControls;
 using CivilizationSandbox.Nations;
 using CivilizationSandbox.Environment;
 using CivilizationSandbox.Population;
+using CivilizationSandbox.Persistence;
 using CivilizationSandbox.Settlement;
 using CivilizationSandbox.Simulation;
 using CivilizationSandbox.World;
@@ -17,6 +18,7 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private int daysPerSecond = 1;
         [SerializeField] private WorldTilemapRenderer mapRenderer;
         [SerializeField] private PopulationUnitLayer populationUnitLayer;
+        [SerializeField] private float autoSaveIntervalSeconds = 30f;
 
         public WorldState World { get; private set; }
         public GeneratedWorld Map { get; private set; }
@@ -31,6 +33,7 @@ namespace CivilizationSandbox.Runtime
         private readonly SettlementLayoutPlanner settlementPlanner = new SettlementLayoutPlanner();
         private readonly EconomySimulator economySimulator = new EconomySimulator();
         private float dayAccumulator;
+        private float autoSaveTimer;
 
         public void StartRain()
         {
@@ -62,17 +65,18 @@ namespace CivilizationSandbox.Runtime
             Agents = CreateStartingAgents(World.Population.Count);
             Movement.Seed(Agents, mapWidth, mapHeight);
             if (populationUnitLayer != null) populationUnitLayer.Initialize(this);
-            if (mapRenderer != null)
-            {
-                mapRenderer.Render(Map);
-                mapRenderer.RenderOverlays(overlayPlanner.Plan(Map, World.Progression.CurrentEra));
-                mapRenderer.RenderBuildings(settlementPlanner.Plan(Map, World.Progression.CurrentEra));
-            }
+            RebuildPresentation();
         }
 
         private void Update()
         {
             if (World == null || GodControls.IsPaused) return;
+            autoSaveTimer += Time.deltaTime;
+            if (autoSaveIntervalSeconds > 0f && autoSaveTimer >= autoSaveIntervalSeconds)
+            {
+                SaveGame();
+                autoSaveTimer = 0f;
+            }
             dayAccumulator += Time.deltaTime * GodControls.TimeScale * daysPerSecond;
             var elapsedDays = Mathf.FloorToInt(dayAccumulator);
             if (elapsedDays <= 0) return;
@@ -83,6 +87,42 @@ namespace CivilizationSandbox.Runtime
             economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier,
                 (resource, amount) => VfxEvents.Raise(VfxEventType.ResourceGathered, amount));
             World.Progression.TryAdvance(World);
+        }
+
+        public void SaveGame()
+        {
+            if (World == null) return;
+            SaveFileService.Save(World);
+        }
+
+        public bool LoadGame()
+        {
+            if (!SaveFileService.TryLoad(out var data)) return false;
+            World = SaveRestore.Restore(data);
+            Map = worldGenerator.Generate(mapWidth, mapHeight, World.Seed);
+            Agents = CreateStartingAgents(World.Population.Count);
+            Movement.Seed(Agents, mapWidth, mapHeight);
+            if (populationUnitLayer != null)
+            {
+                populationUnitLayer.ResetUnits();
+                populationUnitLayer.Initialize(this);
+            }
+            RebuildPresentation();
+            autoSaveTimer = 0f;
+            return true;
+        }
+
+        private void RebuildPresentation()
+        {
+            if (mapRenderer == null || Map == null) return;
+            mapRenderer.Render(Map);
+            mapRenderer.RenderOverlays(overlayPlanner.Plan(Map, World.Progression.CurrentEra));
+            mapRenderer.RenderBuildings(settlementPlanner.Plan(Map, World.Progression.CurrentEra));
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused) SaveGame();
         }
 
         private static PopulationAgent[] CreateStartingAgents(int count)
