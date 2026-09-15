@@ -2,12 +2,12 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd')]
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 5
+assert len(gd) >= 10
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -23,4 +23,7 @@ for token in ('run/main_scene="res://main.tscn"', 'size/viewport_width=768', 'si
 assert 'script = ExtResource("1_main")' in scene
 for token in ('name="Android"', 'screen/handheld/orientation=1', 'package/unique_name='):
     assert token in preset, token
-print(f'PASS: {len(gd)} GDScript files, {len(assets)} PNG assets, Android preset present')
+simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encoding='utf-8')
+for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'try_crewed_exploration'):
+    assert token in simulation, token
+print(f'PASS: {len(gd)} GDScript files, {len(assets)} PNG assets, expanded systems and Android preset present')

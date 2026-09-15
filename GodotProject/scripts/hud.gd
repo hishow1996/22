@@ -41,6 +41,9 @@ func _build_ui() -> void:
     _button(controls, "加食物", simulation.grant_food)
     _button(controls, "降雨", simulation.set_rain)
     _button(controls, "陨石", simulation.trigger_meteor)
+    _button(controls, "外交", _show_diplomacy)
+    _button(controls, "科技树", _show_technology)
+    _button(controls, "职业", _show_jobs)
     _button(controls, "保存", func(): add_log("存档成功" if SaveManager.save_game(simulation) else "存档失败"))
     _button(controls, "读取", func(): add_log("读取成功" if SaveManager.load_game(simulation) else "没有存档"))
     var space := HBoxContainer.new()
@@ -49,6 +52,7 @@ func _build_ui() -> void:
     _button(space, "发射火箭", simulation.try_launch_rocket)
     _button(space, "空间站", simulation.try_build_station)
     _button(space, "深空探测", simulation.try_deep_space)
+    _button(space, "载人探索", simulation.try_crewed_exploration)
     _button(space, "设置", _toggle_settings)
     log_label = Label.new()
     log_label.position = Vector2(16, 1060); log_label.size = Vector2(736, 90)
@@ -104,3 +108,17 @@ func _set_vsync(enabled: bool) -> void:
 func _set_particles(enabled: bool) -> void:
     settings.particles = enabled
     SaveManager.save_settings(settings)
+
+func _show_diplomacy() -> void:
+    simulation.form_alliance()
+    add_log("外交面板：已尝试结成联盟")
+
+func _show_technology() -> void:
+    var available := simulation.technology.available(simulation.era)
+    if available.is_empty():
+        add_log("科技树：当前没有可研究项目")
+    else:
+        add_log("科技树：可研究 " + str(available[0].name) + "，消耗 " + str(available[0].cost) + " 科研点")
+
+func _show_jobs() -> void:
+    add_log("职业分配：" + simulation.population_system.summary())

@@ -21,12 +21,18 @@ var discoveries: Array[String] = []
 var buildings: Array[Dictionary] = []
 var terrain: Array[int] = []
 var rng := RandomNumberGenerator.new()
+var diplomacy := DiplomacySystem.new()
+var technology := TechnologySystem.new()
+var population_system := PopulationSystem.new()
+var space_program := SpaceProgram.new()
+var events := EventBridge.new()
 
 func _init(world_seed: int = 20260915) -> void:
     seed_value = world_seed
     rng.seed = seed_value
     _generate_world()
     _plan_buildings()
+    population_system.assign_for_era(era, population)
 
 func _generate_world() -> void:
     terrain.clear()
@@ -34,16 +40,11 @@ func _generate_world() -> void:
         for x in WIDTH:
             var value := (x * 17 + y * 31 + seed_value) % 100
             var type := 1
-            if value < 12:
-                type = 0
-            elif value < 22:
-                type = 2
-            elif value < 34:
-                type = 3
-            elif value < 42:
-                type = 4
-            elif (x + y * 3) % 29 == 0:
-                type = 5
+            if value < 12: type = 0
+            elif value < 22: type = 2
+            elif value < 34: type = 3
+            elif value < 42: type = 4
+            elif (x + y * 3) % 29 == 0: type = 5
             terrain.append(type)
 
 func _plan_buildings() -> void:
@@ -53,13 +54,12 @@ func _plan_buildings() -> void:
     if era >= 2: types.append("工坊"); types.append("工厂")
     if era >= 3: types.append("研究中心")
     if era >= 4: types.append("发射场")
-    for i in types.size():
-        buildings.append({"type": types[i], "x": 18 + i * 8, "y": 24 + (i % 3) * 10})
+    for i in types.size(): buildings.append({"type": types[i], "x": 18 + i * 8, "y": 24 + (i % 3) * 10})
 
 func tick(days: int = 1) -> void:
     if paused or days <= 0: return
     elapsed_days += days
-    var production := 1.0 if weather != "暴雨" else 0.65
+    var production := 0.65 if weather == "暴雨" else 1.0
     resources.food += int(population * 0.7 * production)
     resources.wood += int(max(1, population * 0.22))
     resources.stone += int(max(1, population * 0.12))
@@ -68,6 +68,10 @@ func tick(days: int = 1) -> void:
     if era >= 3: resources.electricity += int(max(1, population * 0.18))
     if era >= 4: resources.fuel += int(max(1, population * 0.1))
     resources.food -= int(population * 0.35)
+    population_system.tick(population)
+    population_system.assign_for_era(era, population)
+    var diplomacy_event := diplomacy.tick(days, era)
+    if not diplomacy_event.is_empty(): event_logged.emit(diplomacy_event)
     if resources.food < 0:
         population = max(4, population - 1)
         resources.food = 0
@@ -83,7 +87,9 @@ func _check_era() -> void:
     if era < 4 and resources.science >= thresholds[era + 1]:
         era += 1
         _plan_buildings()
+        population_system.assign_for_era(era, population)
         event_logged.emit("时代跃迁：" + ERA_NAMES[era])
+        events.raise_event("era_advanced", float(era + 1))
 
 func grant_food(amount := 50) -> void:
     resources.food += amount
@@ -93,6 +99,7 @@ func grant_food(amount := 50) -> void:
 func set_rain() -> void:
     weather = "降雨"
     event_logged.emit("天气变化：降雨开始")
+    events.raise_event("rain_started")
     changed.emit()
 
 func trigger_meteor() -> void:
@@ -100,34 +107,41 @@ func trigger_meteor() -> void:
     population = max(4, population - max(1, int(population * 0.05)))
     resources.stone += 20
     event_logged.emit("灾害事件：陨石撞击")
+    events.raise_event("meteor_impact")
     changed.emit()
 
-func try_launch_rocket() -> bool:
-    if era < 4 or resources.metal < 60 or resources.fuel < 30:
-        event_logged.emit("火箭发射条件不足")
+func research(id: String) -> bool:
+    var result := technology.research(id, era, resources.science)
+    if not result.ok:
+        event_logged.emit("科技研究条件不足：" + result.name)
         return false
-    resources.metal -= 60
-    resources.fuel -= 30
-    _record_discovery("卫星")
+    resources.science -= result.cost
+    event_logged.emit("科技突破：" + result.name)
+    events.raise_event("technology_researched")
+    changed.emit()
     return true
 
-func try_build_station() -> bool:
-    if era < 4 or resources.metal < 120 or resources.electricity < 80:
-        event_logged.emit("空间站建造条件不足")
-        return false
-    resources.metal -= 120
-    resources.electricity -= 80
-    _record_discovery("空间站")
-    return true
+func form_alliance() -> void:
+    if diplomacy.form_alliance(): event_logged.emit("外交行动：结成联盟")
 
-func try_deep_space() -> bool:
-    if era < 4 or resources.fuel < 100 or resources.science < 180:
-        event_logged.emit("深空探测条件不足")
-        return false
-    resources.fuel -= 100
-    resources.science -= 180
-    _record_discovery("深空探测")
-    return true
+func trade() -> void:
+    if diplomacy.trade(): event_logged.emit("外交行动：完成贸易")
+
+func resolve_war() -> void:
+    event_logged.emit("外交行动：战争结束，胜者为 " + diplomacy.resolve_war())
+
+func try_launch_rocket() -> bool: return _launch_space("卫星")
+func try_build_station() -> bool: return _launch_space("空间站")
+func try_deep_space() -> bool: return _launch_space("深空探测")
+func try_crewed_exploration() -> bool: return _launch_space("载人探索")
+
+func _launch_space(name: String) -> bool:
+    var result := space_program.launch(name, era, resources, resources.science)
+    event_logged.emit(result.message)
+    if result.ok:
+        _record_discovery(name)
+        events.raise_event("space_mission")
+    return result.ok
 
 func _record_discovery(name: String) -> void:
     if not discoveries.has(name): discoveries.append(name)
@@ -135,7 +149,7 @@ func _record_discovery(name: String) -> void:
     changed.emit()
 
 func snapshot() -> Dictionary:
-    return {"seed": seed_value, "days": elapsed_days, "era": era, "population": population, "paused": paused, "time_scale": time_scale, "weather": weather, "resources": resources, "discoveries": discoveries}
+    return {"seed": seed_value, "days": elapsed_days, "era": era, "population": population, "paused": paused, "time_scale": time_scale, "weather": weather, "resources": resources, "discoveries": discoveries, "diplomacy": diplomacy.snapshot(), "technology": technology.snapshot(), "population_jobs": population_system.snapshot(), "space": space_program.snapshot()}
 
 func restore(data: Dictionary) -> void:
     seed_value = int(data.get("seed", seed_value))
@@ -147,6 +161,10 @@ func restore(data: Dictionary) -> void:
     weather = str(data.get("weather", "晴朗"))
     resources = data.get("resources", resources)
     discoveries = data.get("discoveries", [])
+    diplomacy.restore(data.get("diplomacy", {}))
+    technology.restore(data.get("technology", ["fire"]))
+    population_system.restore(data.get("population_jobs", {}))
+    space_program.restore(data.get("space", {}))
     rng.seed = seed_value
     _generate_world()
     _plan_buildings()
