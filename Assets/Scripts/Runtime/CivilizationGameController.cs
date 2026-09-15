@@ -43,6 +43,12 @@ namespace CivilizationSandbox.Runtime
         private float dayAccumulator;
         private float autoSaveTimer;
 
+        public void Configure(WorldTilemapRenderer renderer, PopulationUnitLayer units)
+        {
+            mapRenderer = renderer;
+            populationUnitLayer = units;
+        }
+
         public void StartRain()
         {
             GodControls.SetWeather(WeatherType.Rain);

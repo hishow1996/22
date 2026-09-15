@@ -30,6 +30,13 @@ namespace CivilizationSandbox.World
         [SerializeField] private TileBase researchLabTile;
         [SerializeField] private TileBase launchSiteTile;
 
+        public void Configure(Tilemap terrain, Tilemap overlays, Tilemap buildings)
+        {
+            targetTilemap = terrain;
+            overlayTilemap = overlays;
+            buildingTilemap = buildings;
+        }
+
         public void Render(GeneratedWorld world)
         {
             if (targetTilemap == null || world == null) return;

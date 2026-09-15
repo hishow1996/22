@@ -13,6 +13,12 @@ namespace CivilizationSandbox.UI
         public PortraitHudState CurrentState { get; private set; }
         public event Action<PortraitHudState> StateChanged;
 
+        public void Configure(CivilizationGameController controller, Canvas canvas)
+        {
+            game = controller;
+            portraitCanvas = canvas;
+        }
+
         public void TogglePause() => game.GodControls.TogglePause();
         public void SetSpeed(float speed) => game.GodControls.SetTimeScale(speed);
         public void GrantFood() => game.GodControls.GrantResource(game.World, ResourceType.Food, 25);
