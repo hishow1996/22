@@ -59,6 +59,9 @@ func _load_textures() -> void:
 
 func _process(delta: float) -> void:
     pulse += delta
+    if simulation != null:
+        var light := simulation.environment.light_factor()
+        modulate = Color(light, light, light, 1.0)
     redraw_cooldown -= delta
     if redraw_pending and redraw_cooldown <= 0.0:
         queue_redraw()

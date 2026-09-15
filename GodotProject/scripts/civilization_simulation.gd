@@ -26,10 +26,12 @@ var technology := TechnologySystem.new()
 var population_system := PopulationSystem.new()
 var space_program := SpaceProgram.new()
 var events := EventBridge.new()
+var environment := EnvironmentSystem.new()
 
 func _init(world_seed: int = 20260915) -> void:
     seed_value = world_seed
     rng.seed = seed_value
+    environment = EnvironmentSystem.new(seed_value)
     _generate_world()
     _plan_buildings()
     population_system.assign_for_era(era, population)
@@ -59,7 +61,9 @@ func _plan_buildings() -> void:
 func tick(days: int = 1) -> void:
     if paused or days <= 0: return
     elapsed_days += days
-    var production := 0.65 if weather == "暴雨" else 1.0
+    environment.advance(days)
+    weather = environment.weather()
+    var production := environment.production_factor()
     resources.food += int(population * 0.7 * production)
     resources.wood += int(max(1, population * 0.22))
     resources.stone += int(max(1, population * 0.12))
@@ -98,12 +102,14 @@ func grant_food(amount := 50) -> void:
     changed.emit()
 
 func set_rain() -> void:
-    weather = "降雨"
+    environment.set_weather("降雨")
+    weather = environment.weather()
     event_logged.emit("天气变化：降雨开始")
     events.raise_event("rain_started")
     changed.emit()
 
 func trigger_meteor() -> void:
+    environment.set_weather("暴雨")
     weather = "陨石灾害"
     population = max(4, population - max(1, int(population * 0.05)))
     resources.stone += 20
@@ -150,7 +156,7 @@ func _record_discovery(name: String) -> void:
     changed.emit()
 
 func snapshot() -> Dictionary:
-    return {"seed": seed_value, "days": elapsed_days, "era": era, "population": population, "paused": paused, "time_scale": time_scale, "weather": weather, "resources": resources, "discoveries": discoveries, "diplomacy": diplomacy.snapshot(), "technology": technology.snapshot(), "population_jobs": population_system.snapshot(), "space": space_program.snapshot()}
+    return {"seed": seed_value, "days": elapsed_days, "era": era, "population": population, "paused": paused, "time_scale": time_scale, "weather": weather, "resources": resources, "discoveries": discoveries, "diplomacy": diplomacy.snapshot(), "technology": technology.snapshot(), "population_jobs": population_system.snapshot(), "space": space_program.snapshot(), "environment": environment.snapshot()}
 
 func restore(data: Dictionary) -> void:
     seed_value = int(data.get("seed", seed_value))
@@ -160,6 +166,7 @@ func restore(data: Dictionary) -> void:
     paused = bool(data.get("paused", false))
     time_scale = float(data.get("time_scale", 1.0))
     weather = str(data.get("weather", "晴朗"))
+    environment.restore(data.get("environment", {}))
     resources = data.get("resources", resources)
     discoveries = data.get("discoveries", [])
     diplomacy.restore(data.get("diplomacy", {}))

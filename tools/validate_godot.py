@@ -2,13 +2,13 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd', 'device_profile.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd', 'device_profile.gd', 'environment_system.gd')]
 required += [root / 'tests' / name for name in ('simulation_smoke.gd', 'headless_runner.gd')]
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 17
+assert len(gd) >= 18
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -25,7 +25,7 @@ assert 'script = ExtResource("1_main")' in scene
 for token in ('name="Android"', 'screen/handheld/orientation=1', 'package/unique_name='):
     assert token in preset, token
 simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encoding='utf-8')
-for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'try_crewed_exploration'):
+for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'EnvironmentSystem', 'try_crewed_exploration'):
     assert token in simulation, token
 world_view = (root / 'scripts' / 'world_view.gd').read_text(encoding='utf-8')
 for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'redraw_cooldown', 'last_visual_signature', 'x_start', 'y_start', 'population_nodes[index]', 'visible = false', 'primordial-settler-walk', 'AnimatedSprite2D', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
@@ -51,7 +51,7 @@ save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8'
 for token in ('SAVE_VERSION := 2', 'saved_at', '_migrate_legacy_save', 'data.get("world", data)'):
     assert token in save_manager, token
 fx = (root / 'scripts' / 'event_fx.gd').read_text(encoding='utf-8')
-for token in ('降雨', '陨石灾害', 'draw_line', 'draw_circle'):
+for token in ('降雨', '大雪', '多云', '陨石灾害', 'draw_line', 'draw_circle'):
     assert token in fx, token
 starmap = (root / 'scripts' / 'starmap_view.gd').read_text(encoding='utf-8')
 for token in ('卫星', '空间站', '深空探测', '载人探索', 'simulation.space_program.missions', 'draw_line'):
@@ -70,6 +70,9 @@ for token in ('max_active_effects', 'active_effects', 'pop_front', 'set_quality_
 diagnostics = (root / 'scripts' / 'diagnostics.gd').read_text(encoding='utf-8')
 for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'texture_cache_entries', 'assets=OK'):
     assert token in diagnostics, token
+environment = (root / 'scripts' / 'environment_system.gd').read_text(encoding='utf-8')
+for token in ('SEASONS', 'WEATHER_NAMES', 'light_factor', 'production_factor', 'clock_text', 'snapshot'):
+    assert token in environment, token
 cache = (root / 'scripts' / 'texture_cache.gd').read_text(encoding='utf-8')
 for token in ('static var _cache', 'ResourceLoader.exists', '_cache.has', 'get_texture'):
     assert token in cache, token

@@ -5,6 +5,12 @@ func _init() -> void:
     var simulation := CivilizationSimulation.new(20260915)
     _check(simulation.terrain.size() == 6144, "deterministic 64x96 terrain", failures)
     _check(simulation.population == 24, "initial population", failures)
+    var initial_clock := simulation.environment.clock_text()
+    simulation.tick(48)
+    _check(simulation.environment.clock_text() != initial_clock, "day night clock", failures)
+    _check(simulation.environment.season() == "春季" or simulation.environment.season() == "夏季", "season cycle", failures)
+    simulation.set_rain()
+    _check(simulation.environment.weather() == "降雨", "weather override", failures)
     simulation.resources.science = 500
     _check(simulation.research("farming"), "farming research", failures)
     simulation.form_alliance()

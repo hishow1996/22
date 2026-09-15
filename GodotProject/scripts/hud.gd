@@ -149,8 +149,8 @@ func _add_resource_icon(parent: Control, name: String, x: float) -> void:
 
 func refresh() -> void:
     if simulation == null or status_label == null: return
-    status_label.text = "文明沙盒 · " + simulation.ERA_NAMES[simulation.era] + " · 第 " + str(simulation.elapsed_days) + " 天 · 人口 " + str(simulation.population)
-    resources_label.text = "食物 %d  木材 %d  石材 %d  金属 %d  电力 %d  燃料 %d  科研 %d  | %s" % [simulation.resources.food, simulation.resources.wood, simulation.resources.stone, simulation.resources.metal, simulation.resources.electricity, simulation.resources.fuel, simulation.resources.science, simulation.weather]
+    status_label.text = "文明沙盒 · " + simulation.ERA_NAMES[simulation.era] + " · 第 " + str(simulation.elapsed_days) + " 天 · 人口 " + str(simulation.population) + " · " + simulation.environment.clock_text()
+    resources_label.text = "食物 %d  木材 %d  石材 %d  金属 %d  电力 %d  燃料 %d  科研 %d  | %s · %s" % [simulation.resources.food, simulation.resources.wood, simulation.resources.stone, simulation.resources.metal, simulation.resources.electricity, simulation.resources.fuel, simulation.environment.season(), simulation.weather]
     if log_label != null: log_label.text = "\n".join(logs.slice(max(0, logs.size() - 4)))
     if space_status != null:
         space_status.text = "太空任务：" + ", ".join(simulation.space_program.discovered_bodies) if not simulation.space_program.discovered_bodies.is_empty() else "太空任务：尚未完成"
