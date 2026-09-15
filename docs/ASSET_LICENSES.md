@@ -27,3 +27,7 @@
 ## 农业时代生成素材
 
 `agrarian-farmer.png`、`agrarian-farm.png` 和 `agrarian-granary.png` 来自本项目生成流程，使用当前账户与图像生成工具条款。它们不是从第三方游戏、网站或搜索图片复制而来；正式商业发布前仍需按实际发布渠道和工具最新条款复核商业使用与署名要求。
+
+## 工业时代生成素材
+
+`industrial-engineer.png`、`industrial-factory.png` 和 `industrial-steamworks.png` 来自本项目生成流程，使用当前账户与图像生成工具条款。它们不是从第三方游戏、网站或搜索图片复制而来；正式商业发布前仍需按实际发布渠道和工具最新条款复核商业使用与署名要求。

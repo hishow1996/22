@@ -9,6 +9,9 @@ outputs = {
     'agrarian-farmer.png': 256,
     'agrarian-farm.png': 384,
     'agrarian-granary.png': 256,
+    'industrial-engineer.png': 256,
+    'industrial-factory.png': 384,
+    'industrial-steamworks.png': 384,
 }
 for name, size in outputs.items():
     source = root / name

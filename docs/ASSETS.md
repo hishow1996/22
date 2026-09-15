@@ -36,3 +36,13 @@
 | 粮仓 | `Assets/Art/Generated/agrarian-granary.png` | `processed-agrarian-granary.png` | 农业时代储存与贸易建筑 |
 
 农业时代资源沿用原始时代的像素密度、左上光源、右下投影和深蓝紫轮廓，同时增加麦田金色、砖墙暖红和绿色农作物，以体现文明从部落采集进入定居农业的视觉升级。
+
+## 工业时代第一批正式资源
+
+| 资源 | 原始文件 | Unity 使用文件 | 用途 |
+|---|---|---|---|
+| 工程师 | `Assets/Art/Generated/industrial-engineer.png` | `processed-industrial-engineer.png` | 工业时代职业单位 |
+| 工厂 | `Assets/Art/Generated/industrial-factory.png` | `processed-industrial-factory.png` | 金属与工业生产建筑 |
+| 蒸汽动力设施 | `Assets/Art/Generated/industrial-steamworks.png` | `processed-industrial-steamworks.png` | 电力/蒸汽科技建筑 |
+
+工业时代资源加入钢铁、铜、砖墙、煤炭、齿轮、烟囱和蒸汽等视觉语言，让地图从农业生产自然升级为工业化城市。
