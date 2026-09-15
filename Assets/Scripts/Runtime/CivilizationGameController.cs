@@ -1,5 +1,6 @@
 using CivilizationSandbox.GodControls;
 using CivilizationSandbox.Nations;
+using CivilizationSandbox.Environment;
 using CivilizationSandbox.Population;
 using CivilizationSandbox.Simulation;
 using CivilizationSandbox.World;
@@ -18,6 +19,7 @@ namespace CivilizationSandbox.Runtime
         public WorldState World { get; private set; }
         public GeneratedWorld Map { get; private set; }
         public GodControlState GodControls { get; } = new GodControlState();
+        public EnvironmentSimulator Environment { get; } = new EnvironmentSimulator();
         public PopulationAgent[] Agents { get; private set; }
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
@@ -42,7 +44,8 @@ namespace CivilizationSandbox.Runtime
             if (elapsedDays <= 0) return;
             dayAccumulator -= elapsedDays;
             World.PopulationSimulator.Tick(World, elapsedDays);
-            economySimulator.Tick(World, Agents, elapsedDays);
+            Environment.SetWeather(GodControls.Weather);
+            economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier);
             World.Progression.TryAdvance(World);
         }
 

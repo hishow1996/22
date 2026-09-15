@@ -7,6 +7,11 @@ namespace CivilizationSandbox.Simulation
     {
         public void Tick(WorldState world, PopulationAgent[] agents, int elapsedDays)
         {
+            Tick(world, agents, elapsedDays, 1f);
+        }
+
+        public void Tick(WorldState world, PopulationAgent[] agents, int elapsedDays, float foodProductionMultiplier)
+        {
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (agents == null) throw new ArgumentNullException(nameof(agents));
             if (elapsedDays <= 0) return;
@@ -17,11 +22,11 @@ namespace CivilizationSandbox.Simulation
                 switch (agent.Job)
                 {
                     case Job.Gatherer:
-                        world.Resources.Add(ResourceType.Food, elapsedDays);
+                        world.Resources.Add(ResourceType.Food, (int)(elapsedDays * foodProductionMultiplier));
                         world.Resources.Add(ResourceType.Wood, elapsedDays);
                         break;
                     case Job.Farmer:
-                        world.Resources.Add(ResourceType.Food, elapsedDays * 2);
+                        world.Resources.Add(ResourceType.Food, (int)(elapsedDays * 2 * foodProductionMultiplier));
                         break;
                     case Job.Builder:
                         world.Resources.Add(ResourceType.Stone, elapsedDays);
