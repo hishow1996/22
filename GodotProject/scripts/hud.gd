@@ -132,6 +132,8 @@ func _build_ui() -> void:
     _button(craft_grid, "石镐", func(): _craft_and_refresh("石镐"))
     _button(craft_grid, "铁锄", func(): _craft_and_refresh("铁锄"))
     _button(craft_grid, "铁镐", func(): _craft_and_refresh("铁镐"))
+    _button(craft_grid, "修复石斧", func(): _repair_and_refresh("石斧"))
+    _button(craft_grid, "修复铁锄", func(): _repair_and_refresh("铁锄"))
     var craft_close := Button.new(); craft_close.text = "关闭制作面板"; craft_close.pressed.connect(_toggle_crafting); crafting_box.add_child(craft_close)
     info_panel = PanelContainer.new()
     info_panel.position = Vector2(70, 250); info_panel.size = Vector2(620, 420)
@@ -169,7 +171,7 @@ func _add_resource_icon(parent: Control, name: String, x: float) -> void:
 func refresh() -> void:
     if simulation == null or status_label == null: return
     status_label.text = "文明沙盒 · " + simulation.ERA_NAMES[simulation.era] + " · 第 " + str(simulation.elapsed_days) + " 天 · 人口 " + str(simulation.population) + " · " + simulation.environment.clock_text()
-    resources_label.text = "食物 %d  木材 %d  石材 %d  金属 %d  电力 %d  燃料 %d  科研 %d  | %s · %s" % [simulation.resources.food, simulation.resources.wood, simulation.resources.stone, simulation.resources.metal, simulation.resources.electricity, simulation.resources.fuel, simulation.environment.season(), simulation.weather]
+    resources_label.text = "食物 %d  木材 %d  石材 %d  金属 %d  鸡蛋 %d  牛奶 %d  羊毛 %d  科研 %d  | %s · %s" % [simulation.resources.food, simulation.resources.wood, simulation.resources.stone, simulation.resources.metal, simulation.resources["鸡蛋"], simulation.resources["牛奶"], simulation.resources["羊毛"], simulation.resources.science, simulation.environment.season(), simulation.weather]
     if log_label != null: log_label.text = "\n".join(logs.slice(max(0, logs.size() - 4)))
     if space_status != null:
         space_status.text = "太空任务：" + ", ".join(simulation.space_program.discovered_bodies) if not simulation.space_program.discovered_bodies.is_empty() else "太空任务：尚未完成"
@@ -291,4 +293,8 @@ func _toggle_crafting() -> void:
 
 func _craft_and_refresh(tool: String) -> void:
     simulation.craft_tool(tool)
+    _show_info("制作系统\n" + simulation.agriculture.summary())
+
+func _repair_and_refresh(tool: String) -> void:
+    simulation.repair_tool(tool)
     _show_info("制作系统\n" + simulation.agriculture.summary())

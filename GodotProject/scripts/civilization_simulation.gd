@@ -16,7 +16,7 @@ var population := 24
 var paused := false
 var time_scale := 1.0
 var weather := "晴朗"
-var resources := {"food": 180, "wood": 120, "stone": 80, "metal": 0, "electricity": 0, "fuel": 0, "science": 0}
+var resources := {"food": 180, "wood": 120, "stone": 80, "metal": 0, "electricity": 0, "fuel": 0, "science": 0, "鸡蛋": 0, "牛奶": 0, "羊毛": 0}
 var discoveries: Array[String] = []
 var buildings: Array[Dictionary] = []
 var terrain: Array[int] = []
@@ -76,6 +76,8 @@ func tick(days: int = 1) -> void:
     resources.food -= int(population * 0.35)
     var farm_output := agriculture.advance(days, environment.season(), environment.weather())
     resources.food += int(farm_output.food)
+    for product in farm_output.products:
+        resources[product] = int(resources.get(product, 0)) + int(farm_output.products[product])
     population_system.tick(population)
     population_system.assign_for_era(era, population)
     var diplomacy_event := diplomacy.tick(days, era)
@@ -127,9 +129,10 @@ func plant_field() -> bool:
     return success
 
 func harvest_fields() -> bool:
-    var amount := agriculture.harvest()
+    var harvest := agriculture.harvest()
+    var amount := int(harvest.food)
     resources.food += amount
-    event_logged.emit("农业：收获 " + str(amount) + " 食物" if amount > 0 else "农业：暂无成熟作物")
+    event_logged.emit("农业：收获 " + str(harvest.crop) + "，获得 " + str(amount) + " 食物" if amount > 0 else "农业：暂无成熟作物")
     changed.emit()
     return amount > 0
 
@@ -149,6 +152,12 @@ func breed_animals() -> bool:
 func craft_tool(tool := "石斧") -> bool:
     var success := agriculture.craft(tool, era, resources)
     event_logged.emit("制作：获得 " + tool if success else "制作：材料或时代条件不足")
+    changed.emit()
+    return success
+
+func repair_tool(tool := "石斧") -> bool:
+    var success := agriculture.repair(tool, resources)
+    event_logged.emit("制作：" + tool + " 已修复" if success else "制作：木材不足或工具无需修复")
     changed.emit()
     return success
 
@@ -203,7 +212,9 @@ func restore(data: Dictionary) -> void:
     weather = str(data.get("weather", "晴朗"))
     environment.restore(data.get("environment", {}))
     agriculture.restore(data.get("agriculture", {}))
-    resources = data.get("resources", resources)
+    var saved_resources: Dictionary = data.get("resources", {})
+    for key in resources.keys():
+        if saved_resources.has(key): resources[key] = saved_resources[key]
     discoveries = data.get("discoveries", [])
     diplomacy.restore(data.get("diplomacy", {}))
     technology.restore(data.get("technology", ["fire"]))
