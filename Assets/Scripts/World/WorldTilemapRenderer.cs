@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CivilizationSandbox.Settlement;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -20,6 +21,14 @@ namespace CivilizationSandbox.World
         [SerializeField] private TileBase cobblestoneRoadTile;
         [SerializeField] private TileBase stoneBridgeTile;
         [SerializeField] private TileBase urbanPlazaTile;
+        [SerializeField] private Tilemap buildingTilemap;
+        [SerializeField] private TileBase campfireTile;
+        [SerializeField] private TileBase hutTile;
+        [SerializeField] private TileBase farmTile;
+        [SerializeField] private TileBase workshopTile;
+        [SerializeField] private TileBase factoryTile;
+        [SerializeField] private TileBase researchLabTile;
+        [SerializeField] private TileBase launchSiteTile;
 
         public void Render(GeneratedWorld world)
         {
@@ -53,6 +62,29 @@ namespace CivilizationSandbox.World
                 WorldOverlayType.CobblestoneRoad => cobblestoneRoadTile,
                 WorldOverlayType.StoneBridge => stoneBridgeTile,
                 WorldOverlayType.UrbanPlaza => urbanPlazaTile,
+                _ => null
+            };
+        }
+
+        public void RenderBuildings(IEnumerable<BuildingPlacement> placements)
+        {
+            if (buildingTilemap == null || placements == null) return;
+            buildingTilemap.ClearAllTiles();
+            foreach (var placement in placements)
+                buildingTilemap.SetTile(placement.Position, ResolveBuildingTile(placement.Type));
+        }
+
+        private TileBase ResolveBuildingTile(BuildingType type)
+        {
+            return type switch
+            {
+                BuildingType.Campfire => campfireTile,
+                BuildingType.Hut => hutTile,
+                BuildingType.Farm => farmTile,
+                BuildingType.Workshop => workshopTile,
+                BuildingType.Factory => factoryTile,
+                BuildingType.ResearchLab => researchLabTile,
+                BuildingType.LaunchSite => launchSiteTile,
                 _ => null
             };
         }

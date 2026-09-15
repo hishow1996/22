@@ -116,3 +116,7 @@
 | 资源采集特效 | `effect-resource-gathering-sheet.png` 与 `processed-effect-resource-gathering-01..04.png` | 采集完成反馈 |
 | 火箭发射特效 | `effect-rocket-launch-sheet.png` 与 `processed-effect-rocket-launch-01..04.png` | 发射流程反馈 |
 | 天气灾害特效 | `effect-weather-disaster-sheet.png` 与 `processed-effect-weather-disaster-01..04.png` | 降雨、闪电、陨石效果 |
+
+## 时代建筑布局层
+
+`SettlementLayoutPlanner` 和 `WorldTilemapRenderer.buildingTilemap` 负责把时代建筑放入独立建筑层。当前可绑定素材包括原始木屋、农业农田、工业工厂、现代研究中心和太空火箭发射场；篝火、工坊等建筑可继续补充专用 Tile。

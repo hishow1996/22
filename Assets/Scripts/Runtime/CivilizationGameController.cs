@@ -2,6 +2,7 @@ using CivilizationSandbox.GodControls;
 using CivilizationSandbox.Nations;
 using CivilizationSandbox.Environment;
 using CivilizationSandbox.Population;
+using CivilizationSandbox.Settlement;
 using CivilizationSandbox.Simulation;
 using CivilizationSandbox.World;
 using UnityEngine;
@@ -25,6 +26,7 @@ namespace CivilizationSandbox.Runtime
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
         private readonly WorldOverlayPlanner overlayPlanner = new WorldOverlayPlanner();
+        private readonly SettlementLayoutPlanner settlementPlanner = new SettlementLayoutPlanner();
         private readonly EconomySimulator economySimulator = new EconomySimulator();
         private float dayAccumulator;
 
@@ -60,6 +62,7 @@ namespace CivilizationSandbox.Runtime
             {
                 mapRenderer.Render(Map);
                 mapRenderer.RenderOverlays(overlayPlanner.Plan(Map, World.Progression.CurrentEra));
+                mapRenderer.RenderBuildings(settlementPlanner.Plan(Map, World.Progression.CurrentEra));
             }
         }
 
