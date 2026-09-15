@@ -87,3 +87,15 @@
 | 森林 Tile | `processed-terrain-forest.png` | `TerrainType.Forest` |
 | 山地 Tile | `processed-terrain-mountain.png` | `TerrainType.Mountain` |
 | 河流 Tile | `processed-terrain-river.png` | `TerrainType.River` |
+
+## 地形过渡与道路资源
+
+| 资源 | 文件 | 用途 |
+|---|---|---|
+| 过渡图集 | `Assets/Art/Generated/world-transition-tiles.png` | 六种边缘/道路源图集 |
+| 海岸线 | `processed-transition-shoreline.png` | 海洋与陆地边缘 |
+| 河岸 | `processed-transition-riverbank.png` | 河流与草地边缘 |
+| 草地泥地边缘 | `processed-transition-grass-dirt-edge.png` | 地形过渡 |
+| 石板道路 | `processed-transition-cobblestone-road.png` | 聚落道路 |
+| 石桥 | `processed-transition-stone-bridge.png` | 河流连接 |
+| 城市广场 | `processed-transition-urban-plaza.png` | 现代城市铺装 |

@@ -75,3 +75,15 @@ for index, name in enumerate(terrain_names):
     tile = tile.resize((256, 256), Image.Resampling.NEAREST)
     tile.save(root / f'processed-terrain-{name}.png', optimize=True)
     print('world-terrain-tiles.png', name, '->', tile.size)
+
+transition_sheet = Image.open(root / 'world-transition-tiles.png').convert('RGBA')
+transition_names = ['shoreline', 'riverbank', 'grass-dirt-edge', 'cobblestone-road', 'stone-bridge', 'urban-plaza']
+cell_width = transition_sheet.width // 3
+cell_height = transition_sheet.height // 2
+for index, name in enumerate(transition_names):
+    x = index % 3
+    y = index // 3
+    tile = transition_sheet.crop((x * cell_width, y * cell_height, (x + 1) * cell_width, (y + 1) * cell_height))
+    tile = tile.resize((256, 256), Image.Resampling.NEAREST)
+    tile.save(root / f'processed-transition-{name}.png', optimize=True)
+    print('world-transition-tiles.png', name, '->', tile.size)
