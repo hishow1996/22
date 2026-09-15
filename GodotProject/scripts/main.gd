@@ -4,6 +4,7 @@ var simulation: CivilizationSimulation
 var world_view: WorldView
 var hud: CivilizationHud
 var event_fx: EventFx
+var starmap: StarMapView
 
 func _ready() -> void:
     simulation = CivilizationSimulation.new(20260915)
@@ -16,7 +17,11 @@ func _ready() -> void:
     event_fx.name = "EventFx"
     add_child(event_fx)
     event_fx.setup(simulation)
+    starmap = StarMapView.new()
+    starmap.name = "StarMap"
+    add_child(starmap)
+    starmap.setup(simulation)
     hud = CivilizationHud.new()
     hud.name = "CivilizationHud"
     add_child(hud)
-    hud.setup(simulation)
+    hud.setup(simulation, starmap)

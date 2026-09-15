@@ -2,6 +2,7 @@ class_name CivilizationHud
 extends CanvasLayer
 
 var simulation: CivilizationSimulation
+var starmap: StarMapView
 var status_label: Label
 var resources_label: Label
 var log_label: Label
@@ -14,8 +15,9 @@ var settings := {"fps": 30, "vsync": false, "particles": true}
 var tick_accumulator := 0.0
 var autosave_timer := 0.0
 
-func setup(source: CivilizationSimulation) -> void:
+func setup(source: CivilizationSimulation, map_view: StarMapView = null) -> void:
     simulation = source
+    starmap = map_view
     settings = SaveManager.load_settings()
     simulation.changed.connect(refresh)
     simulation.event_logged.connect(add_log)
@@ -66,6 +68,7 @@ func _build_ui() -> void:
     _button(space, "空间站", simulation.try_build_station)
     _button(space, "深空探测", simulation.try_deep_space)
     _button(space, "载人探索", simulation.try_crewed_exploration)
+    _button(space, "星图", _toggle_starmap)
     _button(space, "设置", _toggle_settings)
     space_status = Label.new()
     space_status.position = Vector2(16, 1015)
@@ -152,6 +155,9 @@ func _set_speed(value: float) -> void:
 
 func _toggle_settings() -> void:
     settings_panel.visible = not settings_panel.visible
+
+func _toggle_starmap() -> void:
+    if starmap != null: starmap.toggle()
 
 func _set_fps(index: int) -> void:
     settings.fps = [30, 45, 60][index]
