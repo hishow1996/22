@@ -29,6 +29,7 @@ namespace CivilizationSandbox.Runtime
         public VfxEventBridge VfxEvents { get; } = new VfxEventBridge();
         public PopulationAgent[] Agents { get; private set; }
         public PopulationMovementSystem Movement { get; } = new PopulationMovementSystem();
+        public PopulationJobManager Jobs { get; } = new PopulationJobManager();
         public event Action<Era> EraAdvanced;
         public event Action<string> TechnologyResearched;
 
@@ -137,6 +138,7 @@ namespace CivilizationSandbox.Runtime
             World.Nations.Add(new NationState("Sol", Era.Primordial));
             Map = worldGenerator.Generate(mapWidth, mapHeight, seed);
             Agents = CreateStartingAgents(World.Population.Count);
+            Jobs.AssignForEra(Agents, World.Progression.CurrentEra);
             Movement.Seed(Agents, mapWidth, mapHeight);
             if (populationUnitLayer != null) populationUnitLayer.Initialize(this);
             RebuildPresentation();
@@ -169,6 +171,7 @@ namespace CivilizationSandbox.Runtime
             if (World.Progression.TryAdvance(World))
             {
                 World.Technologies.UnlockEra(World.Progression.CurrentEra);
+                Jobs.AssignForEra(Agents, World.Progression.CurrentEra);
                 RebuildPresentation();
                 VfxEvents.Raise(VfxEventType.EraAdvanced, (int)World.Progression.CurrentEra + 1);
                 EraAdvanced?.Invoke(World.Progression.CurrentEra);
@@ -188,6 +191,7 @@ namespace CivilizationSandbox.Runtime
             EnsureDefaultNations();
             Map = worldGenerator.Generate(mapWidth, mapHeight, World.Seed);
             Agents = CreateStartingAgents(World.Population.Count);
+            Jobs.AssignForEra(Agents, World.Progression.CurrentEra);
             Movement.Seed(Agents, mapWidth, mapHeight);
             if (populationUnitLayer != null)
             {
