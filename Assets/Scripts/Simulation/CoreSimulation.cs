@@ -86,7 +86,7 @@ namespace CivilizationSandbox.Simulation
         public void SetEraForTests(Era era) => CurrentEra = era;
     }
 
-    public sealed class SpaceProgramState
+    public sealed partial class SpaceProgramState
     {
         public bool HasLaunchSite { get; set; }
         public bool HasLaunched { get; private set; }
@@ -104,6 +104,7 @@ namespace CivilizationSandbox.Simulation
             world.Resources.TrySpend(ResourceType.Fuel, 50);
             world.Resources.TrySpend(ResourceType.Metal, 50);
             HasLaunched = true;
+            Mission = SpaceMission.Satellite;
             return true;
         }
     }

@@ -17,6 +17,8 @@ namespace CivilizationSandbox.UI
         public void SetRain() => game.GodControls.SetWeather(WeatherType.Rain);
         public void TriggerMeteor() => game.GodControls.TriggerDisaster();
         public bool TryLaunchRocket() => game.World.SpaceProgram.TryLaunch(game.World);
+        public bool TryBuildSpaceStation() => game.World.SpaceProgram.TryBuildSpaceStation(game.World);
+        public bool TryLaunchDeepSpaceProbe() => game.World.SpaceProgram.TryLaunchDeepSpaceProbe(game.World);
 
         private void Awake()
         {
