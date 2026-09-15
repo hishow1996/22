@@ -3,6 +3,8 @@ extends Node2D
 
 var textures := {}
 var effects_enabled := true
+const MAX_ACTIVE_EFFECTS := 4
+var active_effects: Array[AnimatedSprite2D] = []
 
 func setup(simulation: CivilizationSimulation) -> void:
     for prefix in ["effect-resource-gathering", "effect-rocket-launch", "effect-weather-disaster"]:
@@ -26,6 +28,11 @@ func _on_event(event_name: String, _intensity: float) -> void:
     for index in range(1, 5):
         if textures.get(prefix + str(index)) != null: frames.add_frame("event", textures[prefix + str(index)])
     if frames.get_frame_count("event") == 0: return
+    for item in active_effects:
+        if not is_instance_valid(item): active_effects.erase(item)
+    if active_effects.size() >= MAX_ACTIVE_EFFECTS:
+        var oldest := active_effects.pop_front()
+        if is_instance_valid(oldest): oldest.queue_free()
     var sprite := AnimatedSprite2D.new()
     sprite.sprite_frames = frames
     sprite.animation = "event"
@@ -33,5 +40,6 @@ func _on_event(event_name: String, _intensity: float) -> void:
     sprite.scale = Vector2.ONE * 0.25
     sprite.z_index = 45
     add_child(sprite)
+    active_effects.append(sprite)
     sprite.play()
-    sprite.animation_finished.connect(sprite.queue_free)
+    sprite.animation_finished.connect(func(): active_effects.erase(sprite); sprite.queue_free())

@@ -118,8 +118,8 @@ func refresh() -> void:
             node.queue_free()
     for node in population_nodes:
         if node != null:
-            node.queue_free()
-    building_nodes.clear(); population_nodes.clear()
+            node.visible = false
+    building_nodes.clear()
     var origin := Vector2(8, 72)
     var texture_by_type := {"篝火": "campfire", "木屋": "primordial-hut", "农田": "agrarian-farm", "工坊": "industrial-factory", "工厂": "industrial-factory", "研究中心": "modern-research-center", "发射场": "space-launch-site"}
     for building in simulation.buildings:
@@ -138,23 +138,34 @@ func refresh() -> void:
     elif simulation.era == 3: unit_name = "modern-scientist"
     elif simulation.era >= 4: unit_name = "space-astronaut"
     for index in people:
-        var person: Node2D
+        var person: Node2D = population_nodes[index] if index < population_nodes.size() else null
         var animation_prefix := "primordial-settler-walk" if simulation.era < 4 else "space-astronaut-walk"
-        var animated := AnimatedSprite2D.new()
         var frames := _make_frames(animation_prefix)
-        if frames != null:
-            animated.sprite_frames = frames
-            animated.animation = "walk"
-            animated.play()
-            person = animated
+        if person == null:
+            var animated := AnimatedSprite2D.new()
+            if frames != null:
+                animated.sprite_frames = frames
+                animated.animation = "walk"
+                animated.play()
+                person = animated
+            else:
+                var sprite := Sprite2D.new()
+                sprite.texture = textures.get(unit_name)
+                person = sprite
+            add_child(person)
+            population_nodes.append(person)
         else:
-            var sprite := Sprite2D.new()
-            sprite.texture = textures.get(unit_name)
-            person = sprite
+            var animated_person := person as AnimatedSprite2D
+            var static_person := person as Sprite2D
+            if animated_person != null and frames != null:
+                animated_person.sprite_frames = frames
+                animated_person.play("walk")
+            elif static_person != null:
+                static_person.texture = textures.get(unit_name)
+        person.visible = true
         person.position = origin + Vector2(27 + (index % 5) * 2.8, 46 + (index / 5) * 3.0) * TILE_SIZE
         person.scale = Vector2.ONE * 0.025
         person.z_index = 30
-        add_child(person); population_nodes.append(person)
 
 func _make_frames(prefix: String) -> SpriteFrames:
     var first_path := "res://assets/processed-" + prefix + "-01.png"

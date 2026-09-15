@@ -17,6 +17,7 @@ func run() -> String:
         if not ResourceLoader.exists("res://assets/" + asset): missing_assets.append(asset)
     var lines := ["Civilization Sandbox diagnostics", "viewport=768x1365 portrait", "time=" + Time.get_datetime_string_from_system()]
     lines.append("required_assets=%d missing=%d" % [required_assets.size(), missing_assets.size()])
+    lines.append("texture_cache_entries=" + str(TextureCache.size()))
     if missing_assets.is_empty(): lines.append("assets=OK")
     else: lines.append("missing=" + ",".join(missing_assets))
     last_report = "\n".join(lines)

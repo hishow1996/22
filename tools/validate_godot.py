@@ -28,7 +28,7 @@ simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encodin
 for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'try_crewed_exploration'):
     assert token in simulation, token
 world_view = (root / 'scripts' / 'world_view.gd').read_text(encoding='utf-8')
-for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'redraw_cooldown', 'last_visual_signature', 'x_start', 'y_start', 'primordial-settler-walk', 'AnimatedSprite2D', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
+for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'redraw_cooldown', 'last_visual_signature', 'x_start', 'y_start', 'population_nodes[index]', 'visible = false', 'primordial-settler-walk', 'AnimatedSprite2D', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
     assert token in world_view, token
 main = (root / 'scripts' / 'main.gd').read_text(encoding='utf-8')
 assert 'EventFx' in main and 'event_fx.setup' in main
@@ -60,8 +60,10 @@ for token in ('extends SceneTree', 'HEADLESS PASS', 'save restore', 'diplomacy a
 effect_player = (root / 'scripts' / 'effect_player.gd').read_text(encoding='utf-8')
 for token in ('effect-resource-gathering', 'effect-rocket-launch', 'effect-weather-disaster', 'AnimatedSprite2D', 'animation_finished'):
     assert token in effect_player, token
+for token in ('MAX_ACTIVE_EFFECTS', 'active_effects', 'pop_front'):
+    assert token in effect_player, token
 diagnostics = (root / 'scripts' / 'diagnostics.gd').read_text(encoding='utf-8')
-for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'assets=OK'):
+for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'texture_cache_entries', 'assets=OK'):
     assert token in diagnostics, token
 cache = (root / 'scripts' / 'texture_cache.gd').read_text(encoding='utf-8')
 for token in ('static var _cache', 'ResourceLoader.exists', '_cache.has', 'get_texture'):
