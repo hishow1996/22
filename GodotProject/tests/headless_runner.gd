@@ -11,6 +11,12 @@ func _init() -> void:
     _check(simulation.environment.season() == "春季" or simulation.environment.season() == "夏季", "season cycle", failures)
     simulation.set_rain()
     _check(simulation.environment.weather() == "降雨", "weather override", failures)
+    _check(simulation.plant_field(), "plant field", failures)
+    simulation.resources.wood = 50
+    simulation.resources.stone = 50
+    _check(simulation.craft_tool("石斧"), "craft stone axe", failures)
+    _check(simulation.feed_animals(), "feed animals", failures)
+    _check(simulation.breed_animals(), "breed animals", failures)
     simulation.resources.science = 500
     _check(simulation.research("farming"), "farming research", failures)
     simulation.form_alliance()
@@ -27,6 +33,7 @@ func _init() -> void:
     restored.restore(snapshot)
     _check(restored.era == 4, "save restore era", failures)
     _check(restored.discoveries.size() == 2, "save restore discoveries", failures)
+    _check(restored.agriculture.fields.size() == 1, "save restore agriculture", failures)
     for asset in ["processed-terrain-ocean.png", "processed-campfire.png", "processed-space-launch-site.png"]:
         _check(ResourceLoader.exists("res://assets/" + asset), "asset " + asset, failures)
     if failures.is_empty():

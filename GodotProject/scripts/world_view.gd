@@ -4,8 +4,9 @@ extends Node2D
 const TILE_SIZE := 12.0
 const TERRAIN_NAMES := ["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"]
 var simulation: CivilizationSimulation
-var building_nodes: Array[Sprite2D] = []
+var building_nodes: Array[Node2D] = []
 var population_nodes: Array[Node2D] = []
+var animal_nodes: Array[Sprite2D] = []
 var textures := {}
 var pulse := 0.0
 var camera_zoom := 1.0
@@ -50,7 +51,7 @@ func _clamp_position() -> void:
     position.y = clamp(position.y, -680.0, 160.0)
 
 func _load_textures() -> void:
-    var names := ["campfire", "primordial-hut", "agrarian-farm", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
+    var names := ["campfire", "primordial-hut", "agrarian-farm", "farm-tilled", "barn", "animal-pasture", "animal-chicken", "animal-sheep", "animal-cow", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
     names.append_array(["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"])
     names.append_array(["transition-shoreline", "transition-riverbank", "transition-cobblestone-road", "transition-stone-bridge", "transition-urban-plaza"])
     for name in names:
@@ -112,7 +113,7 @@ func _draw_overlays(origin: Vector2) -> void:
 
 func refresh() -> void:
     if simulation == null: return
-    var signature := str(simulation.era) + ":" + str(simulation.buildings) + ":" + str(min(10, max(2, int(simulation.population / 8))))
+    var signature := str(simulation.era) + ":" + str(simulation.buildings) + ":" + str(min(10, max(2, int(simulation.population / 8)))) + ":" + str(simulation.agriculture.total_animals()) + ":" + str(simulation.agriculture.ready_count())
     if signature == last_visual_signature: return
     last_visual_signature = signature
     redraw_pending = true
@@ -124,7 +125,7 @@ func refresh() -> void:
             node.visible = false
     building_nodes.clear()
     var origin := Vector2(8, 72)
-    var texture_by_type := {"篝火": "campfire", "木屋": "primordial-hut", "农田": "agrarian-farm", "工坊": "industrial-factory", "工厂": "industrial-factory", "研究中心": "modern-research-center", "发射场": "space-launch-site"}
+    var texture_by_type := {"篝火": "campfire", "木屋": "primordial-hut", "农田": "farm-tilled", "工坊": "industrial-factory", "工厂": "industrial-factory", "研究中心": "modern-research-center", "发射场": "space-launch-site"}
     for building in simulation.buildings:
         var node := Sprite2D.new()
         var texture_name: String = texture_by_type.get(str(building.type), "primordial-hut")
@@ -134,6 +135,18 @@ func refresh() -> void:
         node.z_index = 20
         node.set_meta("kind", str(building.type))
         add_child(node); building_nodes.append(node)
+    for node in animal_nodes:
+        if node != null: node.visible = false
+    var animal_types := ["animal-chicken", "animal-sheep", "animal-cow"]
+    var animal_count := min(6, simulation.agriculture.total_animals())
+    for index in animal_count:
+        var animal: Sprite2D = animal_nodes[index] if index < animal_nodes.size() else Sprite2D.new()
+        animal.texture = textures.get(animal_types[index % animal_types.size()])
+        animal.position = origin + Vector2(42 + (index % 3) * 3.0, 58 + (index / 3) * 3.0) * TILE_SIZE
+        animal.scale = Vector2.ONE * 0.022
+        animal.z_index = 25
+        animal.visible = true
+        if index >= animal_nodes.size(): add_child(animal); animal_nodes.append(animal)
     var people := min(10, max(2, int(simulation.population / 8)))
     var unit_name := "primordial-settler"
     if simulation.era == 1: unit_name = "agrarian-farmer"

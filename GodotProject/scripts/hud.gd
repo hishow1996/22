@@ -98,6 +98,11 @@ func _build_ui() -> void:
     _button(systems, "进行贸易", simulation.trade)
     _button(systems, "解决战争", simulation.resolve_war)
     _button(systems, "运行诊断", _show_diagnostics)
+    _button(systems, "种地", simulation.plant_field)
+    _button(systems, "收获", simulation.harvest_fields)
+    _button(systems, "喂养", simulation.feed_animals)
+    _button(systems, "繁殖", simulation.breed_animals)
+    _button(systems, "制作石斧", _craft_stone_axe)
     log_label = Label.new()
     log_label.position = Vector2(16, 960 - safe_bottom); log_label.size = Vector2(736, 110)
     log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -248,7 +253,7 @@ func _research_next() -> void:
 
 func _show_jobs() -> void:
     add_log("职业分配：" + simulation.population_system.summary())
-    _show_info("文明信息\n人口：" + str(simulation.population) + "\n职业：" + simulation.population_system.summary() + "\n国家：" + str(simulation.diplomacy.nations.size()))
+    _show_info("文明信息\n人口：" + str(simulation.population) + "\n职业：" + simulation.population_system.summary() + "\n国家：" + str(simulation.diplomacy.nations.size()) + "\n农业：" + simulation.agriculture.summary())
 
 func _show_info(text: String) -> void:
     if info_label != null:
@@ -260,3 +265,7 @@ func _show_diagnostics() -> void:
         add_log("诊断器未初始化")
         return
     _show_info(diagnostics.run())
+
+func _craft_stone_axe() -> void:
+    simulation.craft_tool("石斧")
+    _show_info("制作系统\n" + simulation.agriculture.summary())

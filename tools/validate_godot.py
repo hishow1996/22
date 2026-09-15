@@ -2,13 +2,13 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd', 'device_profile.gd', 'environment_system.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd', 'device_profile.gd', 'environment_system.gd', 'agriculture_system.gd')]
 required += [root / 'tests' / name for name in ('simulation_smoke.gd', 'headless_runner.gd')]
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 18
+assert len(gd) >= 19
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -25,7 +25,7 @@ assert 'script = ExtResource("1_main")' in scene
 for token in ('name="Android"', 'screen/handheld/orientation=1', 'package/unique_name='):
     assert token in preset, token
 simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encoding='utf-8')
-for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'EnvironmentSystem', 'try_crewed_exploration'):
+for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'EnvironmentSystem', 'AgricultureSystem', 'plant_field', 'craft_tool'):
     assert token in simulation, token
 world_view = (root / 'scripts' / 'world_view.gd').read_text(encoding='utf-8')
 for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'redraw_cooldown', 'last_visual_signature', 'x_start', 'y_start', 'population_nodes[index]', 'visible = false', 'primordial-settler-walk', 'AnimatedSprite2D', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
@@ -39,7 +39,7 @@ assert 'event_fx.z_index = 40' in main
 for token in ('NOTIFICATION_APPLICATION_PAUSED', 'NOTIFICATION_APPLICATION_RESUMED', 'NOTIFICATION_WM_GO_BACK_REQUEST', 'SaveManager.save_game'):
     assert token in main, token
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_show_diagnostics', '_toggle_starmap'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'plant_field', 'harvest_fields', 'feed_animals', 'breed_animals', 'craft_tool', 'autosave_timer', '_show_info', '_show_diagnostics', '_toggle_starmap'):
     assert token in hud, token
 assert 'handle_back_request' in hud
 device_profile = (root / 'scripts' / 'device_profile.gd').read_text(encoding='utf-8')
@@ -73,6 +73,9 @@ for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'texture_ca
 environment = (root / 'scripts' / 'environment_system.gd').read_text(encoding='utf-8')
 for token in ('SEASONS', 'WEATHER_NAMES', 'light_factor', 'production_factor', 'clock_text', 'snapshot'):
     assert token in environment, token
+agriculture = (root / 'scripts' / 'agriculture_system.gd').read_text(encoding='utf-8')
+for token in ('fields', 'animals', 'recipes', 'plant', 'harvest', 'breed', 'craft', 'tool_durability'):
+    assert token in agriculture, token
 cache = (root / 'scripts' / 'texture_cache.gd').read_text(encoding='utf-8')
 for token in ('static var _cache', 'ResourceLoader.exists', '_cache.has', 'get_texture'):
     assert token in cache, token

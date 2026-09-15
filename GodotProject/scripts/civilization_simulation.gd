@@ -27,6 +27,7 @@ var population_system := PopulationSystem.new()
 var space_program := SpaceProgram.new()
 var events := EventBridge.new()
 var environment := EnvironmentSystem.new()
+var agriculture := AgricultureSystem.new()
 
 func _init(world_seed: int = 20260915) -> void:
     seed_value = world_seed
@@ -73,6 +74,8 @@ func tick(days: int = 1) -> void:
     if era >= 3: resources.electricity += int(max(1, population * 0.18))
     if era >= 4: resources.fuel += int(max(1, population * 0.1))
     resources.food -= int(population * 0.35)
+    var farm_output := agriculture.advance(days, environment.season(), environment.weather())
+    resources.food += int(farm_output.food)
     population_system.tick(population)
     population_system.assign_for_era(era, population)
     var diplomacy_event := diplomacy.tick(days, era)
@@ -117,6 +120,38 @@ func trigger_meteor() -> void:
     events.raise_event("meteor_impact")
     changed.emit()
 
+func plant_field() -> bool:
+    var success := agriculture.plant("小麦")
+    event_logged.emit("农业：已播种小麦" if success else "农业：田地已满")
+    changed.emit()
+    return success
+
+func harvest_fields() -> bool:
+    var amount := agriculture.harvest()
+    resources.food += amount
+    event_logged.emit("农业：收获 " + str(amount) + " 食物" if amount > 0 else "农业：暂无成熟作物")
+    changed.emit()
+    return amount > 0
+
+func feed_animals() -> bool:
+    var used := agriculture.feed_animals(resources.food)
+    resources.food -= used
+    event_logged.emit("养殖：动物已喂养，消耗 " + str(used) + " 食物")
+    changed.emit()
+    return used > 0
+
+func breed_animals() -> bool:
+    var success := agriculture.breed("鸡")
+    event_logged.emit("养殖：鸡群繁殖成功" if success else "养殖：空间不足或繁殖失败")
+    changed.emit()
+    return success
+
+func craft_tool(tool := "石斧") -> bool:
+    var success := agriculture.craft(tool, era, resources)
+    event_logged.emit("制作：获得 " + tool if success else "制作：材料或时代条件不足")
+    changed.emit()
+    return success
+
 func research(id: String) -> bool:
     var result := technology.research(id, era, resources.science)
     if not result.ok:
@@ -156,7 +191,7 @@ func _record_discovery(name: String) -> void:
     changed.emit()
 
 func snapshot() -> Dictionary:
-    return {"seed": seed_value, "days": elapsed_days, "era": era, "population": population, "paused": paused, "time_scale": time_scale, "weather": weather, "resources": resources, "discoveries": discoveries, "diplomacy": diplomacy.snapshot(), "technology": technology.snapshot(), "population_jobs": population_system.snapshot(), "space": space_program.snapshot(), "environment": environment.snapshot()}
+    return {"seed": seed_value, "days": elapsed_days, "era": era, "population": population, "paused": paused, "time_scale": time_scale, "weather": weather, "resources": resources, "discoveries": discoveries, "diplomacy": diplomacy.snapshot(), "technology": technology.snapshot(), "population_jobs": population_system.snapshot(), "space": space_program.snapshot(), "environment": environment.snapshot(), "agriculture": agriculture.snapshot()}
 
 func restore(data: Dictionary) -> void:
     seed_value = int(data.get("seed", seed_value))
@@ -167,6 +202,7 @@ func restore(data: Dictionary) -> void:
     time_scale = float(data.get("time_scale", 1.0))
     weather = str(data.get("weather", "晴朗"))
     environment.restore(data.get("environment", {}))
+    agriculture.restore(data.get("agriculture", {}))
     resources = data.get("resources", resources)
     discoveries = data.get("discoveries", [])
     diplomacy.restore(data.get("diplomacy", {}))

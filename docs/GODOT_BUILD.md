@@ -26,6 +26,8 @@ godot --headless --path GodotProject --script res://tests/headless_runner.gd
 
 环境系统包含昼夜时钟、四季循环和动态天气。昼夜通过地图整体光照因子表现；春、夏、秋、冬会影响生产倍率；晴朗、多云、降雨、暴雨和大雪会影响资源生产并触发对应的雨、雪、云层或灾害视觉效果。环境状态也会写入 JSON 存档。
 
+农业系统包含播种、作物成长和收获；养殖系统包含鸡、羊、牛的喂养与繁殖；工具制作包含石斧、石镐、铁锄和铁镐配方，并受时代与木材、石材、金属资源限制。新增的 64 张像素资源已裁切到 `GodotProject/assets/`，包括田地、作物、牲畜、畜栏、工具、铁砧、熔炉以及制作/收获特效。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行
