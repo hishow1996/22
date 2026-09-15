@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CivilizationSandbox.Nations;
 
 namespace CivilizationSandbox.Simulation
 {
@@ -115,6 +116,7 @@ namespace CivilizationSandbox.Simulation
         public EraProgression Progression { get; } = new EraProgression();
         public SpaceProgramState SpaceProgram { get; } = new SpaceProgramState();
         public PopulationSimulator PopulationSimulator { get; } = new PopulationSimulator();
+        public List<NationState> Nations { get; } = new List<NationState>();
 
         public WorldState(int seed)
         {

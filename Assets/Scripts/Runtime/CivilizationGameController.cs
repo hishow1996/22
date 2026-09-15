@@ -1,4 +1,5 @@
 using CivilizationSandbox.GodControls;
+using CivilizationSandbox.Nations;
 using CivilizationSandbox.Population;
 using CivilizationSandbox.Simulation;
 using CivilizationSandbox.World;
@@ -26,6 +27,8 @@ namespace CivilizationSandbox.Runtime
         private void Awake()
         {
             World = new WorldState(seed);
+            World.Nations.Add(new NationState("Aurora", Era.Primordial));
+            World.Nations.Add(new NationState("Sol", Era.Primordial));
             Map = worldGenerator.Generate(mapWidth, mapHeight, seed);
             Agents = CreateStartingAgents(World.Population.Count);
             if (mapRenderer != null) mapRenderer.Render(Map);
