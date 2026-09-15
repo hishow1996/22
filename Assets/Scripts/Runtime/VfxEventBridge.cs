@@ -10,7 +10,11 @@ namespace CivilizationSandbox.Runtime
         MeteorImpact,
         RocketLaunch,
         EraAdvanced,
-        TechnologyResearched
+        TechnologyResearched,
+        SpaceStationBuilt,
+        DeepSpaceProbeLaunched,
+        CrewedExplorationLaunched,
+        CelestialBodyDiscovered
     }
 
     public readonly struct VfxEvent

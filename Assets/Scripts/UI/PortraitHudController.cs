@@ -20,9 +20,9 @@ namespace CivilizationSandbox.UI
         public void SetRain() => game.StartRain();
         public void TriggerMeteor() => game.TriggerMeteor();
         public bool TryLaunchRocket() => game.TryLaunchRocket();
-        public bool TryBuildSpaceStation() => game.World.SpaceProgram.TryBuildSpaceStation(game.World);
-        public bool TryLaunchDeepSpaceProbe() => game.World.SpaceProgram.TryLaunchDeepSpaceProbe(game.World);
-        public bool TryLaunchCrewedExploration() => game.World.SpaceProgram.TryLaunchCrewedExploration(game.World);
+        public bool TryBuildSpaceStation() => game.TryBuildSpaceStation();
+        public bool TryLaunchDeepSpaceProbe() => game.TryLaunchDeepSpaceProbe();
+        public bool TryLaunchCrewedExploration() => game.TryLaunchCrewedExploration();
         public void SaveGame() => game.SaveGame();
         public bool LoadGame() => game.LoadGame();
         public bool ResearchTechnology(string technologyId) => game.TryResearchTechnology(technologyId);

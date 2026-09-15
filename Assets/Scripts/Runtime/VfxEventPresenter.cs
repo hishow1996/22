@@ -13,6 +13,10 @@ namespace CivilizationSandbox.Runtime
         [SerializeField] private UnityEvent<int> onRocketLaunch;
         [SerializeField] private UnityEvent<int> onEraAdvanced;
         [SerializeField] private UnityEvent<int> onTechnologyResearched;
+        [SerializeField] private UnityEvent<int> onSpaceStationBuilt;
+        [SerializeField] private UnityEvent<int> onDeepSpaceProbeLaunched;
+        [SerializeField] private UnityEvent<int> onCrewedExplorationLaunched;
+        [SerializeField] private UnityEvent<int> onCelestialBodyDiscovered;
 
         private void OnEnable()
         {
@@ -35,6 +39,10 @@ namespace CivilizationSandbox.Runtime
                 case VfxEventType.RocketLaunch: onRocketLaunch?.Invoke(value.Intensity); break;
                 case VfxEventType.EraAdvanced: onEraAdvanced?.Invoke(value.Intensity); break;
                 case VfxEventType.TechnologyResearched: onTechnologyResearched?.Invoke(value.Intensity); break;
+                case VfxEventType.SpaceStationBuilt: onSpaceStationBuilt?.Invoke(value.Intensity); break;
+                case VfxEventType.DeepSpaceProbeLaunched: onDeepSpaceProbeLaunched?.Invoke(value.Intensity); break;
+                case VfxEventType.CrewedExplorationLaunched: onCrewedExplorationLaunched?.Invoke(value.Intensity); break;
+                case VfxEventType.CelestialBodyDiscovered: onCelestialBodyDiscovered?.Invoke(value.Intensity); break;
             }
         }
     }

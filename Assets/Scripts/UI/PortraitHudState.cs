@@ -14,6 +14,8 @@ namespace CivilizationSandbox.UI
         public int Electricity { get; private set; }
         public int Science { get; private set; }
         public bool CanLaunch { get; private set; }
+        public bool HasDeepSpaceData { get; private set; }
+        public int DiscoveredBodies { get; private set; }
         public int UnlockedTechnologyCount { get; private set; }
         public int AvailableTechnologyCount { get; private set; }
 
@@ -31,6 +33,8 @@ namespace CivilizationSandbox.UI
                 Electricity = world.Resources.Get(ResourceType.Electricity),
                 Science = world.Resources.Get(ResourceType.Science),
                 CanLaunch = world.SpaceProgram.CanLaunch(world),
+                HasDeepSpaceData = world.SpaceProgram.HasDeepSpaceData,
+                DiscoveredBodies = world.SpaceProgram.DiscoveredBodies,
                 UnlockedTechnologyCount = world.Technologies.Unlocked.Count,
                 AvailableTechnologyCount = world.Technologies.CountAvailable(world.Progression.CurrentEra)
             };

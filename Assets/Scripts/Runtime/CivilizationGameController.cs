@@ -69,6 +69,35 @@ namespace CivilizationSandbox.Runtime
             return true;
         }
 
+        public bool TryBuildSpaceStation()
+        {
+            if (World == null || !World.SpaceProgram.TryBuildSpaceStation(World)) return false;
+            VfxEvents.Raise(VfxEventType.SpaceStationBuilt);
+            SaveGame();
+            return true;
+        }
+
+        public bool TryLaunchDeepSpaceProbe()
+        {
+            if (World == null || !World.SpaceProgram.TryLaunchDeepSpaceProbe(World)) return false;
+            VfxEvents.Raise(VfxEventType.DeepSpaceProbeLaunched);
+            SaveGame();
+            return true;
+        }
+
+        public bool TryLaunchCrewedExploration()
+        {
+            if (World == null) return false;
+            var previousDiscoveries = World.SpaceProgram.DiscoveredBodies;
+            if (!World.SpaceProgram.TryLaunchCrewedExploration(World)) return false;
+            VfxEvents.Raise(VfxEventType.CrewedExplorationLaunched);
+            if (World.SpaceProgram.DiscoveredBodies > previousDiscoveries)
+                VfxEvents.Raise(VfxEventType.CelestialBodyDiscovered,
+                    World.SpaceProgram.DiscoveredBodies - previousDiscoveries);
+            SaveGame();
+            return true;
+        }
+
         private void Awake()
         {
             World = new WorldState(seed);
