@@ -26,3 +26,13 @@
 ## 风格检查
 
 这批资源采用明亮精致卡通像素风、轻微斜俯视、左上光源、右下投影和深蓝紫轮廓。它们用于建立原始时代的视觉基准；后续农业、工业、现代和太空时代资源必须沿用同一像素密度、阴影方向和调色规则。
+
+## 农业时代第一批正式资源
+
+| 资源 | 原始文件 | Unity 使用文件 | 用途 |
+|---|---|---|---|
+| 农民 | `Assets/Art/Generated/agrarian-farmer.png` | `processed-agrarian-farmer.png` | 农业时代职业单位 |
+| 农田 | `Assets/Art/Generated/agrarian-farm.png` | `processed-agrarian-farm.png` | 食物生产建筑/资源区 |
+| 粮仓 | `Assets/Art/Generated/agrarian-granary.png` | `processed-agrarian-granary.png` | 农业时代储存与贸易建筑 |
+
+农业时代资源沿用原始时代的像素密度、左上光源、右下投影和深蓝紫轮廓，同时增加麦田金色、砖墙暖红和绿色农作物，以体现文明从部落采集进入定居农业的视觉升级。

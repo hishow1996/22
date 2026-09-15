@@ -6,6 +6,9 @@ outputs = {
     'primordial-settler.png': 256,
     'primordial-hut.png': 256,
     'primordial-resource-cluster.png': 384,
+    'agrarian-farmer.png': 256,
+    'agrarian-farm.png': 384,
+    'agrarian-granary.png': 256,
 }
 for name, size in outputs.items():
     source = root / name
