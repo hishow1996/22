@@ -3,8 +3,11 @@ extends Node2D
 
 var textures := {}
 var effects_enabled := true
-const MAX_ACTIVE_EFFECTS := 4
+var max_active_effects := 4
 var active_effects: Array[AnimatedSprite2D] = []
+
+func set_quality_cap(value: int) -> void:
+    max_active_effects = clampi(value, 2, 16)
 
 func setup(simulation: CivilizationSimulation) -> void:
     for prefix in ["effect-resource-gathering", "effect-rocket-launch", "effect-weather-disaster"]:
@@ -30,7 +33,7 @@ func _on_event(event_name: String, _intensity: float) -> void:
     if frames.get_frame_count("event") == 0: return
     for item in active_effects:
         if not is_instance_valid(item): active_effects.erase(item)
-    if active_effects.size() >= MAX_ACTIVE_EFFECTS:
+    if active_effects.size() >= max_active_effects:
         var oldest := active_effects.pop_front()
         if is_instance_valid(oldest): oldest.queue_free()
     var sprite := AnimatedSprite2D.new()

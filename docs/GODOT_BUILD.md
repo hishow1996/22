@@ -22,6 +22,8 @@ godot --headless --path GodotProject --script res://tests/headless_runner.gd
 
 纹理通过 `TextureCache` 按路径缓存，角色行走帧和特效帧按需加载，避免同一 PNG 被重复载入。地图绘制还会根据当前拖动/缩放位置裁剪到屏幕可见 Tile，减少远离屏幕区域的绘制调用。
 
+启动时会读取 CPU 核心数、物理内存和图形适配器，自动选择 `low`、`balanced` 或 `high` 档位。低端设备使用 30 FPS、较少特效并发；平衡设备使用 45 FPS；高端设备使用 60 FPS、更多同时播放的特效且不关闭粒子。玩家一旦在设置中手动调整 FPS、垂直同步或粒子，`manual_quality` 会优先保留玩家选择，不被后续自动检测覆盖。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行

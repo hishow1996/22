@@ -2,13 +2,13 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd', 'texture_cache.gd', 'device_profile.gd')]
 required += [root / 'tests' / name for name in ('simulation_smoke.gd', 'headless_runner.gd')]
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 16
+assert len(gd) >= 17
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -42,6 +42,11 @@ hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
 for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_show_diagnostics', '_toggle_starmap'):
     assert token in hud, token
 assert 'handle_back_request' in hud
+device_profile = (root / 'scripts' / 'device_profile.gd').read_text(encoding='utf-8')
+for token in ('OS.get_processor_count', 'OS.get_memory_info', 'RenderingServer.get_video_adapter_name', 'LOW', 'BALANCED', 'HIGH', 'manual_quality', 'effect_cap'):
+    assert token in device_profile, token
+for token in ('DeviceProfile.resolve', 'set_quality_cap', 'runtime_settings'):
+    assert token in main, token
 save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8')
 for token in ('SAVE_VERSION := 2', 'saved_at', '_migrate_legacy_save', 'data.get("world", data)'):
     assert token in save_manager, token
@@ -60,7 +65,7 @@ for token in ('extends SceneTree', 'HEADLESS PASS', 'save restore', 'diplomacy a
 effect_player = (root / 'scripts' / 'effect_player.gd').read_text(encoding='utf-8')
 for token in ('effect-resource-gathering', 'effect-rocket-launch', 'effect-weather-disaster', 'AnimatedSprite2D', 'animation_finished'):
     assert token in effect_player, token
-for token in ('MAX_ACTIVE_EFFECTS', 'active_effects', 'pop_front'):
+for token in ('max_active_effects', 'active_effects', 'pop_front', 'set_quality_cap'):
     assert token in effect_player, token
 diagnostics = (root / 'scripts' / 'diagnostics.gd').read_text(encoding='utf-8')
 for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'texture_cache_entries', 'assets=OK'):

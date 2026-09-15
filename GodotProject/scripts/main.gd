@@ -7,10 +7,13 @@ var event_fx: EventFx
 var starmap: StarMapView
 var effect_player: EffectPlayer
 var diagnostics := CivilizationDiagnostics.new()
+var runtime_settings := {}
 
 func _ready() -> void:
     simulation = CivilizationSimulation.new(20260915)
     diagnostics.run()
+    runtime_settings = DeviceProfile.resolve(SaveManager.load_settings())
+    SaveManager.save_settings(runtime_settings)
     world_view = WorldView.new()
     world_view.name = "WorldView"
     add_child(world_view)
@@ -25,6 +28,7 @@ func _ready() -> void:
     effect_player.name = "EffectPlayer"
     add_child(effect_player)
     effect_player.setup(simulation)
+    effect_player.set_quality_cap(int(runtime_settings.get("effect_cap", 4)))
     starmap = StarMapView.new()
     starmap.name = "StarMap"
     add_child(starmap)

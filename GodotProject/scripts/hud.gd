@@ -29,6 +29,7 @@ func setup(source: CivilizationSimulation, map_view: StarMapView = null, effects
     Engine.max_fps = int(settings.get("fps", 30))
     DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(settings.get("vsync", false)) else DisplayServer.VSYNC_DISABLED)
     if effect_player != null: effect_player.effects_enabled = bool(settings.get("particles", true))
+    logs.append(DeviceProfile.summary(settings))
     simulation.changed.connect(refresh)
     simulation.event_logged.connect(add_log)
     _build_ui()
@@ -207,16 +208,19 @@ func handle_back_request() -> bool:
 
 func _set_fps(index: int) -> void:
     settings.fps = [30, 45, 60][index]
+    settings.manual_quality = true
     Engine.max_fps = settings.fps
     SaveManager.save_settings(settings)
 
 func _set_vsync(enabled: bool) -> void:
     settings.vsync = enabled
+    settings.manual_quality = true
     DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if enabled else DisplayServer.VSYNC_DISABLED)
     SaveManager.save_settings(settings)
 
 func _set_particles(enabled: bool) -> void:
     settings.particles = enabled
+    settings.manual_quality = true
     if effect_player != null: effect_player.effects_enabled = enabled
     SaveManager.save_settings(settings)
 
