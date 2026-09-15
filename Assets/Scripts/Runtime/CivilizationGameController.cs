@@ -45,6 +45,7 @@ namespace CivilizationSandbox.Runtime
         public void StartRain()
         {
             GodControls.SetWeather(WeatherType.Rain);
+            World?.EventLog.Add("天气变化：降雨开始");
             VfxEvents.Raise(VfxEventType.RainStarted);
         }
 
@@ -52,6 +53,7 @@ namespace CivilizationSandbox.Runtime
         {
             GodControls.TriggerDisaster();
             if (World != null) Environment.ApplyDisaster(World, DisasterType.Meteor, 1);
+            World?.EventLog.Add("灾害事件：陨石撞击");
             VfxEvents.Raise(VfxEventType.MeteorWarning);
             VfxEvents.Raise(VfxEventType.MeteorImpact);
         }
@@ -59,6 +61,7 @@ namespace CivilizationSandbox.Runtime
         public bool TryLaunchRocket()
         {
             if (World == null || !World.SpaceProgram.TryLaunch(World)) return false;
+            World.EventLog.Add("太空行动：火箭成功发射");
             VfxEvents.Raise(VfxEventType.RocketLaunch);
             return true;
         }
@@ -66,6 +69,7 @@ namespace CivilizationSandbox.Runtime
         public bool TryResearchTechnology(string id)
         {
             if (World == null || !World.Technologies.TryResearch(id, World)) return false;
+            World.EventLog.Add("科技突破：" + id);
             VfxEvents.Raise(VfxEventType.TechnologyResearched);
             TechnologyResearched?.Invoke(id);
             SaveGame();
@@ -77,6 +81,7 @@ namespace CivilizationSandbox.Runtime
             if (!TryGetNations(firstIndex, secondIndex, out var first, out var second)) return false;
             if (!diplomacySystem.FormAlliance(first, second)) return false;
             World.Diplomacy.RecordAlliance();
+            World.EventLog.Add("外交行动：结成联盟");
             VfxEvents.Raise(VfxEventType.DiplomacyAction);
             SaveGame();
             return true;
@@ -87,6 +92,7 @@ namespace CivilizationSandbox.Runtime
             if (!TryGetNations(buyerIndex, sellerIndex, out var buyer, out var seller)) return false;
             if (!diplomacySystem.ExecuteTrade(buyer, seller, amount)) return false;
             World.Diplomacy.RecordTrade();
+            World.EventLog.Add("外交行动：完成贸易");
             VfxEvents.Raise(VfxEventType.DiplomacyAction);
             SaveGame();
             return true;
@@ -97,6 +103,7 @@ namespace CivilizationSandbox.Runtime
             if (!TryGetNations(attackerIndex, defenderIndex, out var attacker, out var defender)) return false;
             var result = diplomacySystem.ResolveWar(attacker, defender);
             World.Diplomacy.RecordWar(result.Winner.Name);
+            World.EventLog.Add("外交行动：战争结束，胜者为 " + result.Winner.Name);
             VfxEvents.Raise(VfxEventType.DiplomacyAction, result.Damage);
             SaveGame();
             return true;
@@ -105,6 +112,7 @@ namespace CivilizationSandbox.Runtime
         public bool TryBuildSpaceStation()
         {
             if (World == null || !World.SpaceProgram.TryBuildSpaceStation(World)) return false;
+            World.EventLog.Add("太空建设：空间站建成");
             VfxEvents.Raise(VfxEventType.SpaceStationBuilt);
             SaveGame();
             return true;
@@ -113,6 +121,7 @@ namespace CivilizationSandbox.Runtime
         public bool TryLaunchDeepSpaceProbe()
         {
             if (World == null || !World.SpaceProgram.TryLaunchDeepSpaceProbe(World)) return false;
+            World.EventLog.Add("太空行动：深空探测器发射");
             VfxEvents.Raise(VfxEventType.DeepSpaceProbeLaunched);
             SaveGame();
             return true;
@@ -123,6 +132,7 @@ namespace CivilizationSandbox.Runtime
             if (World == null) return false;
             var previousDiscoveries = World.SpaceProgram.DiscoveredBodies;
             if (!World.SpaceProgram.TryLaunchCrewedExploration(World)) return false;
+            World.EventLog.Add("太空行动：载人探索任务出发");
             VfxEvents.Raise(VfxEventType.CrewedExplorationLaunched);
             if (World.SpaceProgram.DiscoveredBodies > previousDiscoveries)
                 VfxEvents.Raise(VfxEventType.CelestialBodyDiscovered,
@@ -165,6 +175,7 @@ namespace CivilizationSandbox.Runtime
             var autonomousResult = autonomousDiplomacy.Tick(World, elapsedDays);
             if (autonomousResult.Action != AutonomousDiplomacyAction.None)
             {
+                World.EventLog.Add(autonomousResult.Summary);
                 VfxEvents.Raise(VfxEventType.DiplomacyAction);
                 SaveGame();
             }
@@ -172,6 +183,7 @@ namespace CivilizationSandbox.Runtime
             {
                 World.Technologies.UnlockEra(World.Progression.CurrentEra);
                 Jobs.AssignForEra(Agents, World.Progression.CurrentEra);
+                World.EventLog.Add("时代跃迁：" + World.Progression.CurrentEra);
                 RebuildPresentation();
                 VfxEvents.Raise(VfxEventType.EraAdvanced, (int)World.Progression.CurrentEra + 1);
                 EraAdvanced?.Invoke(World.Progression.CurrentEra);

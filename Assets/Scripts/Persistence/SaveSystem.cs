@@ -27,6 +27,7 @@ namespace CivilizationSandbox.Persistence
         public int allianceCount;
         public int warCount;
         public string lastDiplomacyAction;
+        public string[] eventLog = new string[0];
     }
 
     public static class SaveSystem
@@ -36,6 +37,8 @@ namespace CivilizationSandbox.Persistence
             var unlocked = new string[world.Technologies.Unlocked.Count];
             var index = 0;
             foreach (var id in world.Technologies.Unlocked) unlocked[index++] = id;
+            var events = new string[world.EventLog.Entries.Count];
+            for (var i = 0; i < events.Length; i++) events[i] = world.EventLog.Entries[i];
             return new SaveData
             {
                 seed = world.Seed,
@@ -57,7 +60,8 @@ namespace CivilizationSandbox.Persistence
                 tradeCount = world.Diplomacy.TradeCount,
                 allianceCount = world.Diplomacy.AllianceCount,
                 warCount = world.Diplomacy.WarCount,
-                lastDiplomacyAction = world.Diplomacy.LastAction
+                lastDiplomacyAction = world.Diplomacy.LastAction,
+                eventLog = events
             };
         }
 

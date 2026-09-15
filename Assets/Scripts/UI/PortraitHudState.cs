@@ -23,6 +23,8 @@ namespace CivilizationSandbox.UI
         public int AllianceCount { get; private set; }
         public int WarCount { get; private set; }
         public string LastDiplomacyAction { get; private set; }
+        public string LatestWorldEvent { get; private set; }
+        public int WorldEventCount { get; private set; }
 
         public static PortraitHudState FromWorld(WorldState world)
         {
@@ -46,7 +48,9 @@ namespace CivilizationSandbox.UI
                 TradeCount = world.Diplomacy.TradeCount,
                 AllianceCount = world.Diplomacy.AllianceCount,
                 WarCount = world.Diplomacy.WarCount,
-                LastDiplomacyAction = world.Diplomacy.LastAction
+                LastDiplomacyAction = world.Diplomacy.LastAction,
+                LatestWorldEvent = world.EventLog.Latest,
+                WorldEventCount = world.EventLog.Entries.Count
             };
             if (world.Progression.CurrentEra != Era.Space) state.SpaceMissionLabel = "尚未进入太空时代";
             return state;

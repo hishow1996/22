@@ -121,6 +121,7 @@ namespace CivilizationSandbox.Simulation
         public PopulationSimulator PopulationSimulator { get; } = new PopulationSimulator();
         public List<NationState> Nations { get; } = new List<NationState>();
         public DiplomacyState Diplomacy { get; } = new DiplomacyState();
+        public WorldEventLog EventLog { get; } = new WorldEventLog();
 
         public WorldState(int seed)
         {
@@ -129,6 +130,7 @@ namespace CivilizationSandbox.Simulation
             Resources.Add(ResourceType.Food, 40);
             Resources.Add(ResourceType.Wood, 40);
             Technologies.UnlockEra(Era.Primordial);
+            EventLog.Add("文明建立：进入原始时代");
         }
     }
 
