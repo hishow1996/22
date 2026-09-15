@@ -21,7 +21,9 @@ func _init() -> void:
     simulation.resources.science = 500
     _check(simulation.research("farming"), "farming research", failures)
     simulation.form_alliance()
+    var food_before_trade := simulation.resources.food
     simulation.trade()
+    _check(simulation.resources.food > food_before_trade, "trade rewards resources", failures)
     _check(simulation.diplomacy.action_log.size() == 2, "diplomacy actions", failures)
     simulation.era = 4
     simulation._plan_buildings()
@@ -34,6 +36,7 @@ func _init() -> void:
     simulation.resources.science = 500
     _check(simulation.try_launch_rocket(), "satellite mission", failures)
     _check(simulation.try_build_station(), "space station mission", failures)
+    _check(simulation.resources.electricity > 0, "satellite unlocks electricity", failures)
     var snapshot := simulation.snapshot()
     var restored := CivilizationSimulation.new(7)
     restored.restore(snapshot)

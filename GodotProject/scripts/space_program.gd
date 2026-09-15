@@ -15,7 +15,8 @@ func launch(name: String, era: int, resources: Dictionary, science: int) -> Dict
     resources.fuel -= int(cost.fuel)
     missions[name] = true
     discovered_bodies.append(name)
-    return {"ok": true, "message": "太空任务成功：" + name}
+    var rewards := {"卫星": {"electricity": 40, "science": 20}, "空间站": {"science": 70}, "深空探测": {"science": 120, "fuel": 25}, "载人探索": {"science": 180, "food": 80}}
+    return {"ok": true, "message": "太空任务成功：" + name, "science_cost": int(cost.science), "reward": rewards[name]}
 
 func snapshot() -> Dictionary: return {"missions": missions, "discoveries": discovered_bodies}
 func restore(data: Dictionary) -> void:

@@ -87,6 +87,8 @@ func tick(days: int = 1) -> void:
     if era >= 2: resources.metal += int(max(1, population * 0.16))
     if era >= 3: resources.electricity += int(max(1, population * 0.18))
     if era >= 4: resources.fuel += int(max(1, population * 0.1))
+    if technology.unlocked.has("steam"): resources.wood += int(max(1, population * 0.08))
+    if technology.unlocked.has("electricity"): resources.electricity += int(max(1, population * 0.12))
     if era >= 3 and has_building("现代电网"): resources.electricity += int(max(1, population / 20))
     if era >= 3 and has_building("医院"): population += 1 if elapsed_days % 12 == 0 else 0
     if era >= 4 and has_building("空间站"): resources.science += int(max(1, population / 24))
@@ -190,13 +192,25 @@ func research(id: String) -> bool:
     return true
 
 func form_alliance() -> void:
-    if diplomacy.form_alliance(): event_logged.emit("外交行动：结成联盟")
+    if diplomacy.form_alliance():
+        resources.food += 12
+        event_logged.emit("外交行动：结成联盟，获得盟友援助 12 食物")
+        changed.emit()
 
 func trade() -> void:
-    if diplomacy.trade(): event_logged.emit("外交行动：完成贸易")
+    if diplomacy.trade():
+        resources.food += 30
+        resources.wood += 10
+        event_logged.emit("外交行动：完成贸易，获得 30 食物和 10 木材")
+        changed.emit()
 
 func resolve_war() -> void:
-    event_logged.emit("外交行动：战争结束，胜者为 " + diplomacy.resolve_war())
+    var population_before := population
+    var winner := diplomacy.resolve_war()
+    population = max(4, population - max(1, int(population * 0.04)))
+    resources.metal += 12
+    event_logged.emit("外交行动：战争结束，胜者为 " + winner + "，人口损失 " + str(population_before - population) + "，获得 12 金属")
+    changed.emit()
 
 func try_launch_rocket() -> bool: return _launch_space("卫星")
 func try_build_station() -> bool: return _launch_space("空间站")
@@ -207,6 +221,10 @@ func _launch_space(name: String) -> bool:
     var result := space_program.launch(name, era, resources, resources.science)
     event_logged.emit(result.message)
     if result.ok:
+        resources.science = max(0, resources.science - int(result.get("science_cost", 0)))
+        var reward: Dictionary = result.get("reward", {})
+        for resource in reward:
+            resources[resource] = int(resources.get(resource, 0)) + int(reward[resource])
         _record_discovery(name)
         events.raise_event("space_mission")
     return result.ok
