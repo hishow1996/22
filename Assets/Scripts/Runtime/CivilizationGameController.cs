@@ -20,11 +20,33 @@ namespace CivilizationSandbox.Runtime
         public GeneratedWorld Map { get; private set; }
         public GodControlState GodControls { get; } = new GodControlState();
         public EnvironmentSimulator Environment { get; } = new EnvironmentSimulator();
+        public VfxEventBridge VfxEvents { get; } = new VfxEventBridge();
         public PopulationAgent[] Agents { get; private set; }
 
         private readonly WorldGenerator worldGenerator = new WorldGenerator();
         private readonly EconomySimulator economySimulator = new EconomySimulator();
         private float dayAccumulator;
+
+        public void StartRain()
+        {
+            GodControls.SetWeather(WeatherType.Rain);
+            VfxEvents.Raise(VfxEventType.RainStarted);
+        }
+
+        public void TriggerMeteor()
+        {
+            GodControls.TriggerDisaster();
+            if (World != null) Environment.ApplyDisaster(World, DisasterType.Meteor, 1);
+            VfxEvents.Raise(VfxEventType.MeteorWarning);
+            VfxEvents.Raise(VfxEventType.MeteorImpact);
+        }
+
+        public bool TryLaunchRocket()
+        {
+            if (World == null || !World.SpaceProgram.TryLaunch(World)) return false;
+            VfxEvents.Raise(VfxEventType.RocketLaunch);
+            return true;
+        }
 
         private void Awake()
         {

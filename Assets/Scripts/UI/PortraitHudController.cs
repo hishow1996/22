@@ -17,9 +17,9 @@ namespace CivilizationSandbox.UI
         public void SetSpeed(float speed) => game.GodControls.SetTimeScale(speed);
         public void GrantFood() => game.GodControls.GrantResource(game.World, ResourceType.Food, 25);
         public void GrantScience() => game.GodControls.GrantResource(game.World, ResourceType.Science, 25);
-        public void SetRain() => game.GodControls.SetWeather(WeatherType.Rain);
-        public void TriggerMeteor() => game.GodControls.TriggerDisaster();
-        public bool TryLaunchRocket() => game.World.SpaceProgram.TryLaunch(game.World);
+        public void SetRain() => game.StartRain();
+        public void TriggerMeteor() => game.TriggerMeteor();
+        public bool TryLaunchRocket() => game.TryLaunchRocket();
         public bool TryBuildSpaceStation() => game.World.SpaceProgram.TryBuildSpaceStation(game.World);
         public bool TryLaunchDeepSpaceProbe() => game.World.SpaceProgram.TryLaunchDeepSpaceProbe(game.World);
         public bool TryLaunchCrewedExploration() => game.World.SpaceProgram.TryLaunchCrewedExploration(game.World);
