@@ -108,3 +108,11 @@
 | 宇航员行走图集 | `Assets/Art/Generated/space-astronaut-walk-sheet.png` | 四帧宇航员行走源图集 |
 | 原始人动画帧 | `processed-primordial-settler-walk-01.png` 至 `04.png` | Unity Animator |
 | 宇航员动画帧 | `processed-space-astronaut-walk-01.png` 至 `04.png` | Unity Animator |
+
+## 事件特效资源
+
+| 资源 | 文件 | 用途 |
+|---|---|---|
+| 资源采集特效 | `effect-resource-gathering-sheet.png` 与 `processed-effect-resource-gathering-01..04.png` | 采集完成反馈 |
+| 火箭发射特效 | `effect-rocket-launch-sheet.png` 与 `processed-effect-rocket-launch-01..04.png` | 发射流程反馈 |
+| 天气灾害特效 | `effect-weather-disaster-sheet.png` 与 `processed-effect-weather-disaster-01..04.png` | 降雨、闪电、陨石效果 |

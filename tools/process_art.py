@@ -103,3 +103,20 @@ for sheet_name, prefix in animation_sheets.items():
         frame = frame.resize((256, 256), Image.Resampling.NEAREST)
         frame.save(root / f'processed-{prefix}-{index + 1:02d}.png', optimize=True)
         print(sheet_name, index + 1, '->', frame.size)
+
+effect_sheets = {
+    'effect-resource-gathering-sheet.png': 'effect-resource-gathering',
+    'effect-rocket-launch-sheet.png': 'effect-rocket-launch',
+    'effect-weather-disaster-sheet.png': 'effect-weather-disaster',
+}
+for sheet_name, prefix in effect_sheets.items():
+    sheet = Image.open(root / sheet_name).convert('RGBA')
+    cell_width = sheet.width // 2
+    cell_height = sheet.height // 2
+    for index in range(4):
+        x = index % 2
+        y = index // 2
+        frame = sheet.crop((x * cell_width, y * cell_height, (x + 1) * cell_width, (y + 1) * cell_height))
+        frame = frame.resize((256, 256), Image.Resampling.NEAREST)
+        frame.save(root / f'processed-{prefix}-{index + 1:02d}.png', optimize=True)
+        print(sheet_name, index + 1, '->', frame.size)

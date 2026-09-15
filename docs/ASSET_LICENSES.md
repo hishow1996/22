@@ -59,3 +59,7 @@
 ## 角色动画生成素材
 
 `primordial-settler-walk-sheet.png`、`space-astronaut-walk-sheet.png` 及其拆分后的动画帧来自本项目生成流程，使用当前账户与图像生成工具条款。它们不是从第三方游戏、网站或搜索图片复制而来；正式商业发布前仍需按实际发布渠道和工具最新条款复核商业使用与署名要求。
+
+## 事件特效生成素材
+
+`effect-resource-gathering-sheet.png`、`effect-rocket-launch-sheet.png`、`effect-weather-disaster-sheet.png` 及其拆分后的特效帧来自本项目生成流程，使用当前账户与图像生成工具条款。它们不是从第三方游戏、网站或搜索图片复制而来；正式商业发布前仍需按实际发布渠道和工具最新条款复核商业使用与署名要求。
