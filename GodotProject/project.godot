@@ -1,0 +1,37 @@
+; Engine configuration file.
+; Civilization Sandbox: Stellar Ages - Godot 4 migration
+config_version=5
+
+[application]
+config/name="文明沙盒：星际纪元"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.2", "GL Compatibility")
+
+[display]
+
+[display/window]
+size/viewport_width=768
+size/viewport_height=1365
+size/window_width_override=432
+size/window_height_override=768
+stretch/mode="canvas_items"
+handheld/orientation=1
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/canvas_textures/default_texture_filter=0
+
+[input]
+toggle_pause={"deadzone": 0.5, "events": [Object(InputEventKey,"physical_keycode":32)]}
+
+[gui]
+theme/default_font_multichannel_signed_distance_field=true
+
+[android]
+orientation/portrait=true
+orientation/landscape=false
+
+[physics]
+common/enable_pause_aware_picking=true
