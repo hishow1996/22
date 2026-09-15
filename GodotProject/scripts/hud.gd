@@ -181,6 +181,22 @@ func _toggle_settings() -> void:
 func _toggle_starmap() -> void:
     if starmap != null: starmap.toggle()
 
+func handle_back_request() -> bool:
+    if settings_panel != null and settings_panel.visible:
+        settings_panel.visible = false
+        return true
+    if info_panel != null and info_panel.visible:
+        info_panel.visible = false
+        return true
+    if starmap != null and starmap.active:
+        starmap.toggle()
+        return true
+    if simulation != null and not simulation.paused:
+        simulation.paused = true
+        add_log("游戏已暂停，再按一次返回键退出")
+        return true
+    return false
+
 func _set_fps(index: int) -> void:
     settings.fps = [30, 45, 60][index]
     Engine.max_fps = settings.fps

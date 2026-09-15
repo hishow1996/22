@@ -31,3 +31,14 @@ func _ready() -> void:
     hud.name = "CivilizationHud"
     add_child(hud)
     hud.setup(simulation, starmap)
+
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_APPLICATION_PAUSED:
+        simulation.paused = true
+        SaveManager.save_game(simulation)
+    elif what == NOTIFICATION_APPLICATION_RESUMED:
+        event_fx.queue_redraw()
+    elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
+        if hud != null and hud.handle_back_request(): return
+        SaveManager.save_game(simulation)
+        get_tree().quit()
