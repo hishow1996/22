@@ -28,11 +28,12 @@ simulation = (root / 'scripts' / 'civilization_simulation.gd').read_text(encodin
 for token in ('DiplomacySystem', 'TechnologySystem', 'PopulationSystem', 'SpaceProgram', 'EventBridge', 'try_crewed_exploration'):
     assert token in simulation, token
 world_view = (root / 'scripts' / 'world_view.gd').read_text(encoding='utf-8')
-for token in ('processed-" + name', 'terrain-ocean', 'draw_texture_rect', 'primordial-settler', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
+for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-road', 'transition-stone-bridge', '_draw_overlays', 'draw_texture_rect', 'primordial-settler', 'agrarian-farmer', 'space-astronaut', 'Sprite2D', 'InputEventScreenDrag', 'InputEventMagnifyGesture', 'camera_zoom', '篝火'):
     assert token in world_view, token
 main = (root / 'scripts' / 'main.gd').read_text(encoding='utf-8')
 assert 'EventFx' in main and 'event_fx.setup' in main
 assert 'StarMapView' in main and 'starmap.setup' in main
+assert 'event_fx.z_index = 40' in main
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
 for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
     assert token in hud, token

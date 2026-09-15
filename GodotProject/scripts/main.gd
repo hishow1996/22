@@ -15,6 +15,7 @@ func _ready() -> void:
     simulation.changed.connect(world_view.refresh)
     event_fx = EventFx.new()
     event_fx.name = "EventFx"
+    event_fx.z_index = 40
     add_child(event_fx)
     event_fx.setup(simulation)
     starmap = StarMapView.new()

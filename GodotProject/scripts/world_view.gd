@@ -49,6 +49,7 @@ func _clamp_position() -> void:
 func _load_textures() -> void:
     var names := ["campfire", "primordial-hut", "agrarian-farm", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
     names.append_array(["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"])
+    names.append_array(["transition-shoreline", "transition-riverbank", "transition-cobblestone-road", "transition-stone-bridge", "transition-urban-plaza"])
     for name in names:
         var path := "res://assets/processed-" + name + ".png"
         if ResourceLoader.exists(path): textures[name] = load(path)
@@ -74,7 +75,25 @@ func _draw() -> void:
                 draw_texture_rect(terrain_texture, rect, false)
             else:
                 draw_rect(rect, palette[simulation.terrain[index]])
+    _draw_overlays(origin)
     draw_rect(Rect2(origin, Vector2(simulation.WIDTH, simulation.HEIGHT) * TILE_SIZE), Color("#10152a"), false, 2.0)
+
+func _draw_overlays(origin: Vector2) -> void:
+    var road_texture = textures.get("transition-cobblestone-road")
+    var bridge_texture = textures.get("transition-stone-bridge")
+    var shoreline_texture = textures.get("transition-shoreline")
+    var riverbank_texture = textures.get("transition-riverbank")
+    if road_texture != null:
+        for x in range(10, simulation.WIDTH - 8, 6):
+            draw_texture_rect(road_texture, Rect2(origin + Vector2(x, 48) * TILE_SIZE, Vector2(TILE_SIZE, TILE_SIZE)), false)
+    if bridge_texture != null:
+        draw_texture_rect(bridge_texture, Rect2(origin + Vector2(32, 42) * TILE_SIZE, Vector2(TILE_SIZE, TILE_SIZE)), false)
+    for y in range(8, simulation.HEIGHT - 8, 9):
+        var index := y * simulation.WIDTH + 2
+        if shoreline_texture != null and simulation.terrain[index] != 0:
+            draw_texture_rect(shoreline_texture, Rect2(origin + Vector2(2, y) * TILE_SIZE, Vector2(TILE_SIZE, TILE_SIZE)), false)
+        if riverbank_texture != null:
+            draw_texture_rect(riverbank_texture, Rect2(origin + Vector2(45, y) * TILE_SIZE, Vector2(TILE_SIZE, TILE_SIZE)), false)
 
 func refresh() -> void:
     if simulation == null: return
