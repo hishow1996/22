@@ -7,6 +7,7 @@
 | 原始人 | `Assets/Art/Generated/primordial-settler.png` | `processed-primordial-settler.png` | 人口单位、采集者基础外观 |
 | 部落木屋 | `Assets/Art/Generated/primordial-hut.png` | `processed-primordial-hut.png` | 原始时代住宅/聚落建筑 |
 | 资源物件 | `Assets/Art/Generated/primordial-resource-cluster.png` | `processed-primordial-resource-cluster.png` | 树木、石块和食物资源视觉参考 |
+| 篝火 | `Assets/Art/Generated/campfire.png` | `processed-campfire.png` | 原始时代聚落中心建筑 |
 
 ## 处理规则
 

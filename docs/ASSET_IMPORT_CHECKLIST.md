@@ -19,7 +19,8 @@
 |---|---|---|
 | `WorldTilemapRenderer` | `oceanTile` 至 `riverTile` | `processed-terrain-*.png` 创建的 Tile |
 | `WorldTilemapRenderer` | `shorelineTile` 至 `urbanPlazaTile` | `processed-transition-*.png` 创建的 Tile |
-| `WorldTilemapRenderer` | 建筑 Tile 字段 | 对应五时代建筑处理版 PNG 创建的 Tile |
+| `WorldTilemapRenderer` | `campfireTile` | `processed-campfire.png` 创建的 Tile |
+| `WorldTilemapRenderer` | 其他建筑 Tile 字段 | 对应五时代建筑处理版 PNG 创建的 Tile |
 | `GraphicsSettingsPanel` | `antiAliasingToggle`、`shadowsToggle`、`particlesToggle`、`anisotropicToggle`、`vSyncToggle` | Canvas Toggle |
 | `GraphicsSettingsPanel` | `textureQualityDropdown`、`frameRateDropdown` | Canvas Dropdown |
 | `PortraitHudController` | `game`、`portraitCanvas` | 主控制器与竖屏 Canvas |
