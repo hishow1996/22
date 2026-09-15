@@ -18,6 +18,12 @@ namespace CivilizationSandbox.Simulation
 
         public int Get(ResourceType type) => values.TryGetValue(type, out var value) ? value : 0;
 
+        public void Set(ResourceType type, int amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+            values[type] = amount;
+        }
+
         public bool TrySpend(ResourceType type, int amount)
         {
             if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
