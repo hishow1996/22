@@ -102,7 +102,7 @@ func _build_ui() -> void:
     _button(systems, "收获", simulation.harvest_fields)
     _button(systems, "喂养", simulation.feed_animals)
     _button(systems, "繁殖", simulation.breed_animals)
-    _button(systems, "制作石斧", _craft_stone_axe)
+    _button(systems, "制作", _toggle_crafting)
     log_label = Label.new()
     log_label.position = Vector2(16, 960 - safe_bottom); log_label.size = Vector2(736, 110)
     log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -119,6 +119,20 @@ func _build_ui() -> void:
     var vsync := CheckButton.new(); vsync.text = "垂直同步"; vsync.button_pressed = bool(settings.vsync); vsync.toggled.connect(_set_vsync); setting_box.add_child(vsync)
     var particles := CheckButton.new(); particles.text = "粒子效果"; particles.button_pressed = bool(settings.particles); particles.toggled.connect(_set_particles); setting_box.add_child(particles)
     var close := Button.new(); close.text = "关闭"; close.pressed.connect(_toggle_settings); setting_box.add_child(close)
+    var crafting_panel := PanelContainer.new()
+    crafting_panel.name = "CraftingPanel"
+    crafting_panel.position = Vector2(70, 300); crafting_panel.size = Vector2(620, 300)
+    crafting_panel.visible = false
+    root.add_child(crafting_panel)
+    var crafting_box := VBoxContainer.new()
+    crafting_panel.add_child(crafting_box)
+    var craft_title := Label.new(); craft_title.text = "工具制作"; craft_title.add_theme_font_size_override("font_size", 24); crafting_box.add_child(craft_title)
+    var craft_grid := GridContainer.new(); craft_grid.columns = 2; crafting_box.add_child(craft_grid)
+    _button(craft_grid, "石斧", func(): _craft_and_refresh("石斧"))
+    _button(craft_grid, "石镐", func(): _craft_and_refresh("石镐"))
+    _button(craft_grid, "铁锄", func(): _craft_and_refresh("铁锄"))
+    _button(craft_grid, "铁镐", func(): _craft_and_refresh("铁镐"))
+    var craft_close := Button.new(); craft_close.text = "关闭制作面板"; craft_close.pressed.connect(_toggle_crafting); crafting_box.add_child(craft_close)
     info_panel = PanelContainer.new()
     info_panel.position = Vector2(70, 250); info_panel.size = Vector2(620, 420)
     info_panel.visible = false
@@ -268,4 +282,13 @@ func _show_diagnostics() -> void:
 
 func _craft_stone_axe() -> void:
     simulation.craft_tool("石斧")
+    _show_info("制作系统\n" + simulation.agriculture.summary())
+
+func _toggle_crafting() -> void:
+    var panel := get_node_or_null("Control/CraftingPanel")
+    if panel != null:
+        panel.visible = not panel.visible
+
+func _craft_and_refresh(tool: String) -> void:
+    simulation.craft_tool(tool)
     _show_info("制作系统\n" + simulation.agriculture.summary())

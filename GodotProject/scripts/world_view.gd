@@ -51,7 +51,7 @@ func _clamp_position() -> void:
     position.y = clamp(position.y, -680.0, 160.0)
 
 func _load_textures() -> void:
-    var names := ["campfire", "primordial-hut", "agrarian-farm", "farm-tilled", "barn", "animal-pasture", "animal-chicken", "animal-sheep", "animal-cow", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
+    var names := ["campfire", "primordial-hut", "agrarian-farm", "farm-tilled", "crop-seedling", "crop-wheat-ripe", "barn", "animal-pasture", "animal-chicken", "animal-sheep", "animal-cow", "crafting-bench", "forge", "anvil", "tool-stone-axe", "tool-stone-pickaxe", "tool-stone-hoe", "industrial-factory", "modern-research-center", "space-launch-site", "primordial-settler", "agrarian-farmer", "industrial-engineer", "modern-scientist", "space-astronaut"]
     names.append_array(["terrain-ocean", "terrain-grass", "terrain-dirt", "terrain-forest", "terrain-mountain", "terrain-river"])
     names.append_array(["transition-shoreline", "transition-riverbank", "transition-cobblestone-road", "transition-stone-bridge", "transition-urban-plaza"])
     for name in names:
@@ -147,6 +147,24 @@ func refresh() -> void:
         animal.z_index = 25
         animal.visible = true
         if index >= animal_nodes.size(): add_child(animal); animal_nodes.append(animal)
+    var farm_texture: Texture2D = textures.get("crop-wheat-ripe" if simulation.agriculture.ready_count() > 0 else "crop-seedling")
+    if farm_texture != null:
+        var farm_sprite := Sprite2D.new()
+        farm_sprite.texture = farm_texture
+        farm_sprite.position = origin + Vector2(20, 34) * TILE_SIZE
+        farm_sprite.scale = Vector2.ONE * 0.035
+        farm_sprite.z_index = 24
+        add_child(farm_sprite)
+        building_nodes.append(farm_sprite)
+    var workshop_texture: Texture2D = textures.get("forge" if simulation.era >= 2 else "crafting-bench")
+    if workshop_texture != null:
+        var workshop := Sprite2D.new()
+        workshop.texture = workshop_texture
+        workshop.position = origin + Vector2(54, 35) * TILE_SIZE
+        workshop.scale = Vector2.ONE * 0.035
+        workshop.z_index = 24
+        add_child(workshop)
+        building_nodes.append(workshop)
     var people := min(10, max(2, int(simulation.population / 8)))
     var unit_name := "primordial-settler"
     if simulation.era == 1: unit_name = "agrarian-farmer"

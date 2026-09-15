@@ -39,7 +39,7 @@ assert 'event_fx.z_index = 40' in main
 for token in ('NOTIFICATION_APPLICATION_PAUSED', 'NOTIFICATION_APPLICATION_RESUMED', 'NOTIFICATION_WM_GO_BACK_REQUEST', 'SaveManager.save_game'):
     assert token in main, token
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'plant_field', 'harvest_fields', 'feed_animals', 'breed_animals', 'craft_tool', 'autosave_timer', '_show_info', '_show_diagnostics', '_toggle_starmap'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'plant_field', 'harvest_fields', 'feed_animals', 'breed_animals', 'craft_tool', 'CraftingPanel', '_toggle_crafting', '_craft_and_refresh', 'autosave_timer', '_show_info', '_show_diagnostics', '_toggle_starmap'):
     assert token in hud, token
 assert 'handle_back_request' in hud
 device_profile = (root / 'scripts' / 'device_profile.gd').read_text(encoding='utf-8')
