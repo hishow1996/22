@@ -6,9 +6,11 @@ var hud: CivilizationHud
 var event_fx: EventFx
 var starmap: StarMapView
 var effect_player: EffectPlayer
+var diagnostics := CivilizationDiagnostics.new()
 
 func _ready() -> void:
     simulation = CivilizationSimulation.new(20260915)
+    diagnostics.run()
     world_view = WorldView.new()
     world_view.name = "WorldView"
     add_child(world_view)
@@ -30,7 +32,7 @@ func _ready() -> void:
     hud = CivilizationHud.new()
     hud.name = "CivilizationHud"
     add_child(hud)
-    hud.setup(simulation, starmap, effect_player)
+    hud.setup(simulation, starmap, effect_player, diagnostics)
 
 func _notification(what: int) -> void:
     if what == NOTIFICATION_APPLICATION_PAUSED:

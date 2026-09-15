@@ -2,13 +2,13 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / 'GodotProject'
 required = [root / 'project.godot', root / 'main.tscn', root / 'export_presets.cfg']
-required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd')]
+required += [root / 'scripts' / name for name in ('main.gd', 'civilization_simulation.gd', 'world_view.gd', 'hud.gd', 'save_manager.gd', 'diplomacy_system.gd', 'technology_system.gd', 'population_system.gd', 'space_program.gd', 'event_bridge.gd', 'event_fx.gd', 'starmap_view.gd', 'effect_player.gd', 'ui_theme.gd', 'diagnostics.gd')]
 required.append(root / 'tests' / 'simulation_smoke.gd')
 for path in required:
     assert path.exists() and path.stat().st_size > 0, path
 
 gd = list((root / 'scripts').glob('*.gd'))
-assert len(gd) >= 14
+assert len(gd) >= 15
 for path in gd:
     text = path.read_text(encoding='utf-8')
     assert text.count('func ') >= 1, path
@@ -33,12 +33,13 @@ for token in ('processed-" + name', 'terrain-ocean', 'transition-cobblestone-roa
 main = (root / 'scripts' / 'main.gd').read_text(encoding='utf-8')
 assert 'EventFx' in main and 'event_fx.setup' in main
 assert 'EffectPlayer' in main and 'effect_player.setup' in main
+assert 'CivilizationDiagnostics' in main and 'diagnostics.run()' in main
 assert 'StarMapView' in main and 'starmap.setup' in main
 assert 'event_fx.z_index = 40' in main
 for token in ('NOTIFICATION_APPLICATION_PAUSED', 'NOTIFICATION_APPLICATION_RESUMED', 'NOTIFICATION_WM_GO_BACK_REQUEST', 'SaveManager.save_game'):
     assert token in main, token
 hud = (root / 'scripts' / 'hud.gd').read_text(encoding='utf-8')
-for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_toggle_starmap'):
+for token in ('_set_speed', 'processed-hud-', 'space_status', 'building_status', 'get_display_safe_area', '_calculate_safe_insets', 'GridContainer', 'custom_minimum_size = Vector2(116, 58)', 'CivilizationUiTheme.create()', 'Engine.max_fps', 'window_set_vsync_mode', 'effect_player.effects_enabled', 'try_crewed_exploration', 'autosave_timer', '_show_info', '_show_diagnostics', '_toggle_starmap'):
     assert token in hud, token
 assert 'handle_back_request' in hud
 save_manager = (root / 'scripts' / 'save_manager.gd').read_text(encoding='utf-8')
@@ -56,6 +57,9 @@ for token in ('diplomacy', 'technology', 'space program', 'save restore'):
 effect_player = (root / 'scripts' / 'effect_player.gd').read_text(encoding='utf-8')
 for token in ('effect-resource-gathering', 'effect-rocket-launch', 'effect-weather-disaster', 'AnimatedSprite2D', 'animation_finished'):
     assert token in effect_player, token
+diagnostics = (root / 'scripts' / 'diagnostics.gd').read_text(encoding='utf-8')
+for token in ('LOG_PATH', 'ResourceLoader.exists', 'missing_assets', 'assets=OK'):
+    assert token in diagnostics, token
 ui_theme = (root / 'scripts' / 'ui_theme.gd').read_text(encoding='utf-8')
 for token in ('font_hover_color', 'font_pressed_color', 'set_stylebox("hover", "Button"', 'corner_radius_top_left = 0'):
     assert token in ui_theme, token

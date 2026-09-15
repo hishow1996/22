@@ -8,6 +8,8 @@ Android 生命周期也已处理：切入后台会暂停模拟并自动保存，
 
 图形设置启动时会从 `user://civilization_settings.json` 恢复，FPS 和垂直同步立即应用，粒子开关会同步控制火箭、灾害和采集动画播放器；设置面板的当前选项会显示已保存值。
 
+启动时会运行资源诊断器，检查地形、篝火、时代建筑等关键 PNG 是否存在，并写入 `user://civilization_diagnostics.log`。游戏内“运行诊断”按钮会把报告显示在信息面板中，便于在 Android 真机上排查黑屏、缺图和导出资源遗漏。
+
 Godot 迁移工程位于 `GodotProject/`，与原 Unity 工程并存。使用 Godot 4.x 打开 `GodotProject/project.godot`。
 
 ## 编辑器运行

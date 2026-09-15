@@ -4,6 +4,7 @@ extends CanvasLayer
 var simulation: CivilizationSimulation
 var starmap: StarMapView
 var effect_player: EffectPlayer
+var diagnostics: CivilizationDiagnostics
 var status_label: Label
 var resources_label: Label
 var log_label: Label
@@ -19,10 +20,11 @@ var autosave_timer := 0.0
 var safe_top := 0.0
 var safe_bottom := 0.0
 
-func setup(source: CivilizationSimulation, map_view: StarMapView = null, effects: EffectPlayer = null) -> void:
+func setup(source: CivilizationSimulation, map_view: StarMapView = null, effects: EffectPlayer = null, diagnostic_runner: CivilizationDiagnostics = null) -> void:
     simulation = source
     starmap = map_view
     effect_player = effects
+    diagnostics = diagnostic_runner
     settings = SaveManager.load_settings()
     Engine.max_fps = int(settings.get("fps", 30))
     DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if bool(settings.get("vsync", false)) else DisplayServer.VSYNC_DISABLED)
@@ -94,6 +96,7 @@ func _build_ui() -> void:
     _button(systems, "结成联盟", simulation.form_alliance)
     _button(systems, "进行贸易", simulation.trade)
     _button(systems, "解决战争", simulation.resolve_war)
+    _button(systems, "运行诊断", _show_diagnostics)
     log_label = Label.new()
     log_label.position = Vector2(16, 960 - safe_bottom); log_label.size = Vector2(736, 110)
     log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -247,3 +250,9 @@ func _show_info(text: String) -> void:
     if info_label != null:
         info_label.text = text + "\n\n点击科技树、外交或职业按钮刷新面板。"
         info_panel.visible = true
+
+func _show_diagnostics() -> void:
+    if diagnostics == null:
+        add_log("诊断器未初始化")
+        return
+    _show_info(diagnostics.run())
