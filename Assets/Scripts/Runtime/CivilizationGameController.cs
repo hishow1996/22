@@ -37,6 +37,7 @@ namespace CivilizationSandbox.Runtime
         private readonly SettlementLayoutPlanner settlementPlanner = new SettlementLayoutPlanner();
         private readonly EconomySimulator economySimulator = new EconomySimulator();
         private readonly DiplomacySystem diplomacySystem = new DiplomacySystem();
+        private readonly AutonomousDiplomacySystem autonomousDiplomacy = new AutonomousDiplomacySystem();
         private float dayAccumulator;
         private float autoSaveTimer;
 
@@ -159,6 +160,12 @@ namespace CivilizationSandbox.Runtime
             Environment.SetWeather(GodControls.Weather);
             economySimulator.Tick(World, Agents, elapsedDays, Environment.FoodProductionMultiplier,
                 (resource, amount) => VfxEvents.Raise(VfxEventType.ResourceGathered, amount));
+            var autonomousResult = autonomousDiplomacy.Tick(World, elapsedDays);
+            if (autonomousResult.Action != AutonomousDiplomacyAction.None)
+            {
+                VfxEvents.Raise(VfxEventType.DiplomacyAction);
+                SaveGame();
+            }
             if (World.Progression.TryAdvance(World))
             {
                 World.Technologies.UnlockEra(World.Progression.CurrentEra);
