@@ -369,8 +369,7 @@
         android:orientation="vertical"
         android:visibility="gone">
 
-        <!-- 无记录：homeStage 占满全屏，圆盘严格居中 = 图二原来的样子。
-             有记录：列表拿走下半部分，圆盘自然偏上，仍可点开新 PDF。 -->
+        <!-- 无记录：仅显示居中的文件夹图标；有记录：顶部轻量工具行 + 最近文件列表。 -->
         <FrameLayout
             android:id="@+id/homeStage"
             android:layout_width="match_parent"
@@ -386,33 +385,66 @@
 
                 <ImageButton
                     android:id="@+id/btnOpenEmpty"
-                    android:layout_width="88dp"
-                    android:layout_height="88dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:layout_gravity="center_horizontal"
-                    android:background="@drawable/round_btn"
+                    android:background="@null"
                     android:contentDescription="@string/cd_open"
-                    android:elevation="2dp"
-                    android:padding="26dp"
+                    android:padding="10dp"
                     android:scaleType="centerInside"
                     android:src="@drawable/ic_folder"
                     android:tint="@color/icon" />
 
             </LinearLayout>
 
-            <ImageButton
-                android:id="@+id/btnHomeMore"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:layout_gravity="top|end"
-                android:layout_marginTop="8dp"
-                android:layout_marginEnd="10dp"
-                android:background="@drawable/round_btn"
-                android:contentDescription="@string/cd_more"
-                android:padding="7dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_more"
-                android:tint="@color/icon"
-                android:visibility="gone" />
+            <LinearLayout
+                android:id="@+id/homeHeader"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_gravity="top"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="18dp"
+                android:paddingEnd="12dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="最近打开"
+                    android:textColor="@color/icon"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <ImageButton
+                    android:id="@+id/btnHomeOpen"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@null"
+                    android:contentDescription="@string/cd_open"
+                    android:padding="10dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_folder"
+                    android:tint="@color/icon" />
+
+                <ImageButton
+                    android:id="@+id/btnHomeMore"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@null"
+                    android:contentDescription="@string/cd_more"
+                    android:padding="10dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_more"
+                    android:tint="@color/icon" />
+
+            </LinearLayout>
 
         </FrameLayout>
 

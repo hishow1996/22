@@ -155,6 +155,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var bottomBar: LinearLayout
     private lateinit var emptyState: View
     private lateinit var homeStage: FrameLayout
+    private lateinit var homeHeader: LinearLayout
     private lateinit var homeHero: View
     private lateinit var homeScroll: View
     private lateinit var btnHomeMore: ImageButton
@@ -313,6 +314,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar = findViewById(R.id.bottomBar)
         emptyState = findViewById(R.id.emptyState)
         homeStage = findViewById(R.id.homeStage)
+        homeHeader = findViewById(R.id.homeHeader)
         homeHero = findViewById(R.id.homeHero)
         homeScroll = findViewById(R.id.homeScroll)
         btnHomeMore = findViewById(R.id.btnHomeMore)
@@ -582,6 +584,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val open = View.OnClickListener { openDoc.launch(arrayOf("application/pdf")) }
         findViewById<ImageButton>(R.id.btnOpen).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnOpenEmpty).setOnClickListener(open)
+        findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
         btnHomeMore.setOnClickListener { showHomeMenu() }
 
         btnPen.setOnClickListener { selectTool(Tools.PEN) }
@@ -746,10 +749,15 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // v11：barsHidden 不参与，隐藏栏后右下角仍常驻橡皮
         refreshTempEraser()
         emptyState.setPadding(safeL, 0, safeR, safeB)
-        val ml = btnHomeMore.layoutParams as FrameLayout.LayoutParams
-        ml.topMargin = cutTop + dp(8)
-        ml.marginEnd = safeR + dp(10)
-        btnHomeMore.layoutParams = ml
+        val headerLp = homeHeader.layoutParams as FrameLayout.LayoutParams
+        headerLp.topMargin = cutTop + dp(4)
+        homeHeader.layoutParams = headerLp
+        if (homeHeader.visibility == View.VISIBLE) {
+            val stageLp = homeStage.layoutParams as LinearLayout.LayoutParams
+            stageLp.height = cutTop + dp(56)
+            stageLp.weight = 0f
+            homeStage.layoutParams = stageLp
+        }
         for (v in listOf(shapeBar, selectionBar)) {
             val lp = v.layoutParams as FrameLayout.LayoutParams
             lp.topMargin = barTop + dp(2)
@@ -1070,8 +1078,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /**
-     * 无记录 = 完全就是图二：圆盘占满全屏、严格居中，没有任何其它元素。
-     * 有记录 = 圆盘仍可点（重新导入新 PDF）+ 下方常驻浏览记录。
+     * 无记录时只显示居中的文件夹图标；有记录时顶部保留轻量操作栏，
+     * 最近文件列表占据首页主体空间。
      */
     private fun renderHomeShelf() {
         homeShelf.removeAllViews()
@@ -1079,15 +1087,21 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val stage = homeStage.layoutParams as LinearLayout.LayoutParams
         val scroll = homeScroll.layoutParams as LinearLayout.LayoutParams
         if (items.isEmpty()) {
+            homeHeader.visibility = View.GONE
+            homeHero.visibility = View.VISIBLE
             homeScroll.visibility = View.GONE
-            btnHomeMore.visibility = View.GONE
+            stage.height = 0
             stage.weight = 1f
+            scroll.height = 0
             scroll.weight = 0f
         } else {
+            homeHero.visibility = View.GONE
+            homeHeader.visibility = View.VISIBLE
             homeScroll.visibility = View.VISIBLE
-            btnHomeMore.visibility = View.VISIBLE
-            stage.weight = 0.56f
-            scroll.weight = 0.44f
+            stage.height = maxOf(sysTop, safeT) + dp(56)
+            stage.weight = 0f
+            scroll.height = 0
+            scroll.weight = 1f
         }
         homeStage.layoutParams = stage
         homeScroll.layoutParams = scroll
