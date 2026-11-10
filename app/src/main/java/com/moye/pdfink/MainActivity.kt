@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -109,6 +110,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private var currentZoom: Float
         get() = vm.currentZoom
         set(v) { vm.currentZoom = v }
+    private var currentPanX = 0f
+    private var currentPanY = 0f
     private var focusKey: String
         get() = vm.focusKey
         set(v) { vm.focusKey = v }
@@ -326,7 +329,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         pager.offscreenPageLimit = 1
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                focusKey = "p$position"
+                focusKey = "p${DisplayMode.logical(
+                    state.displayMode, state.landscape, position)}"
                 updatePage(position)
                 refreshBookmark()
                 saveSessionNow()
@@ -357,6 +361,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.brightness = p.getFloat("brightness", 0f)
         state.browse = p.getBoolean("browse", false)
         state.spread = p.getBoolean("spread", false)
+        state.displayMode = p.getInt("displayMode", DisplayMode.FIT)
+            .coerceIn(DisplayMode.FIT, DisplayMode.DOUBLE)
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
         state.edgeFlip = p.getBoolean("edge", true)
@@ -375,6 +381,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putInt("eraser", eraserIndex); putInt("shape", currentShape)
             putInt("tint", state.tint); putFloat("brightness", state.brightness)
             putBoolean("browse", state.browse); putBoolean("spread", state.spread)
+            putInt("displayMode", state.displayMode)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
@@ -500,7 +507,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun refreshBookmark() {
-        val on = inkStore.bookmarks().contains(pager.currentItem)
+        val on = inkStore.bookmarks().contains(currentPage())
         btnBookmark.isSelected = on
         btnBookmark.setColorFilter(
             ContextCompat.getColor(this, if (on) R.color.accent else R.color.icon)
@@ -549,7 +556,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             savePrefs(); refreshTools(); updatePagerInput()
         }
         btnBookmark.setOnClickListener {
-            inkStore.toggleBookmark(pager.currentItem)
+            inkStore.toggleBookmark(currentPage())
             refreshBookmark()
         }
         findViewById<ImageButton>(R.id.btnZoomReset).setOnClickListener {
@@ -645,8 +652,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val cutBottom = maxOf(sysBottom, safeB)
         val baseTop = if (portrait) dp(50) else dp(54)
         val baseBottom = if (portrait) dp(48) else dp(52)
-        val barTop = baseTop + cutTop + dp(6)
-        val barBottom = baseBottom + cutBottom + dp(4)
+        // P0：栏隐藏后必须把 padding 一起归零。旧版一次性写死 54/52dp，
+        // 栏 GONE 了那 140dp 还占着，就变成截图里的上下大片空白。
+        val barTop = if (barsHidden) 0 else baseTop + cutTop + dp(6)
+        val barBottom = if (barsHidden) 0 else baseBottom + cutBottom + dp(4)
 
         val lpTop = topBar.layoutParams as FrameLayout.LayoutParams
         lpTop.height = barTop
@@ -659,6 +668,15 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8), cutBottom + dp(4))
 
         pager.setPadding(0, barTop, 0, barBottom)
+        val barVis = if (barsHidden) View.GONE else View.VISIBLE
+        val inDoc = repo != null && pager.visibility == View.VISIBLE
+        topBar.visibility = barVis
+        bottomBar.visibility = barVis
+        btnShow.visibility =
+            if (barsHidden && inDoc) View.VISIBLE else View.GONE
+        btnTempEraser.visibility =
+            if (barsHidden || !inDoc || !state.tempEraserOn) View.GONE
+            else View.VISIBLE
         emptyState.setPadding(safeL, 0, safeR, safeB)
         homeBar.setPadding(0, cutTop + dp(8), 0, dp(8))
         homeBrand.visibility = if (portrait) View.VISIBLE else View.GONE
@@ -862,31 +880,75 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         lp2.gravity = g2; btnHide.layoutParams = lp2
     }
 
+    /** 双页模式下每个 item 是一组两页，itemCount 减半。 */
+    private fun viewCount(): Int = DisplayMode.viewCount(
+        state.displayMode, state.landscape, repo?.count ?: 1)
+
+    /** 当前显示的「逻辑页」（书签 / 导出 / 会话 / 页码都用它）。 */
+    private fun currentPage(): Int = DisplayMode.logical(
+        state.displayMode, state.landscape, pager.currentItem)
+        .coerceIn(0, ((repo?.count ?: 1) - 1).coerceAtLeast(0))
+
+    private fun viewPosOf(page: Int): Int = DisplayMode.viewPos(
+        state.displayMode, state.landscape, page)
+        .coerceIn(0, (viewCount() - 1).coerceAtLeast(0))
+
+    private fun goToPage(page: Int, smooth: Boolean = false) {
+        pager.setCurrentItem(viewPosOf(page), smooth)
+    }
+
     private fun updatePagerInput() {
         pager.isUserInputEnabled = state.browse && currentZoom <= 1.01f
     }
 
     private fun step(delta: Int) {
-        val n = repo?.count ?: return
+        if (repo == null) return
+        val n = viewCount()
         if (n <= 0) return
         pager.setCurrentItem((pager.currentItem + delta).coerceIn(0, n - 1), true)
     }
 
     private fun updatePage(pos: Int) {
         seek.progress = pos
-        tvPage.text = "${pos + 1} / ${repo?.count ?: 1}"
+        tvPage.text = DisplayMode.label(
+            state.displayMode, state.landscape, pos, repo?.count ?: 1)
     }
 
+    /** 栏的显隐统一走 applyChrome，保证 padding 与 visibility 永远一致。 */
     private fun toggleBars(hide: Boolean) {
+        if (barsHidden == hide) return
         barsHidden = hide
-        val vis = if (hide) View.GONE else View.VISIBLE
-        topBar.visibility = vis
-        bottomBar.visibility = vis
-        btnShow.visibility = if (hide && repo != null) View.VISIBLE else View.GONE
-        btnTempEraser.visibility =
-            if (hide || repo == null) View.GONE
-            else if (state.tempEraserOn) View.VISIBLE else View.GONE
-        refreshTools()
+        applyChrome()
+        refreshPageLayout()
+    }
+
+    /** 可用尺寸变了，必须按新尺寸重渲染，否则纸页变大后仍是旧的低清位图。 */
+    private fun refreshPageLayout() {
+        adapter?.invalidateRenderCache()
+        adapter?.notifyDataSetChanged()
+    }
+
+    /** 把当前横屏显示模式推给 adapter 并重渲染。竖屏一律 FIT。 */
+    private fun applyPageMode() {
+        val mode = state.effectiveMode
+        adapter?.let {
+            it.fitMode = if (mode == DisplayMode.WIDTH)
+                PageContainer.WIDTH else PageContainer.FIT
+            it.doublePage = mode == DisplayMode.DOUBLE
+        }
+        refreshPageLayout()
+        updatePagerInput()
+    }
+
+    private fun setDisplayMode(mode: Int) {
+        if (state.displayMode == mode) return
+        // itemCount 变化时先记住逻辑页，切完再按新映射跳回去
+        val keepPage = if (repo != null) currentPage() else 0
+        state.displayMode = mode
+        savePrefs()
+        applyPageMode()
+        if (repo != null) goToPage(keepPage)
+        saveSessionNow()
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -1030,6 +1092,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.showCorrection = session.showCorrection
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
         currentZoom = session.zoom.coerceIn(1f, 4f)
+        state.displayMode = session.displayMode
+        currentPanX = session.panX
+        currentPanY = session.panY
 
         val ad = PagesAdapter(
             r, this, state, workScope,
@@ -1039,6 +1104,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             { d -> step(d) }
         )
         ad.initialZoom = currentZoom
+        ad.initialPanX = currentPanX
+        ad.initialPanY = currentPanY
+        ad.fitMode = if (state.effectiveMode == DisplayMode.WIDTH)
+            PageContainer.WIDTH else PageContainer.FIT
+        ad.doublePage = state.effectiveMode == DisplayMode.DOUBLE
+        ad.onPanChange = { px, py -> currentPanX = px; currentPanY = py }
         adapter = ad
         pager.adapter = ad
         pager.visibility = View.VISIBLE
@@ -1046,11 +1117,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         topBar.visibility = if (barsHidden) View.GONE else View.VISIBLE
         bottomBar.visibility = if (barsHidden) View.GONE else View.VISIBLE
         btnShow.visibility = if (barsHidden) View.VISIBLE else View.GONE
-        seek.max = (r.count - 1).coerceAtLeast(0)
+        seek.max = (viewCount() - 1).coerceAtLeast(0)
         val restored = if (vm.createdPage >= 0) vm.createdPage else session.page
-        val page = restored.coerceIn(0, r.count - 1)
+        val logical = restored.coerceIn(0, r.count - 1)
+        val page = viewPosOf(logical)
         pager.setCurrentItem(page, false)
-        focusKey = "p$page"
+        focusKey = "p$logical"
         updatePage(page)
         pager.post { activeViews.values.forEach { it.setPageLook(state.tint) } }
         refreshBookmark()
@@ -1092,7 +1164,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     // ----- 浮层菜单 -----
-    private fun menuActions() = listOf(
+    private fun menuActions(): List<MenuAction> = listOf(
         MenuAction(R.drawable.ic_close, getString(R.string.cd_clear), { false }) {
             activeViews[focusKey]?.clearPage()
         },
@@ -1107,7 +1179,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             if (r != null) exportPdf((0 until r.count).toList(), "全本")
         },
         MenuAction(R.drawable.ic_pdf, getString(R.string.cd_pdf_page), { false }) {
-            exportPdf(listOf(pager.currentItem), "单页")
+            // pages() 收 display position，返回的正是逻辑页列表
+            val vp = pager.currentItem
+            exportPdf(DisplayMode.pages(state.displayMode, state.landscape, vp,
+                repo?.count ?: 1).toList(), "单页")
         },
         MenuAction(R.drawable.ic_backup, getString(R.string.cd_backup), { false }) {
             createBackup.launch("moye-backup.moye")
@@ -1206,7 +1281,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_home, getString(R.string.cd_home), { false }) {
             showHome()
         }
-    )
+    ) + if (state.landscape) listOf(
+        MenuAction(R.drawable.ic_fit_screen, getString(R.string.cd_fit_screen), {
+            state.effectiveMode == DisplayMode.FIT
+        }) { setDisplayMode(DisplayMode.FIT) },
+        MenuAction(R.drawable.ic_fit_width, getString(R.string.cd_fit_width), {
+            state.effectiveMode == DisplayMode.WIDTH
+        }) { setDisplayMode(DisplayMode.WIDTH) },
+        MenuAction(R.drawable.ic_double_page, getString(R.string.cd_double_page), {
+            state.effectiveMode == DisplayMode.DOUBLE
+        }) { setDisplayMode(DisplayMode.DOUBLE) }
+    ) else emptyList<MenuAction>()
 
     private fun showMenu() {
         val pv = layoutInflater.inflate(R.layout.popup_menu, null)
@@ -1292,7 +1377,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val btnAll = v.findViewById<ImageButton>(R.id.btnSelectAll)
         var oa: OverviewAdapter? = null
         oa = OverviewAdapter(r, inkStore, inkStore.bookmarks(), workScope,
-            { p -> pager.setCurrentItem(p, false); dialog.dismiss() }
+            { p -> goToPage(p); dialog.dismiss() }
         ) { n ->
             btnExport.visibility = if (n > 0) View.VISIBLE else View.GONE
             btnAll.visibility = if (oa?.selectionMode == true) View.VISIBLE else View.GONE
@@ -1318,10 +1403,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val v = layoutInflater.inflate(R.layout.dialog_nav, null)
         val dialog = AlertDialog.Builder(this).setView(v).create()
         val et = v.findViewById<EditText>(R.id.navPage)
-        et.hint = (pager.currentItem + 1).toString()
+        et.hint = (currentPage() + 1).toString()
         fun go() {
             val n = et.text.toString().toIntOrNull() ?: return
-            pager.setCurrentItem((n - 1).coerceIn(0, r.count - 1), false)
+            goToPage((n - 1).coerceIn(0, r.count - 1))
             dialog.dismiss()
         }
         et.imeOptions = EditorInfo.IME_ACTION_GO
@@ -1350,7 +1435,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     setStroke(dp(1), 0x442F6FED.toInt())
                 }
                 setOnClickListener {
-                    pager.setCurrentItem(p, false)
+                    goToPage(p)
                     dialog.dismiss()
                 }
             }
@@ -1447,15 +1532,36 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         requestStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
     }
 
+    /** 双页并排模式下，单页导出也给出两页，和屏幕上看到的一致。 */
+    private fun composeTwoPages(r: PdfRepo, p: Int, w: Int, h: Int): Bitmap {
+        val a = PageComposer.compose(r, inkStore, p, w, h, state.tint,
+            state.brightness, state.visibleLayers, false, state.pageRotation)
+        val b = PageComposer.compose(r, inkStore, p + 1, w, h, state.tint,
+            state.brightness, state.visibleLayers, false, state.pageRotation)
+        val gap = (w * 0.03f).toInt()
+        val out = Bitmap.createBitmap(w * 2 + gap, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        c.drawColor(0xFFFFFFFF.toInt())
+        c.drawBitmap(a, 0f, 0f, null)
+        c.drawBitmap(b, (w + gap).toFloat(), 0f, null)
+        a.recycle()
+        b.recycle()
+        return out
+    }
+
     private fun exportCurrentPngInternal() {
         val r = repo ?: return
-        val p = pager.currentItem
+        val p = currentPage()
         workScope.launch {
             val (w, h) = try { pageSize(p) } catch (e: Exception) { return@launch }
             val bmp = try {
-                PageComposer.compose(r, inkStore, p, w, h, state.tint,
-                    state.brightness, state.visibleLayers, state.effectiveSpread,
-                    state.pageRotation)
+                if (state.effectiveMode == DisplayMode.DOUBLE && p + 1 < r.count) {
+                    composeTwoPages(r, p, w, h)
+                } else {
+                    PageComposer.compose(r, inkStore, p, w, h, state.tint,
+                        state.brightness, state.visibleLayers, state.effectiveSpread,
+                        state.pageRotation)
+                }
             } catch (e: Exception) { null } ?: return@launch
             val ok = saveToGallery(bmp)
             bmp.recycle()
@@ -1535,14 +1641,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun saveSessionNow() {
         if (vm.currentFp.isEmpty() || !::sessionRepo.isInitialized) return
         sessionRepo.saveSession(vm.currentFp, DocSession(
-            page = pager.currentItem,
+            page = currentPage(),
             zoom = currentZoom,
             brushTool = currentTool,
             layer = state.activeLayer,
             tint = state.tint,
             brightness = state.brightness,
             rotation = state.pageRotation,
-            showCorrection = state.showCorrection
+            showCorrection = state.showCorrection,
+            displayMode = state.displayMode,
+            panX = currentPanX,
+            panY = currentPanY
         ))
     }
 
@@ -1774,11 +1883,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun jumpToNextInk() {
         val n = repo?.count ?: return
-        val cur = pager.currentItem
+        val cur = currentPage()
         val order = ((cur + 1) until n).toList() + (0..cur).toList()
         for (p in order) {
             if (inkStore.hasInk("p$p") || inkStore.hasInk("d$p")) {
-                pager.setCurrentItem(p, false)
+                goToPage(p)
                 return
             }
         }
@@ -1786,10 +1895,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun jumpToNextBookmark() {
         val n = repo?.count ?: return
-        val cur = pager.currentItem
+        val cur = currentPage()
         val bm = inkStore.bookmarks().filter { it in 0 until n }.sorted()
         val next = bm.firstOrNull { it > cur } ?: bm.firstOrNull()
-        if (next != null && next != cur) pager.setCurrentItem(next, false)
+        if (next != null && next != cur) goToPage(next)
     }
 
     private fun rotatePage() {
@@ -1824,17 +1933,18 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         super.onConfigurationChanged(newConfig)
         applySystemDark(newConfig)
         applyHandedness()
+        // 方向变化会改变 itemCount（竖屏强制 FIT），先记住逻辑页
+        val keepPage = if (repo != null) currentPage() else 0
         applyOrientationLayout()
+        // 竖屏强制 FIT、横屏恢复用户选的模式，并触发重渲染
+        applyPageMode()
+        if (repo != null) goToPage(keepPage)
         saveSessionNow()
-        pager.post {
-            adapter?.invalidateRenderCache()
-            adapter?.notifyDataSetChanged()
-        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putInt("moye_page", pager.currentItem)
+        outState.putInt("moye_page", currentPage())
     }
 
     override fun onDestroy() {

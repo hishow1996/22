@@ -10,6 +10,8 @@
         android:id="@+id/spreadRoot"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="center"
         android:orientation="horizontal"
         android:paddingStart="6dp"
@@ -33,6 +35,32 @@
 
             <com.moye.pdfink.InkView
                 android:id="@+id/inkView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </com.moye.pdfink.PageContainer>
+
+        <!-- v7 双页并排：相邻的下一页。GONE 时不参与 LinearLayout 的 weight 分配 -->
+        <com.moye.pdfink.PageContainer
+            android:id="@+id/secondContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:background="#FFFFFFFF"
+            android:elevation="3dp"
+            android:outlineProvider="bounds"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/secondImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/cd_next"
+                android:scaleType="fitXY" />
+
+            <com.moye.pdfink.InkView
+                android:id="@+id/secondInk"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 

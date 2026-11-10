@@ -12,6 +12,10 @@ import kotlin.math.hypot
  * 双指缩放 + 平移 + 双指横滑翻页。
  * 在 dispatch 层截获多指事件，因此不受子 View 的 disallowIntercept 影响。
  * 变换施加在 content 上，ViewGroup 会把触摸坐标逆变换给 InkView，笔迹自动跟随。
+ *
+ * v7：WIDTH 模式下页面比容器高，panExtraY > 0，scale=1 时也允许上下平移；
+ * 抬手不再把 tx/ty 清零，改由 applyTransform 按边界钳制。单指仍照常写字，
+ * 平移靠双指同向拖动（spreadDelta 小，只走 tx/ty 分支），零新手势、零冲突。
  */
 class ZoomHost @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -19,6 +23,11 @@ class ZoomHost @JvmOverloads constructor(
 
     var onZoomChange: ((Float) -> Unit)? = null
     var onFlip: ((Int) -> Unit)? = null
+    var onPanChange: ((Float, Float) -> Unit)? = null
+
+    /** 页面超出容器的像素（未缩放时），由 PagesAdapter 在 layout 后写入。 */
+    @Volatile var panExtraX = 0f
+    @Volatile var panExtraY = 0f
 
     private var content: View? = null
     private var scale = 1f
@@ -47,7 +56,6 @@ class ZoomHost @JvmOverloads constructor(
         val multi = ev.pointerCount >= 2
         if (multi) zooming = true
         if (zooming) {
-            // 第二根手指落下时也让子 View 收到，便于它取消正在进行的笔画
             if (ev.actionMasked == MotionEvent.ACTION_POINTER_DOWN && ev.pointerCount == 2) {
                 super.dispatchTouchEvent(ev)
             }
@@ -105,8 +113,8 @@ class ZoomHost @JvmOverloads constructor(
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (scale <= 1.01f) {
                     scale = 1f
-                    tx = 0f
-                    ty = 0f
+                    // 不清零 tx/ty：WIDTH 模式的上下平移要保留，
+                    // applyTransform 会按 panExtra 边界把它们钳回合法范围
                     applyTransform()
                 }
                 startDist = 0f
@@ -116,8 +124,11 @@ class ZoomHost @JvmOverloads constructor(
 
     private fun applyTransform() {
         val v = content ?: return
-        val limX = width * (scale - 1f) * 0.5f
-        val limY = height * (scale - 1f) * 0.5f
+        // 内容超出量随 scale 放大；scale=1 且 panExtra=0 时上限为 0，等价原行为
+        val limX = panExtraX.coerceAtLeast(0f) * scale * 0.5f +
+            width * (scale - 1f).coerceAtLeast(0f) * 0.5f
+        val limY = panExtraY.coerceAtLeast(0f) * scale * 0.5f +
+            height * (scale - 1f).coerceAtLeast(0f) * 0.5f
         tx = tx.coerceIn(-limX, limX)
         ty = ty.coerceIn(-limY, limY)
         v.scaleX = scale
@@ -125,6 +136,7 @@ class ZoomHost @JvmOverloads constructor(
         v.translationX = tx
         v.translationY = ty
         onZoomChange?.invoke(scale)
+        onPanChange?.invoke(tx, ty)
     }
 
     fun reset(silent: Boolean = false) {
@@ -138,14 +150,24 @@ class ZoomHost @JvmOverloads constructor(
             v.translationX = 0f
             v.translationY = 0f
         }
-        if (!silent) onZoomChange?.invoke(1f)
+        if (!silent) {
+            onZoomChange?.invoke(1f)
+            onPanChange?.invoke(0f, 0f)
+        }
     }
 
     val zoomScale: Float get() = scale
+    val panX: Float get() = tx
+    val panY: Float get() = ty
 
-    /** 会话恢复：只还原倍率，平移归零即可。 */
-    fun setScale(s: Float) {
+    /** 会话恢复：还原倍率与平移量，平移归零时也不影响 FIT 模式。 */
+    fun setScale(s: Float, px: Float = 0f, py: Float = 0f) {
         scale = s.coerceIn(1f, 4f)
+        tx = px
+        ty = py
         applyTransform()
     }
+
+    /** panExtra 由外部写入后，按新边界重新钳一次，避免露出空白。 */
+    fun refreshPanBounds() { applyTransform() }
 }

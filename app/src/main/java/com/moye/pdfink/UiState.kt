@@ -33,9 +33,15 @@ class UiState {
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true
+    // v7：横屏显示模式，用户设置原样保留，竖屏强制 FIT
+    @Volatile var displayMode = DisplayMode.FIT
 
+    val effectiveMode: Int
+        get() = DisplayMode.effective(displayMode, landscape)
+
+    /** 双页并排与「题目 / 草稿对开」不能叠三层，双页优先。 */
     val effectiveSpread: Boolean
-        get() = spread && landscape
+        get() = spread && landscape && effectiveMode != DisplayMode.DOUBLE
 
     val visibleLayers: Set<Int>
         get() = if (showCorrection) setOf(Layers.ANSWER, Layers.CORRECTION)

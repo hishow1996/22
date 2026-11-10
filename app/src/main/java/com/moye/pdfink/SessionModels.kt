@@ -40,7 +40,11 @@ data class DocSession(
     val tint: Int = PageFilter.WHITE,
     val brightness: Float = 0f,
     val rotation: Int = 0,
-    val showCorrection: Boolean = true
+    val showCorrection: Boolean = true,
+    // v7：横屏显示模式与双指平移量
+    val displayMode: Int = DisplayMode.FIT,
+    val panX: Float = 0f,
+    val panY: Float = 0f
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("p", page)
@@ -51,6 +55,9 @@ data class DocSession(
         .put("b", brightness.toDouble())
         .put("r", rotation)
         .put("sc", showCorrection)
+        .put("dm", displayMode)
+        .put("px", panX.toDouble())
+        .put("py", panY.toDouble())
 
     companion object {
         fun fromJson(o: JSONObject): DocSession = DocSession(
@@ -61,7 +68,11 @@ data class DocSession(
             o.optInt("ti", PageFilter.WHITE),
             o.optDouble("b", 0.0).toFloat(),
             o.optInt("r", 0),
-            o.optBoolean("sc", true)
+            o.optBoolean("sc", true),
+            o.optInt("dm", DisplayMode.FIT).coerceIn(
+                DisplayMode.FIT, DisplayMode.DOUBLE),
+            o.optDouble("px", 0.0).toFloat(),
+            o.optDouble("py", 0.0).toFloat()
         )
     }
 }

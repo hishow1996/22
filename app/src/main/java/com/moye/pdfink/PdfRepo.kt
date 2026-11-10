@@ -46,7 +46,10 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     private fun raw(page: Int, w: Int, h: Int): Bitmap = synchronized(renderer) {
-        val s = min(1f, 2200f / maxOf(w, h).coerceAtLeast(1).toFloat())
+        // WIDTH 模式页面可到约 2600px 长边，固定 2200 上限会把它缩糊
+        val maxSide = if (Runtime.getRuntime().maxMemory() < 128L * 1024 * 1024)
+            1800f else 2600f
+        val s = min(1f, maxSide / maxOf(w, h).coerceAtLeast(1).toFloat())
         val rw = (w * s).toInt().coerceAtLeast(1)
         val rh = (h * s).toInt().coerceAtLeast(1)
         val key = "$page-${rw}x$rh"
