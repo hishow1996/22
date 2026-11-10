@@ -125,6 +125,14 @@ class InkView @JvmOverloads constructor(
         alpha = 110
     }
     private var liveDirty: FloatArray? = null
+
+    /** v15：与题目底图共用同一 viewport，放大后两层像素级对齐。 */
+    var viewport: Viewport? = null
+    /** s>1 时切矢量重绘：位图缓冲不再被父 View 插值放大，笔迹也锐利。 */
+    var hiResMode: Boolean = false
+        set(v) {
+            if (v != field) { field = v; invalidate() }
+        }
     private var pageTint = InkPalette.WHITE
     private fun mapInk(argb: Int): Int = InkPalette.mapColor(argb, pageTint)
 
@@ -203,6 +211,42 @@ class InkView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        val vp = viewport
+        if (hiResMode && vp != null && vp.lw > 0 && vp.lh > 0) {
+            // 与题目底图共用同一组 ZoomHost 下发的逻辑坐标，像素级对齐
+            val sc = vp.bucket
+            val lw = vp.lw.toFloat()
+            val lh = vp.lh.toFloat()
+            // bbox 粗筛用可见逻辑窗，绘制定位用 originX/originY
+            val r = floatArrayOf(vp.visLeft, vp.visTop,
+                vp.visLeft + vp.visW.coerceAtLeast(1),
+                vp.visTop + vp.visH.coerceAtLeast(1))
+            canvas.save()
+            canvas.translate(-vp.originX, -vp.originY)
+            // 按归一化坐标 × 放大后的逻辑画布直绘，不再经过位图缓冲插值。
+            // bbox 粗筛：只画与可见窗相交的 marks，放大后也不会全量重绘。
+            for (m in marks) {
+                if (!visible(m)) continue
+                val b = GeometryCore.markBounds(m)
+                val pb = floatArrayOf(b[0] * lw, b[1] * lh, b[2] * lw, b[3] * lh)
+                if (!GeometryCore.overlaps(pb, r)) continue
+                InkGeometry.drawMark(canvas, m, lw, lh,
+                    strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+            }
+            // 正在写的一笔仍走局部位图，按逻辑画布缩放铺开；抬手并入 marks 后即锐利
+            canvas.save()
+            canvas.scale(sc, sc)
+            live?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+            predSeg?.let { s ->
+                scratch.reset()
+                scratch.moveTo(s[0], s[1])
+                scratch.lineTo(s[2], s[3])
+                canvas.drawPath(scratch, predPaint)
+            }
+            canvas.restore()
+            canvas.restore()
+            return
+        }
         if (base == null) {
             ensureBuffers()
             drawAllBase(baseC ?: return)

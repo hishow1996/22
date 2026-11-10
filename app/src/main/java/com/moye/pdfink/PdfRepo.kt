@@ -74,29 +74,28 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     /**
-     * 只渲染第 index 条纵向条带（目标像素坐标），横向严格 1:1。
-     * matrix = 缩放 s=目标宽/原页宽 + 平移 -条带顶部，
-     * PdfRenderer 会按 bitmap 边界裁剪，所以只分配 w×tileH 的位图。
+     * 只渲染逻辑画布上 (left,top) 起 tw×th 的一块，横向严格 1:1。
+     * A = 逻辑画布宽 / PDF 页宽（已含放大倍率），矩阵 = 缩放 A + 平移 -(块左上/A)。
+     * PdfRenderer 按 bitmap 边界裁剪，所以只分配 tw×th 的位图，
+     * 4× 放大时可见窗口仍是屏幕大小，块数不随倍率增长。
      */
     fun renderTile(
-        page: Int, w: Int, h: Int, index: Int, tileH: Int,
-        tint: Int, brightness: Float
+        page: Int, lw: Int, lh: Int, left: Int, top: Int,
+        tw: Int, th: Int, tint: Int, brightness: Float
     ): Bitmap {
-        val top = index * tileH
-        if (top >= h || w <= 0) {
+        if (lw <= 0 || tw <= 0 || th <= 0 || left >= lw || top >= lh) {
             return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         }
-        val th = minOf(tileH, h - top)
-        val out = Bitmap.createBitmap(w, th, Bitmap.Config.ARGB_8888)
+        val out = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
         out.eraseColor(Color.WHITE)
         synchronized(renderer) {
             val p = renderer.openPage(page)
-            val s = w.toFloat() / p.width.coerceAtLeast(1).toFloat()
-            // preTranslate：M = T * S，点变换 = S·p + (0,-top)。
-            // 若把平移写在缩放之后右乘，平移量会被 s 再乘一次，条带整体偏移。
+            val a = lw.toFloat() / p.width.coerceAtLeast(1).toFloat()
+            // preTranslate：M = T * S，点变换 = A·p - (left,top)。
+            // 若把平移写在缩放之后右乘，平移量会被 A 再乘一次，整块偏移。
             val m = Matrix().apply {
-                setScale(s, s)
-                preTranslate(0f, -top.toFloat())
+                setScale(a, a)
+                preTranslate(-left.toFloat() / a, -top.toFloat() / a)
             }
             p.render(out, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
             p.close()

@@ -29,6 +29,18 @@ class ZoomHost @JvmOverloads constructor(
     @Volatile var panExtraX = 0f
     @Volatile var panExtraY = 0f
 
+    /** 每页独有：题目底图与笔迹层读同一组 scale / pan，放大后像素级对齐。 */
+    val viewport = Viewport()
+    /** 变换数值变了就通知各层 invalidate。 */
+    var onViewportChanged: (() -> Unit)? = null
+    /** 倍率跨过 1× 时通知 InkView 切换矢量重绘模式。 */
+    var onScaleCommit: ((Float) -> Unit)? = null
+    /** 页面旋转过（低频）仍沿用旧的 View 变换，行为完全不变。 */
+    var legacyViewScale = false
+    /** 页面基准像素尺寸，由 PagesAdapter 在测量完成后写入。 */
+    var baseContentW = 0
+    var baseContentH = 0
+
     private var content: View? = null
     private var scale = 1f
     private var tx = 0f
@@ -122,6 +134,36 @@ class ZoomHost @JvmOverloads constructor(
         }
     }
 
+    /**
+     * 把 scale / tx / ty 换算成「逻辑画布 + 可见原点」，一次性写进 viewport。
+     * 子 View 只照抄这组数，不各自推算；否则横屏 WIDTH 下页面比宿主高，
+     * TiledPageView 按自身高度取块就会只画顶部几行。
+     */
+    private fun syncViewport(tx0: Float, ty0: Float) {
+        val sc = TiledPageView.bucket(scale.coerceIn(1f, 4f))
+        val bw = baseContentW.coerceAtLeast(1)
+        val bh = baseContentH.coerceAtLeast(1)
+        val lw = (bw * sc).toInt().coerceAtLeast(1)
+        val lh = (bh * sc).toInt().coerceAtLeast(1)
+        // 逻辑画布在宿主视口中居中，再叠加用户平移
+        val lx = (width - lw) * 0.5f + tx0
+        val ly = (height - lh) * 0.5f + ty0
+        // 页面基准框在宿主中居中（gravity=center），子 View 局部 (0,0) 落在这里
+        val ox = (width - bw) * 0.5f
+        val oy = (height - bh) * 0.5f
+        viewport.scale = scale
+        viewport.bucket = sc
+        viewport.lw = lw
+        viewport.lh = lh
+        viewport.originX = ox - lx
+        viewport.originY = oy - ly
+        // 宿主可见区 h∈[0,width] 对应逻辑 X∈[-lx,-lx+width]，与 ox/oy 无关
+        viewport.visLeft = -lx
+        viewport.visTop = -ly
+        viewport.visW = width
+        viewport.visH = height
+    }
+
     private fun applyTransform() {
         val v = content ?: return
         // 内容超出量随 scale 放大；scale=1 且 panExtra=0 时上限为 0，等价原行为
@@ -131,10 +173,23 @@ class ZoomHost @JvmOverloads constructor(
             height * (scale - 1f).coerceAtLeast(0f) * 0.5f
         tx = tx.coerceIn(-limX, limX)
         ty = ty.coerceIn(-limY, limY)
-        v.scaleX = scale
-        v.scaleY = scale
-        v.translationX = tx
-        v.translationY = ty
+        syncViewport(tx, ty)
+        if (legacyViewScale) {
+            // 旋转页：保持 v14 及以前的行为，不进新绘制链路
+            v.scaleX = scale
+            v.scaleY = scale
+            v.translationX = tx
+            v.translationY = ty
+        } else {
+            // v15：不再缩放 View，内容由 TiledPageView / InkView 按 viewport 自绘，
+            // 否则底图与笔迹位图会被插值放大到 4× 而糊掉。
+            v.scaleX = 1f
+            v.scaleY = 1f
+            v.translationX = 0f
+            v.translationY = 0f
+        }
+        onViewportChanged?.invoke()
+        onScaleCommit?.invoke(scale)
         onZoomChange?.invoke(scale)
         onPanChange?.invoke(tx, ty)
     }
@@ -152,8 +207,12 @@ class ZoomHost @JvmOverloads constructor(
             v.scaleX = 1f
             v.scaleY = 1f
             v.translationX = 0f
-            v.translationY = ty
+            v.translationY = if (legacyViewScale) ty else 0f
         }
+        syncViewport(0f, ty)
+        // 即使 silent 也要复位 viewport，否则复用的 holder 会残留上一次的倍率
+        onViewportChanged?.invoke()
+        onScaleCommit?.invoke(1f)
         if (!silent) {
             onZoomChange?.invoke(1f)
             onPanChange?.invoke(0f, ty)

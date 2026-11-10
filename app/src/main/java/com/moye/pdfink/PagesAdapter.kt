@@ -93,6 +93,27 @@ class PagesAdapter(
         h.zoom.onZoomChange = onZoomChange
         h.zoom.onFlip = onFlip
         h.zoom.onPanChange = onPanChange
+        // 页面旋转过（低频）沿用旧 View 变换；其余走 v15 的高分辨率自绘
+        h.zoom.legacyViewScale = state.pageRotation != 0
+        h.zoom.onViewportChanged = {
+            h.image.invalidate()
+            h.secondImage.invalidate()
+            h.ink.invalidate()
+            h.secondInk.invalidate()
+            h.draftInk.invalidate()
+        }
+        h.zoom.onScaleCommit = { sc ->
+            val hi = sc > 1.01f && state.pageRotation == 0
+            h.ink.hiResMode = hi
+            h.secondInk.hiResMode = hi
+            h.draftInk.hiResMode = hi
+        }
+        val vp = h.zoom.viewport
+        h.image.viewport = vp
+        h.secondImage.viewport = vp
+        h.ink.viewport = vp
+        h.secondInk.viewport = vp
+        h.draftInk.viewport = vp
 
         h.pageContainer.layoutParams = params()
         h.secondContainer.layoutParams = params().apply {
@@ -117,8 +138,9 @@ class PagesAdapter(
 
         h.image.colorFilter = null
         h.secondImage.colorFilter = null
-        // WIDTH 且未旋转 → 分块；FIT / DOUBLE / 旋转页 → 原来的整页 render
-        val useTiles = fitMode == PageContainer.WIDTH && state.pageRotation == 0
+        // v15：所有未旋转页都走分块（竖屏 FIT 也 1:1，放大仍锐利）；
+        // 只有页面旋转过才退回整页 render（低频，见 README 边界）。
+        val useTiles = state.pageRotation == 0
         h.image.unbindTiled()
         h.secondImage.unbindTiled()
         if (useTiles) {
@@ -147,6 +169,11 @@ class PagesAdapter(
             val ht = h.pageContainer.height
             if (w <= 0 || ht <= 0) return@post
 
+            // v15：View 不再被 scale，w/ht 恒定就是页面基准尺寸；
+            // 必须在 refreshPanBounds / setScale 之前写入 syncViewport。
+            h.zoom.baseContentW = w
+            h.zoom.baseContentH = ht
+
             // WIDTH 模式页面比容器高，把超出量交给 ZoomHost 做 1x 纵向平移边界
             h.zoom.panExtraX = 0f
             h.zoom.panExtraY = (ht - h.zoom.height).coerceAtLeast(0).toFloat()
@@ -159,9 +186,17 @@ class PagesAdapter(
             }
 
             if (useTiles) {
-                // 只渲染可见条带，不再生成整页大位图
+                // 基准尺寸不变；放大倍率由 viewport 在 onDraw 里换算成逻辑画布
                 h.image.bindTiled(repo, scope, p0, w, ht,
                     state.tint, state.brightness)
+                if (showSecond) {
+                    val w2 = h.secondContainer.width
+                    val h2 = h.secondContainer.height
+                    if (w2 > 0 && h2 > 0) {
+                        h.secondImage.bindTiled(repo, scope, p1, w2, h2,
+                            state.tint, state.brightness)
+                    }
+                }
             } else {
                 ensureRendered(h, p0, h.image, w, ht, token, position)
                 if (showSecond) {
@@ -259,8 +294,8 @@ class PagesAdapter(
     }
 
     fun resetZoom(page: Int) {
-        holders[page]?.zoom?.reset(
-            toTop = fitMode == PageContainer.WIDTH && state.pageRotation == 0)
+        // v15：所有模式都回 1:1 并回页顶（FIT 下 panExtra=0，等价归零）
+        holders[page]?.zoom?.reset(toTop = true)
     }
 
     override fun onViewRecycled(h: VH) {

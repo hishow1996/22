@@ -1162,6 +1162,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.tint = session.tint.coerceIn(0, 2)
         state.brightness = session.brightness.coerceIn(-1f, 1f)
         state.pageRotation = session.rotation.coerceIn(0, 270)
+        // P0：横版 PDF 在竖屏 FIT 下只占屏高约 1/3，自动建议旋转 90°。
+        // 结果写进会话，用户之后在「更多」里手动改旋转会覆盖它。
+        if (!state.landscape && session.rotation == 0 &&
+            r.ratio(0) > 1.2f) {
+            state.pageRotation = 90
+        }
         state.showCorrection = session.showCorrection
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
         currentZoom = session.zoom.coerceIn(1f, 4f)
