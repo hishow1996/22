@@ -376,6 +376,27 @@
             android:layout_height="0dp"
             android:layout_weight="1">
 
+            <LinearLayout
+                android:id="@+id/homeHero"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageButton
+                    android:id="@+id/btnOpenEmpty"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center_horizontal"
+                    android:background="@null"
+                    android:contentDescription="@string/cd_open"
+                    android:padding="10dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_folder"
+                    android:tint="@color/icon" />
+
+            </LinearLayout>
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"

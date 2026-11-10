@@ -156,6 +156,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var emptyState: View
     private lateinit var homeStage: FrameLayout
     private lateinit var homeHeader: LinearLayout
+    private lateinit var homeHero: View
     private lateinit var homeScroll: View
     private lateinit var btnHomeMore: ImageButton
     private lateinit var homeShelf: LinearLayout
@@ -314,6 +315,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         emptyState = findViewById(R.id.emptyState)
         homeStage = findViewById(R.id.homeStage)
         homeHeader = findViewById(R.id.homeHeader)
+        homeHero = findViewById(R.id.homeHero)
         homeScroll = findViewById(R.id.homeScroll)
         btnHomeMore = findViewById(R.id.btnHomeMore)
         homeShelf = findViewById(R.id.homeShelf)
@@ -592,6 +594,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun setupClicks() {
         val open = View.OnClickListener { openDoc.launch(arrayOf("application/pdf")) }
         findViewById<ImageButton>(R.id.btnOpen).setOnClickListener(open)
+        findViewById<ImageButton>(R.id.btnOpenEmpty).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
         btnHomeMore.setOnClickListener { showHomeMenu() }
 
@@ -1085,20 +1088,25 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         renderHomeShelf()
     }
 
-    /** 首页导入入口固定在右上角；有记录时显示最近文件列表。 */
+    /**
+     * 无记录时只显示居中的文件夹图标；有记录时顶部保留轻量操作栏，
+     * 最近文件列表占据首页主体空间。
+     */
     private fun renderHomeShelf() {
         homeShelf.removeAllViews()
         val items = recents.all()
         val stage = homeStage.layoutParams as LinearLayout.LayoutParams
         val scroll = homeScroll.layoutParams as LinearLayout.LayoutParams
         if (items.isEmpty()) {
-            homeHeader.visibility = View.VISIBLE
+            homeHeader.visibility = View.GONE
+            homeHero.visibility = View.VISIBLE
             homeScroll.visibility = View.GONE
             stage.height = 0
             stage.weight = 1f
             scroll.height = 0
             scroll.weight = 0f
         } else {
+            homeHero.visibility = View.GONE
             homeHeader.visibility = View.VISIBLE
             homeScroll.visibility = View.VISIBLE
             stage.height = maxOf(sysTop, safeT) + dp(56)
