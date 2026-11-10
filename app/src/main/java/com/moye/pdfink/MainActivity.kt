@@ -1002,7 +1002,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         adapter?.notifyDataSetChanged()
     }
 
-    /** 把当前横屏显示模式推给 adapter 并重渲染。竖屏一律 FIT。 */
+    /** 把当前显示模式推给 adapter 并重渲染。竖屏默认按宽度适配。 */
     private fun applyPageMode() {
         val mode = state.effectiveMode
         adapter?.let {
@@ -1196,7 +1196,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.tint = session.tint.coerceIn(0, 2)
         state.brightness = session.brightness.coerceIn(-1f, 1f)
         state.pageRotation = session.rotation.coerceIn(0, 270)
-        // P0：横版 PDF 在竖屏 FIT 下只占屏高约 1/3，自动建议旋转 90°。
+        // 横版 PDF 在竖屏时自动旋转 90°，避免横向内容缩得过窄。
         // 结果写进会话，用户之后在「更多」里手动改旋转会覆盖它。
         if (!state.landscape && session.rotation == 0 &&
             r.ratio(0) > 1.2f) {
@@ -2086,10 +2086,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         super.onConfigurationChanged(newConfig)
         applySystemDark(newConfig)
         applyHandedness()
-        // 方向变化会改变 itemCount（竖屏强制 FIT），先记住逻辑页
+        // 方向变化可能改变 itemCount（横屏双页仅在横屏生效），先记住逻辑页
         val keepPage = if (repo != null) currentPage() else 0
         applyOrientationLayout()
-        // 竖屏强制 FIT、横屏恢复用户选的模式，并触发重渲染
+        // 竖屏使用单页宽度适配、横屏恢复用户选的模式，并触发重渲染
         applyPageMode()
         if (repo != null) goToPage(keepPage)
         saveSessionNow()

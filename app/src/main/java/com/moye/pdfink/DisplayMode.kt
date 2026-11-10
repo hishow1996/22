@@ -1,7 +1,8 @@
 package com.moye.pdfink
 
 /**
- * 横屏页面显示模式。竖屏一律强制 FIT（竖屏纸本来就够大）。
+ * 页面显示模式。竖屏默认按宽度适配，过高页面允许纵向平移；
+ * 横屏保留 FIT / WIDTH / DOUBLE 三种模式。
  * 与「题目 / 草稿对开」互斥：双页并排时 effectiveSpread 会自动降级。
  *
  * DOUBLE 下 ViewPager2 的一个 item 是「一组两页」：itemCount 减半，
@@ -16,7 +17,7 @@ object DisplayMode {
     const val DOUBLE = 2     // 相邻两页并排
 
     fun effective(mode: Int, landscape: Boolean): Int =
-        if (landscape) mode.coerceIn(FIT, DOUBLE) else FIT
+        if (landscape) mode.coerceIn(FIT, DOUBLE) else WIDTH
 
     fun isDouble(mode: Int, landscape: Boolean) =
         effective(mode, landscape) == DOUBLE
