@@ -307,3 +307,40 @@ Android Studio（Ladybug+，JDK 17）打开本目录，Sync 后 Run。
 - `InkView`：`MotionEvent.CLASSIFICATION_PALM` 是 API 34 flag-gated 常量，
   公开 android.jar 不含该字段，按 AOSP 取字面值 `0x2`
 - `MainActivity`：补 `brushRow` 的 lateinit 声明与 findViewById
+
+## 首页 v9：图二的极简样子 + 浏览记录常驻
+
+- **无记录**：米白底 + 屏幕正中白圆盘（88dp，深灰文件夹），零文字、零顶栏、
+  零品牌图 —— 与图二逐像素一致。`homeBar` / `homeBrand` / `btnHomeOpen` 全部删除。
+- **有记录**：圆盘仍在（视觉中心偏上），下方直接显示浏览记录，不藏长按、
+  不上滑、不需要额外入口；右上角一个 34dp「更多」收容备份 / 恢复 / 设置等
+  全局动作（无记录时隐藏，所以图二不受影响）。
+- **重新导入文件**：点圆盘照样选新 PDF。同一份按内容指纹去重、排到最前，
+  换路径 / 换入口打开都对得上；不同份新增一条（最多 12 条）。
+  笔迹 `InkStore.attach()` 也按指纹分目录，所以圈画和会话都跟着同一份走。
+  Uri 失效时 `openUri()` 返回 false，不会写入脏记录，重新选一次即可。
+- **标题和图三一致**：改用系统 `OpenableColumns.DISPLAY_NAME`，保留 `.pdf`、
+  不截断、不加省略号；卡片改 `maxLines=4` 可换行。`Recents.Item` 新增
+  `custom` 标记，手动改过名的记录不会被重新导入或点开时覆盖。
+- **续读**：点卡片后按 `fp` 取 `DocSession`，页码 + 缩放 + 工具 + 横屏模式 +
+  平移量一起恢复。
+
+**修掉两个真 bug**
+1. `applyChrome()` 的 `barVis` 原先只看 `barsHidden`，没看 `inDoc`，首页态
+   顶/底栏会被系统 insets 回调复活（图一那一排工具 / 翻页箭头 / 星标）。
+   现在 `barsHidden || !inDoc` 一律 GONE，并在 `refreshTools()` 里加
+   `pager.visibility` 双保险。
+2. `vm.createdPage` 从 saved state 赋值后一直 ≥0，`openUri()` 的
+   `if (createdPage >= 0) createdPage else session.page` 会让之后从首页
+   点开任何卷子都被带到上一份旧页码。现在用完一次立刻清空，
+   之后一律走按指纹归档的 `session.page`。
+
+**默认口径**（两项未指定，按推荐执行）：记录行 = 左侧 PDF 小图标 +
+完整文件主标题 + 灰副行进度；副行显示「第 N 页 / N / M」，
+不复刻图三「3月29日 11.32 MB PDF 文档」那行说明性小字。
+
+**真机验收补充**
+  35. 无记录首页：只有正中白圆盘，顶/底栏、品牌图、悬浮键全部不显示
+  36. 打开一份 PDF 再返回，首页直接出现记录；换一份再导入，两条并存、新的在前
+  37. 点记录打开后回到上次页码；换另一份记录不会串到上一份页码
+  38. 标题含 .pdf 且不截断、不加省略号；手动改名后重新导入不被覆盖

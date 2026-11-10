@@ -18,7 +18,7 @@
             android:layout_height="22dp"
             android:layout_gravity="center"
             android:importantForAccessibility="no"
-            android:src="@drawable/ic_folder"
+            android:src="@drawable/ic_pdf"
             android:tint="@color/icon" />
 
     </FrameLayout>
@@ -30,14 +30,14 @@
         android:layout_weight="1"
         android:orientation="vertical">
 
+        <!-- 与文件管理器一致：完整文件名（含 .pdf），不截断、不加省略号 -->
         <TextView
             android:id="@+id/cardName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="middle"
-            android:singleLine="true"
+            android:maxLines="4"
             android:textColor="@color/icon"
-            android:textSize="15sp" />
+            android:textSize="16sp" />
 
         <TextView
             android:id="@+id/cardProgress"

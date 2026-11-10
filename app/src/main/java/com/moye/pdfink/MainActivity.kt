@@ -149,9 +149,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var toolsStrip: LinearLayout
     private lateinit var bottomBar: LinearLayout
     private lateinit var emptyState: View
-    private lateinit var homeBar: View
+    private lateinit var homeStage: FrameLayout
     private lateinit var homeHero: View
-    private lateinit var homeBrand: View
+    private lateinit var homeScroll: View
+    private lateinit var btnHomeMore: ImageButton
     private lateinit var homeShelf: LinearLayout
     private lateinit var colorRow: LinearLayout
     private lateinit var widthRow: LinearLayout
@@ -297,9 +298,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         toolsStrip = findViewById(R.id.toolsStrip)
         bottomBar = findViewById(R.id.bottomBar)
         emptyState = findViewById(R.id.emptyState)
-        homeBar = findViewById(R.id.homeBar)
+        homeStage = findViewById(R.id.homeStage)
         homeHero = findViewById(R.id.homeHero)
-        homeBrand = findViewById(R.id.homeBrand)
+        homeScroll = findViewById(R.id.homeScroll)
+        btnHomeMore = findViewById(R.id.btnHomeMore)
         homeShelf = findViewById(R.id.homeShelf)
         colorRow = findViewById(R.id.colorRow)
         widthRow = findViewById(R.id.widthRow)
@@ -483,12 +485,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         listOf(btnPen, btnHighlight, btnShape, btnLasso, btnNote, btnEraser).forEach {
             it.alpha = dim
         }
+        val inDocNow = ::pager.isInitialized && pager.visibility == View.VISIBLE
         shapeBar.visibility =
-            if (!barsHidden && currentTool == Tools.SHAPE && !state.browse) View.VISIBLE
-            else View.GONE
+            if (!barsHidden && inDocNow && currentTool == Tools.SHAPE && !state.browse)
+                View.VISIBLE else View.GONE
         selectionBar.visibility =
-            if (!barsHidden && !state.browse &&
-                activeViews.values.any { it.hasSelection() }) View.VISIBLE else View.GONE
+            if (!barsHidden && inDocNow && !state.browse &&
+                activeViews.values.any { it.hasSelection() })
+                View.VISIBLE else View.GONE
         mapOf(
             R.id.btnLine to Shapes.LINE, R.id.btnRect to Shapes.RECT,
             R.id.btnOval to Shapes.OVAL, R.id.btnArrow to Shapes.ARROW
@@ -520,8 +524,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val open = View.OnClickListener { openDoc.launch(arrayOf("application/pdf")) }
         findViewById<ImageButton>(R.id.btnOpen).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnOpenEmpty).setOnClickListener(open)
-        findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
-        findViewById<ImageButton>(R.id.btnHomeMore).setOnClickListener { showHomeMenu() }
+        btnHomeMore.setOnClickListener { showHomeMenu() }
 
         btnPen.setOnClickListener { selectTool(Tools.PEN) }
         btnHighlight.setOnClickListener { selectTool(Tools.HIGHLIGHT) }
@@ -670,8 +673,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8), cutBottom + dp(4))
 
         pager.setPadding(0, barTop, 0, barBottom)
-        val barVis = if (barsHidden) View.GONE else View.VISIBLE
         val inDoc = repo != null && pager.visibility == View.VISIBLE
+        val barVis = if (barsHidden || !inDoc) View.GONE else View.VISIBLE
         topBar.visibility = barVis
         bottomBar.visibility = barVis
         btnShow.visibility =
@@ -680,10 +683,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             if (barsHidden || !inDoc || !state.tempEraserOn) View.GONE
             else View.VISIBLE
         emptyState.setPadding(safeL, 0, safeR, safeB)
-        homeBar.setPadding(0, cutTop + dp(8), 0, dp(8))
-        homeBrand.visibility = if (portrait) View.VISIBLE else View.GONE
-        homeHero.setPadding(0, if (portrait) dp(12) else dp(4), 0,
-            if (portrait) dp(20) else dp(8))
+        val ml = btnHomeMore.layoutParams as FrameLayout.LayoutParams
+        ml.topMargin = cutTop + dp(8)
+        ml.marginEnd = safeR + dp(10)
+        btnHomeMore.layoutParams = ml
         for (v in listOf(shapeBar, selectionBar)) {
             val lp = v.layoutParams as FrameLayout.LayoutParams
             lp.topMargin = barTop + dp(2)
@@ -980,29 +983,66 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         shapeBar.visibility = View.GONE
         selectionBar.visibility = View.GONE
         btnTempEraser.visibility = View.GONE
+        edgeLeft.visibility = View.GONE
+        edgeRight.visibility = View.GONE
         emptyState.setPadding(safeL, 0, safeR, safeB)
         renderHomeShelf()
     }
 
-    /** 首屏卡片：文件名 / 上次页码进度 / 写过笔迹的蓝点，零说明性小字。 */
+    /**
+     * 无记录 = 完全就是图二：圆盘占满全屏、严格居中，没有任何其它元素。
+     * 有记录 = 圆盘仍可点（重新导入新 PDF）+ 下方常驻浏览记录。
+     */
     private fun renderHomeShelf() {
         homeShelf.removeAllViews()
-        for (item in recents.all()) {
+        val items = recents.all()
+        val stage = homeStage.layoutParams as LinearLayout.LayoutParams
+        val scroll = homeScroll.layoutParams as LinearLayout.LayoutParams
+        if (items.isEmpty()) {
+            homeScroll.visibility = View.GONE
+            btnHomeMore.visibility = View.GONE
+            stage.weight = 1f
+            scroll.weight = 0f
+        } else {
+            homeScroll.visibility = View.VISIBLE
+            btnHomeMore.visibility = View.VISIBLE
+            stage.weight = 0.56f
+            scroll.weight = 0.44f
+        }
+        homeStage.layoutParams = stage
+        homeScroll.layoutParams = scroll
+
+        for (item in items) {
+            val u = Uri.parse(item.uri)
             val card = layoutInflater.inflate(
                 R.layout.item_home_card, homeShelf, false)
-            card.findViewById<TextView>(R.id.cardName).text = item.name
+
+            // 标题与文件管理器一模一样：系统 DISPLAY_NAME，保留 .pdf、不截断。
+            // 手动改过名的记录保持用户命名；老记录（升级前剥过后缀）自动刷新。
+            val real = recents.displayName(u)
+            val looksReal = real.contains('.') && !real.all { it.isDigit() }
+            val title = when {
+                item.custom -> item.name
+                looksReal -> real
+                else -> item.name
+            }
+            if (!item.custom && looksReal && real != item.name) {
+                recents.refreshName(item.fp, real)
+            }
+            card.findViewById<TextView>(R.id.cardName).text = title
+
             val s = sessionRepo.session(item.fp)
             val cur = (s.page + 1).coerceAtLeast(1)
             card.findViewById<TextView>(R.id.cardProgress).text =
                 if (item.pages > 0) "$cur / ${item.pages}" else "第 ${cur} 页"
             card.findViewById<View>(R.id.cardInkDot).visibility =
                 if (InkStore.hasAnyInk(this, item.fp)) View.VISIBLE else View.GONE
+
+            // 点开 = 打开这份 PDF，并按内容指纹恢复页码 / 缩放 / 工具 / 模式 / 平移
             card.setOnClickListener {
-                val u = Uri.parse(item.uri)
                 if (openUri(u)) {
                     prefs().edit().putString("uri", item.uri).apply()
-                    recents.add(u, recents.displayName(u), vm.currentFp,
-                        repo?.count ?: item.pages)
+                    recents.touch(item.fp, u, repo?.count ?: item.pages)
                 } else flash("!")
             }
             card.setOnLongClickListener {
@@ -1041,7 +1081,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             b.setOnLongClickListener { flash(a.label); true }
             grid.addView(b)
         }
-        popup.showAsDropDown(findViewById(R.id.btnHomeMore), 0, dp(6))
+        popup.showAsDropDown(btnHomeMore, 0, dp(6))
     }
 
     private fun homeMenuActions() = listOf(
@@ -1120,7 +1160,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.visibility = if (barsHidden) View.GONE else View.VISIBLE
         btnShow.visibility = if (barsHidden) View.VISIBLE else View.GONE
         seek.max = (viewCount() - 1).coerceAtLeast(0)
-        val restored = if (vm.createdPage >= 0) vm.createdPage else session.page
+        // createdPage 只用于「重建后恢复当前这一份」，用完立刻清；
+        // 否则之后从首页点开任何卷子都会被带到上一份的旧页码。
+        val restored = if (vm.createdPage >= 0) {
+            val p = vm.createdPage
+            vm.createdPage = -1
+            p
+        } else session.page
         val logical = restored.coerceIn(0, r.count - 1)
         val page = viewPosOf(logical)
         pager.setCurrentItem(page, false)
@@ -1456,8 +1502,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     val u = Uri.parse(item.uri)
                     if (openUri(u)) {
                         prefs().edit().putString("uri", item.uri).apply()
-                        recents.add(u, recents.displayName(u), vm.currentFp,
-                            repo?.count ?: 0)
+                        recents.touch(item.fp, u, repo?.count ?: item.pages)
                     } else flash("!")
                     dialog.dismiss()
                 }

@@ -369,81 +369,62 @@
         android:orientation="vertical"
         android:visibility="gone">
 
-        <!-- P0 极简顶栏：只留「打开 / 更多」两个图标，零文字 -->
-        <LinearLayout
-            android:id="@+id/homeBar"
+        <!-- 无记录：homeStage 占满全屏，圆盘严格居中 = 图二原来的样子。
+             有记录：列表拿走下半部分，圆盘自然偏上，仍可点开新 PDF。 -->
+        <FrameLayout
+            android:id="@+id/homeStage"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp">
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
+            <LinearLayout
+                android:id="@+id/homeHero"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical">
 
-            <ImageButton
-                android:id="@+id/btnHomeOpen"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                style="@style/Tool"
-                android:contentDescription="@string/cd_open"
-                android:src="@drawable/ic_folder" />
+                <ImageButton
+                    android:id="@+id/btnOpenEmpty"
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
+                    android:layout_gravity="center_horizontal"
+                    android:background="@drawable/round_btn"
+                    android:contentDescription="@string/cd_open"
+                    android:elevation="2dp"
+                    android:padding="26dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_folder"
+                    android:tint="@color/icon" />
+
+            </LinearLayout>
 
             <ImageButton
                 android:id="@+id/btnHomeMore"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                style="@style/Tool"
-                android:layout_marginStart="6dp"
-                android:contentDescription="@string/cd_more"
-                android:src="@drawable/ic_more" />
-
-        </LinearLayout>
-
-        <!-- 品牌标记 + 主按钮：P1 会换成矢量纸叠主视觉，P0 只用现成图标占位 -->
-        <LinearLayout
-            android:id="@+id/homeHero"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:paddingTop="12dp"
-            android:paddingBottom="20dp">
-
-            <ImageView
-                android:id="@+id/homeBrand"
-                android:layout_width="44dp"
-                android:layout_height="44dp"
-                android:contentDescription="@string/app_name"
-                android:scaleType="centerInside"
-                android:src="@mipmap/ic_launcher" />
-
-            <ImageButton
-                android:id="@+id/btnOpenEmpty"
-                android:layout_width="88dp"
-                android:layout_height="88dp"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="18dp"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="10dp"
                 android:background="@drawable/round_btn"
-                android:contentDescription="@string/cd_open"
-                android:elevation="2dp"
-                android:padding="26dp"
+                android:contentDescription="@string/cd_more"
+                android:padding="7dp"
                 android:scaleType="centerInside"
-                android:src="@drawable/ic_folder"
-                android:tint="@color/icon" />
+                android:src="@drawable/ic_more"
+                android:tint="@color/icon"
+                android:visibility="gone" />
 
-        </LinearLayout>
+        </FrameLayout>
 
-        <!-- 最近卷子卡片列表 -->
+        <!-- 浏览记录：打开过文件后直接显示，不藏长按、不上滑 -->
         <ScrollView
+            android:id="@+id/homeScroll"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
+            android:layout_weight="0"
             android:fillViewport="true"
-            android:scrollbars="none">
+            android:scrollbars="none"
+            android:visibility="gone">
 
             <LinearLayout
                 android:id="@+id/homeShelf"
