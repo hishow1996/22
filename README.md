@@ -293,3 +293,17 @@ Android Studio（Ladybug+，JDK 17）打开本目录，Sync 后 Run。
 **真机验收补充**
   33. 桌面图标米白铺满加中央蓝线，没有深蓝框、折角或纸的边
   34. 圆形 / 圆角 / 方形遮罩下蓝线完整，四角不露深色月牙
+
+## 构建修复已固化进生成链
+
+仓库曾有并行提交修了 6 处真实问题，本轮同步图标时一度被全量覆盖回退，
+现已写进生成链，每次构建自动带上：
+
+- `AndroidManifest`：移除不合法的 `screenWidthSize|screenHeightSize` configChanges 值
+- `BackupCodec`：补 `org.json.JSONArray` import
+- `Fingerprint`：`min(n, …)` → `minOf(n, …)`（Int 无 `min` 重载）
+- `GeometryCore`：形状橡皮改「橡皮包围盒 ∩ 形状包围盒」判定，
+  覆盖橡皮落在形状内部而顶点不在附近的情形
+- `InkView`：`MotionEvent.CLASSIFICATION_PALM` 是 API 34 flag-gated 常量，
+  公开 android.jar 不含该字段，按 AOSP 取字面值 `0x2`
+- `MainActivity`：补 `brushRow` 的 lateinit 声明与 findViewById
