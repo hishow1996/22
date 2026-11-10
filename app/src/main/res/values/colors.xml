@@ -8,4 +8,6 @@
     <color name="accent">#FF2F6FED</color>
     <color name="sheet">#FFFBF9F5</color>
     <color name="dot_off">#FF4A4A50</color>
+    <!-- 图三 PDF 徽标实测主体色 -->
+    <color name="pdf_badge_red">#FFD7463B</color>
 </resources>
