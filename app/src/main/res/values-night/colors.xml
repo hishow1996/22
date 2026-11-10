@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#FF171D2B</color>
+    <color name="bar">#FF222B3C</color>
+    <color name="icon">#FFD9E0EC</color>
+    <color name="divider">#26FFFFFF</color>
+    <color name="page_text">#FF9DA9BB</color>
+    <color name="sheet">#FF1F2736</color>
+    <color name="dot_off">#FF8995A8</color>
+</resources>
