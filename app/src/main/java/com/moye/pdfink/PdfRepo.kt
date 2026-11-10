@@ -121,7 +121,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
             }
             val filtered = PageFilter.apply(out, tint, brightness)
             if (filtered !== out) out.recycle()
-            filtered
+            return filtered
         } catch (failure: Throwable) {
             if (!out.isRecycled) out.recycle()
             throw failure

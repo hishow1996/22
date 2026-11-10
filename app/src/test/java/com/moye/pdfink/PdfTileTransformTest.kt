@@ -40,7 +40,8 @@ class PdfTileTransformTest {
     fun rotationTwoSeventyMapsPageCorners() {
         val m = PdfTileTransform.matrixValues(100f, 200f, 400, 40, 60, 270)
         assertEquals(-40f, point(m, 0f, 0f).first, 0.0001f)
-        assertEquals(340f, point(m, 0f, 0f).second, 0.0001f)
+        // 270° 旋转画布高 = sourceWidth*scale，页左上角 y' = 100*2-60 = 140
+        assertEquals(140f, point(m, 0f, 0f).second, 0.0001f)
         assertEquals(360f, point(m, 100f, 200f).first, 0.0001f)
         assertEquals(-60f, point(m, 100f, 200f).second, 0.0001f)
     }

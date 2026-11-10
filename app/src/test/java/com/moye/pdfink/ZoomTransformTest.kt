@@ -55,7 +55,8 @@ class ZoomTransformTest {
     fun continuousDisplayScaleIsIndependentFromTileResolution() {
         val actualScale = 0.83f
         val renderScale = TiledPageView.bucket(actualScale)
-        assertEquals(0.67f, renderScale, 0.0001f)
+        // 0.83 落在 [0.74,0.89) 档 → 0.8（与 zoom buckets 区间语义一致）
+        assertEquals(0.8f, renderScale, 0.0001f)
         assertEquals(actualScale / renderScale,
             ZoomTransform.renderToDisplayFactor(actualScale, renderScale), 0.0001f)
         assertEquals(1f / ZoomTransform.renderToDisplayFactor(actualScale, renderScale),
