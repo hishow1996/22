@@ -6,8 +6,8 @@ import org.json.JSONObject
 data class BrushPreset(
     val brushTool: Int = Tools.PEN,
     val color: Int = 0,
-    val width: Int = 1,
-    val eraser: Int = 1,
+    val width: Int = BrushSizes.DEFAULT,
+    val eraser: Int = BrushSizes.DEFAULT,
     val brushShape: Int = Shapes.LINE,
     val layer: Int = Layers.ANSWER
 ) {
@@ -23,8 +23,8 @@ data class BrushPreset(
         fun fromJson(o: JSONObject): BrushPreset = BrushPreset(
             o.optInt("t", Tools.PEN),
             o.optInt("c", 0),
-            o.optInt("w", 1),
-            o.optInt("e", 1),
+            o.optInt("w", BrushSizes.DEFAULT),
+            o.optInt("e", BrushSizes.DEFAULT),
             o.optInt("s", Shapes.LINE),
             o.optInt("l", Layers.ANSWER)
         )

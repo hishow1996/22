@@ -15,8 +15,8 @@ class MainViewModel : ViewModel() {
     fun sessions(): SessionRepository? = sessionRepo
 
     var colorIndex = 0
-    var widthIndex = 1
-    var eraserIndex = 1
+    var widthIndex = BrushSizes.DEFAULT
+    var eraserIndex = BrushSizes.DEFAULT
     var brushTool = Tools.PEN
     var lastDrawTool = Tools.PEN
     var brushShape = Shapes.LINE

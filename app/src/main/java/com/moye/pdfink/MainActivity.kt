@@ -67,8 +67,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         0xFF222226.toInt(), 0xFFE5484D.toInt(), 0xFF2F6FED.toInt(),
         0xFF1E9E62.toInt(), 0xFFF2A03D.toInt()
     )
-    private val widths = floatArrayOf(0.0035f, 0.007f, 0.013f)
-    private val eraserWidths = floatArrayOf(0.022f, 0.042f, 0.075f)
+    // 5 档数值与 UI 预览都由 BrushSizes 一处定义
+    private val widths = BrushSizes.PEN
+    private val eraserWidths = BrushSizes.ERASER
     private val highlighterAlpha = 92
 
     private val workScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -347,8 +348,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun loadPrefs() {
         val p = prefs()
         colorIndex = p.getInt("color", 0).coerceIn(0, colors.lastIndex)
-        widthIndex = p.getInt("width", 1).coerceIn(0, widths.lastIndex)
-        eraserIndex = p.getInt("eraser", 1).coerceIn(0, eraserWidths.lastIndex)
+        widthIndex = p.getInt("width", BrushSizes.DEFAULT)
+            .coerceIn(0, widths.lastIndex)
+        eraserIndex = p.getInt("eraser", BrushSizes.DEFAULT)
+            .coerceIn(0, eraserWidths.lastIndex)
         currentShape = p.getInt("shape", Shapes.LINE)
         state.tint = p.getInt("tint", PageFilter.WHITE).coerceIn(0, 2)
         state.brightness = p.getFloat("brightness", 0f)
@@ -392,12 +395,22 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         if (selected) setStroke(dp(2), 0xFF4A4A50.toInt())
     }
 
+    /** 笔画预览：圆角横条的高度就是这一档的实际粗细，5 档一眼分辨。 */
+    private fun strokeDrawable(hDp: Int, selected: Boolean, eraser: Boolean) =
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(hDp) / 2f
+            val on = if (eraser) 0xFFF2A03D.toInt() else 0xFF2F6FED.toInt()
+            setColor(if (selected) on else 0xFFA8AEB8.toInt())
+            if (selected) setStroke(dp(1), 0x33000000)
+        }
+
     // ----- toolbar -----
     private fun buildDots() {
         colors.forEachIndexed { i, c ->
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)).apply {
-                    marginEnd = dp(8)
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+                    marginEnd = dp(6)
                 }
                 contentDescription = getString(R.string.cd_color)
                 setOnClickListener {
@@ -410,30 +423,35 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         widths.forEachIndexed { i, _ ->
             val holder = FrameLayout(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(26), dp(26)).apply {
-                    marginEnd = dp(4)
+                layoutParams = LinearLayout.LayoutParams(dp(22), dp(24)).apply {
+                    marginEnd = dp(2)
                 }
-                contentDescription = getString(R.string.cd_width)
+                contentDescription = getString(R.string.cd_width_step, i + 1)
                 isClickable = true
                 setOnClickListener {
                     if (currentTool == Tools.ERASER) eraserIndex = i else widthIndex = i
                     savePrefs(); refreshDots(); refreshTools()
                 }
             }
-            val dot = View(this).apply {
-                val d = dp(6 + i * 6)
-                layoutParams = FrameLayout.LayoutParams(d, d, Gravity.CENTER)
+            val bar = View(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    dp(18), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
             }
-            holder.addView(dot); widthDots.add(dot); widthRow.addView(holder)
+            holder.addView(bar); widthDots.add(bar); widthRow.addView(holder)
         }
         refreshDots()
     }
 
     private fun refreshDots() {
-        colorDots.forEachIndexed { i, v -> v.background = dotDrawable(colors[i], i == colorIndex) }
-        val sel = if (currentTool == Tools.ERASER) eraserIndex else widthIndex
+        val eraser = currentTool == Tools.ERASER
+        colorDots.forEachIndexed { i, v ->
+            v.background = dotDrawable(colors[i], i == colorIndex)
+            v.alpha = if (eraser) 0.45f else 1f
+        }
+        val sel = if (eraser) eraserIndex else widthIndex
         widthDots.forEachIndexed { i, v ->
-            v.background = dotDrawable(0xFF4A4A50.toInt(), i == sel)
+            v.background = strokeDrawable(
+                BrushSizes.previewDp(i), i == sel, eraser)
         }
     }
 
@@ -679,29 +697,30 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
         }
 
-        val dot = if (portrait) dp(18) else dp(22)
+        // 5 档后压缩 holder 与间距：横屏工具条只比 3 档多约 30dp
+        val dot = if (portrait) dp(18) else dp(20)
         colorDots.forEach { v ->
             val p = v.layoutParams as LinearLayout.LayoutParams
             p.width = dot
             p.height = dot
-            p.marginEnd = if (portrait) dp(4) else dp(8)
+            p.marginEnd = if (portrait) dp(4) else dp(6)
             v.layoutParams = p
         }
         for (i in 0 until widthRow.childCount) {
             val h = widthRow.getChildAt(i)
             val p = h.layoutParams as LinearLayout.LayoutParams
-            val d = if (portrait) dp(22) else dp(26)
+            val d = if (portrait) dp(20) else dp(22)
             p.width = d
-            p.height = d
-            p.marginEnd = if (portrait) dp(2) else dp(4)
+            p.height = dp(24)
+            p.marginEnd = dp(2)
             h.layoutParams = p
         }
         brushSlots.forEach { v ->
             val p = v.layoutParams as LinearLayout.LayoutParams
-            val d = if (portrait) dp(12) else dp(14)
+            val d = if (portrait) dp(12) else dp(13)
             p.width = d
             p.height = d
-            p.marginEnd = if (portrait) dp(3) else dp(5)
+            p.marginEnd = if (portrait) dp(3) else dp(4)
             v.layoutParams = p
         }
 
@@ -730,10 +749,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         fun refresh() {
             for ((v, kind, i) in items) {
                 when (kind) {
-                    "c" -> v.background = dotDrawable(colors[i], i == colorIndex)
-                    "w" -> v.background = dotDrawable(
-                        0xFF4A4A50.toInt(),
-                        i == if (currentTool == Tools.ERASER) eraserIndex else widthIndex
+                    "c" -> {
+                        v.background = dotDrawable(colors[i], i == colorIndex)
+                        v.alpha = if (currentTool == Tools.ERASER) 0.45f else 1f
+                    }
+                    "w" -> v.background = strokeDrawable(
+                        BrushSizes.previewDp(i),
+                        i == if (currentTool == Tools.ERASER) eraserIndex else widthIndex,
+                        currentTool == Tools.ERASER
                     )
                     "b" -> {
                         val b = sessionRepo.brush(i)
@@ -752,8 +775,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         colors.forEachIndexed { i, _ ->
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply {
-                    marginEnd = dp(4)
+                layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply {
+                    marginEnd = dp(3)
                 }
                 contentDescription = getString(R.string.cd_color)
                 setOnClickListener {
@@ -767,35 +790,48 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             add(v, "c", i)
         }
+        // 5 色 + 5 档 + 分隔 + 4 笔刷槽 ≈ 258dp，276dp 浮层一屏放得下
         for (i in 0 until widths.size + 1) {
-            val v = View(this)
             if (i < widths.size) {
-                v.layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)).apply {
-                    marginEnd = dp(3)
-                }
-                v.contentDescription = getString(R.string.cd_width)
                 val idx = i
-                v.setOnClickListener {
-                    if (currentTool == Tools.ERASER) eraserIndex = idx else widthIndex = idx
-                    savePrefs()
-                    refreshDots()
-                    refreshTools()
-                    refresh()
+                val holder = FrameLayout(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(18), dp(22)).apply {
+                        marginEnd = dp(2)
+                    }
+                    contentDescription = getString(R.string.cd_width_step, i + 1)
+                    isClickable = true
+                    setOnClickListener {
+                        if (currentTool == Tools.ERASER) eraserIndex = idx
+                        else widthIndex = idx
+                        savePrefs()
+                        refreshDots()
+                        refreshTools()
+                        refresh()
+                    }
                 }
-                add(v, "w", i)
+                val bar = View(this).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        dp(16), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
+                }
+                holder.addView(bar)
+                row.addView(holder)
+                items.add(Triple(bar, "w", i))
             } else {
-                v.layoutParams = LinearLayout.LayoutParams(dp(1), dp(20)).apply {
-                    marginStart = dp(4)
-                    marginEnd = dp(4)
+                val sep = View(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(1), dp(18)).apply {
+                        marginStart = dp(3)
+                        marginEnd = dp(3)
+                    }
+                    setBackgroundColor(ContextCompat.getColor(
+                        this@MainActivity, R.color.divider))
                 }
-                v.setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.divider))
-                row.addView(v)
+                row.addView(sep)
             }
         }
         for (i in 0 until 4) {
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply {
-                    marginEnd = dp(4)
+                layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply {
+                    marginEnd = dp(2)
                 }
                 contentDescription = getString(R.string.cd_brush_slot)
                 val idx = i
