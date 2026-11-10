@@ -7,9 +7,10 @@ import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
-import android.util.LruCache
 import java.io.Closeable
 import kotlin.math.min
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /** 系统 PdfRenderer 封装：串行访问 + raw 页缓存 + 滤镜与旋转输出。 */
 class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
@@ -19,12 +20,11 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
             ?: throw IllegalStateException("cannot open uri")
 
     private val renderer = PdfRenderer(pfd)
-    private val ratios = HashMap<Int, Float>()
+    private val ratios = ConcurrentHashMap<Int, Float>()
+    val cacheId: String = "doc-${nextId.incrementAndGet()}"
 
-    private val cache: LruCache<String, Bitmap> = object : LruCache<String, Bitmap>(
-        (Runtime.getRuntime().maxMemory() / 1024L / 6L).toInt().coerceAtLeast(8 * 1024)
-    ) {
-        override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024
+    companion object {
+        private val nextId = AtomicLong()
     }
 
     val count: Int get() = renderer.pageCount
@@ -42,10 +42,16 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         }
     }
 
+    /** 缓存命中版本只读内存，不打开 PdfRenderer 页面。 */
+    fun cachedRatioWithRotation(page: Int, rotation: Int): Float? =
+        ratios[page]?.let {
+            if (PdfTileTransform.normalizeRotation(rotation) in setOf(90, 270)) 1f / it else it
+        }
+
     /** 90 / 270 度时页面宽高互换，容器比例要取倒数。 */
     fun ratioWithRotation(page: Int, rotation: Int): Float {
         val r = ratio(page)
-        return if (rotation == 90 || rotation == 270) 1f / r else r
+        return if (PdfTileTransform.normalizeRotation(rotation) in setOf(90, 270)) 1f / r else r
     }
 
     private fun raw(page: Int, w: Int, h: Int): Bitmap = synchronized(renderer) {
@@ -61,8 +67,8 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         val s = min(1f, maxSide / maxOf(w, h).coerceAtLeast(1).toFloat())
         val rw = (w * s).toInt().coerceAtLeast(1)
         val rh = (h * s).toInt().coerceAtLeast(1)
-        val key = "$page-${rw}x$rh"
-        val hit = cache.get(key)
+        val key = "raw:$cacheId:$page-${rw}x$rh"
+        val hit = PdfBitmapCache.get(key)
         if (hit != null) {
             hit
         } else {
@@ -75,7 +81,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
                 } finally {
                     p.close()
                 }
-                cache.put(key, bmp)
+                PdfBitmapCache.put(key, bmp)
                 bmp
             } catch (failure: Throwable) {
                 if (!bmp.isRecycled) bmp.recycle()
@@ -92,7 +98,8 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
      */
     fun renderTile(
         page: Int, lw: Int, lh: Int, left: Int, top: Int,
-        tw: Int, th: Int, tint: Int, brightness: Float
+        tw: Int, th: Int, tint: Int, brightness: Float,
+        rotation: Int = 0
     ): Bitmap {
         if (lw <= 0 || tw <= 0 || th <= 0 || left >= lw || top >= lh) {
             return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
@@ -103,13 +110,10 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
             synchronized(renderer) {
                 val p = renderer.openPage(page)
                 try {
-                    val a = lw.toFloat() / p.width.coerceAtLeast(1).toFloat()
-                    // preTranslate：M = T * S，点变换 = A·p - (left,top)。
-                    // 若把平移写在缩放之后右乘，平移量会被 A 再乘一次，整块偏移。
-                    val m = Matrix().apply {
-                        setScale(a, a)
-                        preTranslate(-left.toFloat() / a, -top.toFloat() / a)
-                    }
+                    val values = PdfTileTransform.matrixValues(
+                        p.width.toFloat(), p.height.toFloat(), lw, left, top, rotation
+                    )
+                    val m = Matrix().apply { setValues(values) }
                     p.render(out, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 } finally {
                     p.close()
@@ -128,13 +132,14 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         page: Int, w: Int, h: Int, tint: Int, brightness: Float,
         rotation: Int = 0
     ): Bitmap {
-        val swap = rotation == 90 || rotation == 270
+        val normalizedRotation = PdfTileTransform.normalizeRotation(rotation)
+        val swap = normalizedRotation == 90 || normalizedRotation == 270
         val rw = if (swap) h else w
         val rh = if (swap) w else h
         val src = raw(page, rw, rh)
         val filtered = PageFilter.apply(src, tint, brightness)
-        if (rotation == 0) return filtered
-        val m = Matrix().apply { postRotate(rotation.toFloat()) }
+        if (normalizedRotation == 0) return filtered
+        val m = Matrix().apply { postRotate(normalizedRotation.toFloat()) }
         val out = Bitmap.createBitmap(
             filtered, 0, 0, filtered.width, filtered.height, m, true
         )
@@ -155,11 +160,14 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     override fun close() {
+        PdfTileScheduler.cancelRepository(cacheId)
         try {
             synchronized(renderer) { renderer.close() }
         } finally {
             pfd.close()
-            cache.evictAll()
+            PdfBitmapCache.clearPrefix("raw:$cacheId:")
+            PdfBitmapCache.clearPrefix("tile:$cacheId:")
+            PdfBitmapCache.clearPrefix("page:$cacheId:")
         }
     }
 }

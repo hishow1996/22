@@ -6,6 +6,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Matrix
+import kotlinx.coroutines.Job
+import kotlin.math.floor
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
@@ -63,7 +65,14 @@ class InkView @JvmOverloads constructor(
 
     private var host: Host? = null
     private var key = ""
+    private var loadJob: Job? = null
+    private var loadGeneration = 0
+    private var loadingMarks = false
     private val marks = ArrayList<Mark>()
+    private val spatialIndex = HashMap<Int, MutableList<Int>>()
+    private var spatialColumns = 1
+    private var spatialReady = false
+    private val spatialCellPx = 256f
     private var before: List<Mark> = emptyList()
 
     private var base: Bitmap? = null
@@ -127,9 +136,9 @@ class InkView @JvmOverloads constructor(
     }
     private var liveDirty: FloatArray? = null
 
-    /** v15：与题目底图共用同一 viewport，放大后两层像素级对齐。 */
+    /** 底图、矢量批注和触摸事件共用同一连续缩放 viewport。 */
     var viewport: Viewport? = null
-    /** s>1 时切矢量重绘：位图缓冲不再被父 View 插值放大，笔迹也锐利。 */
+    /** 倍率偏离 1× 时切矢量重绘，避免笔迹位图跟不上连续缩放。 */
     var hiResMode: Boolean = false
         set(v) {
             if (v != field) { field = v; invalidate() }
@@ -141,14 +150,39 @@ class InkView @JvmOverloads constructor(
     private val density: Float get() = resources.displayMetrics.density
 
     fun attach(h: Host, k: String) {
+        loadJob?.cancel()
+        loadGeneration++
+        val generation = loadGeneration
         host = h
         key = k
+        loadingMarks = true
         marks.clear()
-        marks.addAll(h.store.load(k))
         selection = null
         h.onSelectionChanged(false)
         cancelGesture()
         rebuild()
+        loadJob = h.store.loadAsync(k, h.ioScope) { loaded ->
+            if (generation != loadGeneration || host !== h || key != k) return@loadAsync
+            marks.clear()
+            marks.addAll(loaded)
+            loadingMarks = false
+            rebuild()
+        }
+    }
+
+    /** 换卷前提交当前手势并排入原文档写入队列，不阻塞主线程等待磁盘。 */
+    fun persistForDocumentSwitch() {
+        if (loadingMarks || key.isEmpty()) return
+        finish()
+        persist()
+    }
+
+    /** RecyclerView 回收页面时取消尚未完成的旧笔迹读取。 */
+    fun cancelPendingLoad() {
+        loadGeneration++
+        loadJob?.cancel()
+        loadJob = null
+        loadingMarks = false
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { rebuild() }
@@ -166,7 +200,52 @@ class InkView @JvmOverloads constructor(
 
     private fun visible(m: Mark): Boolean = m.layer in (host?.visibleLayers ?: setOf(0))
 
+    private fun rebuildSpatialIndex() {
+        spatialIndex.clear()
+        spatialColumns = ((width / spatialCellPx).toInt() + 1).coerceAtLeast(1)
+        if (width <= 0 || height <= 0) {
+            spatialReady = false
+            return
+        }
+        marks.forEachIndexed { index, mark ->
+            val bounds = GeometryCore.markBounds(mark)
+            val left = (bounds[0] * width).toInt().coerceIn(0, width - 1)
+            val top = (bounds[1] * height).toInt().coerceIn(0, height - 1)
+            val right = (bounds[2] * width).toInt().coerceIn(left, width - 1)
+            val bottom = (bounds[3] * height).toInt().coerceIn(top, height - 1)
+            val x0 = (left / spatialCellPx).toInt()
+            val x1 = (right / spatialCellPx).toInt()
+            val y0 = (top / spatialCellPx).toInt()
+            val y1 = (bottom / spatialCellPx).toInt()
+            for (gy in y0..y1) for (gx in x0..x1) {
+                val cell = gy * spatialColumns + gx
+                spatialIndex.getOrPut(cell) { ArrayList() }.add(index)
+            }
+        }
+        spatialReady = true
+    }
+
+    private fun indicesInRect(rect: FloatArray): List<Int> {
+        if (marks.size < 80 || width <= 0 || height <= 0) return marks.indices.toList()
+        if (!spatialReady) rebuildSpatialIndex()
+        if (!spatialReady) return marks.indices.toList()
+        val left = rect[0].toInt().coerceIn(0, width - 1)
+        val top = rect[1].toInt().coerceIn(0, height - 1)
+        val right = rect[2].toInt().coerceIn(left, width - 1)
+        val bottom = rect[3].toInt().coerceIn(top, height - 1)
+        val x0 = (left / spatialCellPx).toInt()
+        val x1 = (right / spatialCellPx).toInt()
+        val y0 = (top / spatialCellPx).toInt()
+        val y1 = (bottom / spatialCellPx).toInt()
+        val found = LinkedHashSet<Int>()
+        for (gy in y0..y1) for (gx in x0..x1) {
+            spatialIndex[gy * spatialColumns + gx]?.let(found::addAll)
+        }
+        return found.sorted()
+    }
+
     private fun drawAllBase(c: Canvas) {
+        rebuildSpatialIndex()
         base?.eraseColor(Color.TRANSPARENT)
         for (m in marks) {
             if (!visible(m)) continue
@@ -194,11 +273,13 @@ class InkView @JvmOverloads constructor(
     private fun rebuildRegion(dirty: FloatArray) {
         val c = baseC ?: return
         val r = GeometryCore.clampRect(dirty, width.toFloat(), height.toFloat())
+        rebuildSpatialIndex()
         if (r[2] <= r[0] || r[3] <= r[1]) { rebuild(); return }
         clearRegion(c, r)
         c.save()
         c.clipRect(r[0], r[1], r[2], r[3])
-        for (m in marks) {
+        for (index in indicesInRect(r)) {
+            val m = marks[index]
             if (!visible(m)) continue
             val b = GeometryCore.markBounds(m)
             val pb = floatArrayOf(b[0] * width, b[1] * height, b[2] * width, b[3] * height)
@@ -216,6 +297,7 @@ class InkView @JvmOverloads constructor(
         if (hiResMode && vp != null && vp.lw > 0 && vp.lh > 0) {
             // 与题目底图共用同一组 ZoomHost 下发的逻辑坐标，像素级对齐
             val sc = vp.bucket
+            val displayFactor = ZoomTransform.renderToDisplayFactor(vp.scale, sc)
             val lw = vp.lw.toFloat()
             val lh = vp.lh.toFloat()
             // bbox 粗筛用可见逻辑窗，绘制定位用 originX/originY
@@ -224,9 +306,14 @@ class InkView @JvmOverloads constructor(
                 vp.visTop + vp.visH.coerceAtLeast(1))
             canvas.save()
             canvas.translate(-vp.originX, -vp.originY)
-            // 按归一化坐标 × 放大后的逻辑画布直绘，不再经过位图缓冲插值。
-            // bbox 粗筛：只画与可见窗相交的 marks，放大后也不会全量重绘。
-            for (m in marks) {
+            canvas.scale(displayFactor, displayFactor)
+            // 栅格清晰度与页面实际显示倍率分开，书写矢量坐标使用同一显示变换。
+            // 空间索引先筛出与当前视口相交的批注，再执行精确 bbox 检查。
+            val pageRect = floatArrayOf(
+                r[0] / sc, r[1] / sc, r[2] / sc, r[3] / sc
+            )
+            for (index in indicesInRect(pageRect)) {
+                val m = marks[index]
                 if (!visible(m)) continue
                 val b = GeometryCore.markBounds(m)
                 val pb = floatArrayOf(b[0] * lw, b[1] * lh, b[2] * lw, b[3] * lh)
@@ -289,14 +376,21 @@ class InkView @JvmOverloads constructor(
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         val h = host ?: return false
         if (h.browseMode) return false
+        if (loadingMarks) return true
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN && blocked(ev)) return false
+        // 低内存回收后，下一次编辑前重建笔迹缓冲，避免 liveC/baseC 为空导致笔迹不能提交。
+        if (base == null || live == null) {
+            ensureBuffers()
+            if (baseC != null) drawAllBase(baseC!!)
+        }
         val vp = viewport
-        val mapped = if (hiResMode && vp != null && vp.bucket > 0f) {
+        val mapped = if (hiResMode && vp != null && vp.scale > 0f) {
             MotionEvent.obtain(ev).apply {
-                val inv = 1f / vp.bucket
+                val inv = 1f / vp.scale
                 val matrix = Matrix().apply {
                     setValues(floatArrayOf(
-                        inv, 0f, ZoomTransform.pageCoordinate(0f, vp.originX, vp.bucket),
-                        0f, inv, ZoomTransform.pageCoordinate(0f, vp.originY, vp.bucket),
+                        inv, 0f, ZoomTransform.pageCoordinate(0f, vp.originX, vp.scale),
+                        0f, inv, ZoomTransform.pageCoordinate(0f, vp.originY, vp.scale),
                         0f, 0f, 1f
                     ))
                 }
@@ -313,7 +407,6 @@ class InkView @JvmOverloads constructor(
     private fun handleTouchEvent(ev: MotionEvent, h: Host): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                if (blocked(ev)) return false
                 h.onFocus(key)
                 when {
                     h.tool == Tools.NOTE -> {
@@ -810,7 +903,8 @@ class InkView @JvmOverloads constructor(
 
     fun flush() {
         val h = host ?: return
-        if (key.isNotEmpty()) h.store.saveNow(key, ArrayList(marks))
+        if (loadingMarks || key.isEmpty()) return
+        h.store.saveNow(key, ArrayList(marks))
     }
 
     /** 由全局时间轴驱动，不产生新历史。 */

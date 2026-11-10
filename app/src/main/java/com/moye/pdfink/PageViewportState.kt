@@ -37,8 +37,14 @@ object ZoomTransform {
             viewportSize.coerceAtLeast(0)).coerceAtLeast(0f) * 0.5f
 
     /** 从局部屏幕坐标反算页面逻辑坐标，供所有笔迹工具共用。 */
-    fun pageCoordinate(screen: Float, origin: Float, bucket: Float): Float =
-        if (bucket <= 0f) screen else (screen + origin) / bucket
+    fun pageCoordinate(screen: Float, origin: Float, scale: Float): Float =
+        if (scale <= 0f) screen else (screen + origin) / scale
+
+    fun renderToDisplayFactor(scale: Float, bucket: Float): Float =
+        if (bucket <= 0f) 1f else scale / bucket
+
+    fun displayToRender(value: Float, scale: Float, bucket: Float): Float =
+        if (scale <= 0f) value else value * bucket / scale
 
     fun anchoredTranslation(
         oldScale: Float,

@@ -1,19 +1,17 @@
 package com.moye.pdfink
 
-import android.graphics.Bitmap
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
-import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.LinearLayout
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
 
 class PagesAdapter(
     private val repo: PdfRepo,
@@ -26,20 +24,6 @@ class PagesAdapter(
     private val onFlip: (Int) -> Unit
 ) : RecyclerView.Adapter<PagesAdapter.VH>() {
 
-    /**
-     * 按字节限额（而不是张数）。WIDTH 模式位图比 FIT 大得多，限额按可用堆
-     * 动态取，避免荣耀 10 这类低堆机器上放几张就把内存吃满。
-     * key 带页面 + 实际像素尺寸，栏隐藏 / 旋转 / 切模式导致尺寸变化时
-     * 不会误用旧尺寸的低清图。
-     */
-    private val shown = object : LruCache<String, Bitmap>(
-        (Runtime.getRuntime().maxMemory() / 1024L / 8L)
-            .toInt().coerceIn(12 * 1024, 48 * 1024)
-    ) {
-        override fun sizeOf(key: String, value: Bitmap) =
-            (value.byteCount / 1024).coerceAtLeast(1)
-    }
-
     private val holders = HashMap<Int, VH>()
 
     var initialZoom = 1f
@@ -48,6 +32,15 @@ class PagesAdapter(
     var fitMode = PageContainer.FIT
     var doublePage = false
     var activePosition = 0
+        set(value) {
+            if (field == value) return
+            field = value
+            holders.forEach { (position, holder) ->
+                val active = position == value
+                holder.image.setCurrentPage(active)
+                holder.secondImage.setCurrentPage(active)
+            }
+        }
     var pageViewportProvider: ((Int) -> PageViewportState?)? = null
     var onPageViewportChange: ((Int, PageViewportState) -> Unit)? = null
     var onPanChange: ((Float, Float) -> Unit)? = null
@@ -66,6 +59,8 @@ class PagesAdapter(
         val secondInk: InkView = v.findViewById(R.id.secondInk)
         val draftInk: InkView = v.findViewById(R.id.draftInk)
         var renderToken = 0
+        var ratioJob: Job? = null
+        val ratioFailures = HashSet<Int>()
         var boundPage = -1
         var boundLogical = -1
     }
@@ -80,9 +75,10 @@ class PagesAdapter(
     private fun params(weight: Float = 1f): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, weight)
 
-    private fun key(page: Int, w: Int, h: Int) = "$page-${w}x$h"
-
     override fun onBindViewHolder(h: VH, position: Int) {
+        h.renderToken++
+        val token = h.renderToken
+        h.ratioJob?.cancel()
         h.boundPage = position
         // 双页模式：一个 item 承载 p0 与 p0+1 两个逻辑页，键不重叠
         val p0 = DisplayMode.logical(
@@ -102,8 +98,8 @@ class PagesAdapter(
             if (position == activePosition) onPanChange?.invoke(px, py)
             onPageViewportChange?.invoke(p0, h.zoom.pageViewportState())
         }
-        // 页面旋转过（低频）沿用旧 View 变换；其余走 v15 的高分辨率自绘
-        h.zoom.legacyViewScale = state.pageRotation != 0
+        // 所有旋转角度统一使用 viewport 自绘，不再退回整页位图。
+        h.zoom.legacyViewScale = false
         h.zoom.onViewportChanged = {
             h.image.invalidate()
             h.secondImage.invalidate()
@@ -112,7 +108,7 @@ class PagesAdapter(
             h.draftInk.invalidate()
         }
         h.zoom.onScaleCommit = { sc ->
-            val hi = kotlin.math.abs(sc - 1f) > 0.01f && state.pageRotation == 0
+            val hi = kotlin.math.abs(sc - 1f) > 0.0001f
             h.ink.hiResMode = hi
             h.secondInk.hiResMode = hi
             h.draftInk.hiResMode = hi
@@ -134,32 +130,60 @@ class PagesAdapter(
         h.pageContainer.fitMode = fitMode
         h.secondContainer.fitMode = PageContainer.FIT
         h.draftContainer.fitMode = PageContainer.FIT
-        h.pageContainer.ratio = repo.ratioWithRotation(p0, state.pageRotation)
-        h.secondContainer.ratio =
-            if (showSecond) repo.ratioWithRotation(p1, state.pageRotation)
-            else h.pageContainer.ratio
+        // 只同步读取尺寸缓存；首次打开的新页在后台打开 PdfRenderer 页面取尺寸。
+        val ratio0 = repo.cachedRatioWithRotation(p0, state.pageRotation)
+            ?: if (p0 in h.ratioFailures) 0.75f else null
+        val ratio1 = if (showSecond) {
+            repo.cachedRatioWithRotation(p1, state.pageRotation)
+                ?: if (p1 in h.ratioFailures) 0.75f else null
+        } else null
+        val ratiosReady = ratio0 != null && (!showSecond || ratio1 != null)
+        h.pageContainer.ratio = ratio0 ?: 0.75f
+        h.secondContainer.ratio = ratio1 ?: ratio0 ?: 0.75f
         h.draftContainer.ratio = h.pageContainer.ratio
+        h.pageContainer.visibility = if (ratiosReady) View.VISIBLE else View.INVISIBLE
+        h.secondContainer.visibility = when {
+            !showSecond -> View.GONE
+            ratiosReady -> View.VISIBLE
+            else -> View.INVISIBLE
+        }
+        if (!ratiosReady) {
+            h.ratioJob = scope.launch(Dispatchers.IO) {
+                val failedPages = HashSet<Int>()
+                if (ratio0 == null && runCatching { repo.ratio(p0) }.isFailure) {
+                    failedPages.add(p0)
+                }
+                if (showSecond && ratio1 == null &&
+                    runCatching { repo.ratio(p1) }.isFailure
+                ) {
+                    failedPages.add(p1)
+                }
+                withContext(Dispatchers.Main) {
+                    if (h.renderToken == token &&
+                        h.boundPage == position &&
+                        h.boundLogical == p0 &&
+                        h.bindingAdapterPosition == position
+                    ) {
+                        h.ratioFailures.addAll(failedPages)
+                        notifyItemChanged(position)
+                    }
+                }
+            }
+        }
 
-        h.secondContainer.visibility = if (showSecond) View.VISIBLE else View.GONE
         // 双页并排与「题目 / 草稿对开」互斥，effectiveSpread 已在 UiState 降级
         h.draftContainer.visibility =
             if (state.effectiveSpread) View.VISIBLE else View.GONE
 
         h.image.colorFilter = null
         h.secondImage.colorFilter = null
-        // v15：所有未旋转页都走分块（竖屏 FIT 也 1:1，放大仍锐利）；
-        // 只有页面旋转过才退回整页 render（低频，见 README 边界）。
-        val useTiles = state.pageRotation == 0
+        // 所有页面（含 90/180/270 度）统一走分块渲染。
         h.image.unbindTiled()
         h.secondImage.unbindTiled()
-        if (useTiles) {
-            h.image.setImageBitmap(null)
-            h.secondImage.setImageBitmap(null)
-        } else {
-            showAnyCached(h, p0, h.image)
-            if (showSecond) showAnyCached(h, p1, h.secondImage)
-            else h.secondImage.setImageBitmap(null)
-        }
+        h.image.setImageBitmap(null)
+        h.secondImage.setImageBitmap(null)
+        h.image.setCurrentPage(position == activePosition)
+        h.secondImage.setCurrentPage(position == activePosition)
 
         h.ink.setPageLook(state.tint)
         h.secondInk.setPageLook(state.tint)
@@ -171,9 +195,9 @@ class PagesAdapter(
         if (showSecond) onInkBound("p$p1", h.secondInk)
         onInkBound("d$p0", h.draftInk)
 
-        val token = ++h.renderToken
         h.pageContainer.post {
             if (h.renderToken != token || h.bindingAdapterPosition != position) return@post
+            if (!ratiosReady) return@post
             val w = h.pageContainer.width
             val ht = h.pageContainer.height
             if (w <= 0 || ht <= 0) return@post
@@ -190,7 +214,8 @@ class PagesAdapter(
             when {
                 remembered != null -> h.zoom.setPageViewportState(remembered)
                 position == restorePanAt &&
-                    (initialZoom > 1.01f || initialPanX != 0f || initialPanY != 0f) -> {
+                    (kotlin.math.abs(initialZoom - 1f) > 0.0001f ||
+                        initialPanX != 0f || initialPanY != 0f) -> {
                     h.zoom.setScale(initialZoom, initialPanX, initialPanY)
                 }
                 else -> h.zoom.reset(silent = false,
@@ -198,92 +223,22 @@ class PagesAdapter(
             }
             if (position == restorePanAt) restorePanAt = -1
 
-            if (useTiles) {
-                // 基准尺寸不变；放大倍率由 viewport 在 onDraw 里换算成逻辑画布
-                h.image.bindTiled(repo, scope, p0, w, ht,
-                    state.tint, state.brightness)
-                if (showSecond) {
-                    val w2 = h.secondContainer.width
-                    val h2 = h.secondContainer.height
-                    if (w2 > 0 && h2 > 0) {
-                        h.secondImage.bindTiled(repo, scope, p1, w2, h2,
-                            state.tint, state.brightness)
-                    }
-                }
-            } else {
-                ensureRendered(h, p0, h.image, w, ht, token, position)
-                if (showSecond) {
-                    val w2 = h.secondContainer.width
-                    val h2 = h.secondContainer.height
-                    if (w2 > 0 && h2 > 0) {
-                        ensureRendered(h, p1, h.secondImage, w2, h2, token, position)
-                    }
+            // 0°/90°/180°/270° 全部按当前视口分块渲染。
+            h.image.bindTiled(
+                repo, p0, w, ht, state.tint, state.brightness,
+                state.pageRotation, position == activePosition
+            )
+            if (showSecond) {
+                val w2 = h.secondContainer.width
+                val h2 = h.secondContainer.height
+                if (w2 > 0 && h2 > 0) {
+                    h.secondImage.bindTiled(
+                        repo, p1, w2, h2, state.tint, state.brightness,
+                        state.pageRotation, position == activePosition
+                    )
                 }
             }
-            // 不再提前整页 rasterize 相邻页：常规页面使用分块渲染，
-            // 这些整页位图不会被使用，却会与当前可见块争用 PdfRenderer 和堆内存。
-        }
-    }
-
-    /** 先塞任意尺寸的旧缓存，避免重渲染期间闪白；随后按实际尺寸覆盖。 */
-    private fun showAnyCached(h: VH, page: Int, image: ImageView) {
-        val snap = shown.snapshot()
-        for (k in snap.keys) {
-            if (k.startsWith("$page-")) {
-                image.setImageBitmap(snap[k])
-                return
-            }
-        }
-        image.setImageBitmap(null)
-    }
-
-    /** 按容器实际像素渲染：栏隐藏 / 切模式 / 旋转后尺寸变了自然重渲染。 */
-    private fun ensureRendered(
-        h: VH, page: Int, image: ImageView, w: Int, ht: Int,
-        token: Int, position: Int
-    ) {
-        val k = key(page, w, ht)
-        val hit = shown.get(k)
-        if (hit != null) {
-            image.setImageBitmap(hit)
-            return
-        }
-        scope.launch(Dispatchers.IO) {
-            // 旋转页先显示轻量预览，减少大尺寸整页栅格化完成前的空白等待。
-            val longest = maxOf(w, ht)
-            if (longest > 1200) {
-                val factor = 1200f / longest.toFloat()
-                val pw = (w * factor).toInt().coerceAtLeast(1)
-                val ph = (ht * factor).toInt().coerceAtLeast(1)
-                val previewKey = key(page, pw, ph)
-                val preview = shown.get(previewKey) ?: try {
-                    repo.render(page, pw, ph, state.tint, state.brightness,
-                        state.pageRotation).also { shown.put(previewKey, it) }
-                } catch (_: Exception) { null }
-                if (preview != null) withContext(Dispatchers.Main) {
-                    if (h.renderToken == token &&
-                        h.bindingAdapterPosition == position &&
-                        image.isAttachedToWindow
-                    ) {
-                        image.colorFilter = null
-                        image.setImageBitmap(preview)
-                    }
-                }
-            }
-            val b = try {
-                repo.render(page, w, ht, state.tint, state.brightness,
-                    state.pageRotation)
-            } catch (e: Exception) { null }
-            if (b != null) withContext(Dispatchers.Main) {
-                shown.put(k, b)
-                if (h.renderToken == token &&
-                    h.bindingAdapterPosition == position &&
-                    image.isAttachedToWindow
-                ) {
-                    image.colorFilter = null
-                    image.setImageBitmap(b)
-                }
-            }
+            // 相邻页的少量预加载任务由全局队列排在当前页后面。
         }
     }
 
@@ -300,13 +255,13 @@ class PagesAdapter(
         for (h in holders.values) h.zoom.browseMode = v
     }
 
-    fun bitmapFor(page: Int): Bitmap? {
-        val snap = shown.snapshot()
-        for (k in snap.keys) if (k.startsWith("$page-")) return snap[k]
-        return null
-    }
+    fun bitmapFor(page: Int): android.graphics.Bitmap? =
+        PdfBitmapCache.findPrefix("page:${repo.cacheId}:$page-")
 
-    fun invalidateRenderCache() { shown.evictAll(); TileCache.clear() }
+    fun invalidateRenderCache() {
+        TileCache.clear()
+        PdfBitmapCache.clearPrefix("page:${repo.cacheId}:")
+    }
 
     /** 亮度滑杆拖动时实时可见，松手后才真正重渲染。 */
     fun previewBrightness(b: Float) {
@@ -332,7 +287,7 @@ class PagesAdapter(
     }
 
     fun evictAll() {
-        shown.evictAll()
+        PdfBitmapCache.clearPrefix("tile:${repo.cacheId}:")
         clearPreview()
     }
 
@@ -343,6 +298,8 @@ class PagesAdapter(
 
     override fun onViewRecycled(h: VH) {
         h.renderToken++
+        h.ratioJob?.cancel()
+        h.ratioJob = null
         val pos = h.boundPage
         val p = h.boundLogical
         if (pos >= 0) {
@@ -356,6 +313,12 @@ class PagesAdapter(
         }
         h.image.unbindTiled()
         h.secondImage.unbindTiled()
+        h.ink.cancelPendingLoad()
+        h.secondInk.cancelPendingLoad()
+        h.draftInk.cancelPendingLoad()
+        h.ink.releaseBuffers()
+        h.secondInk.releaseBuffers()
+        h.draftInk.releaseBuffers()
         h.image.colorFilter = null
         h.image.setImageBitmap(null)
         h.secondImage.colorFilter = null

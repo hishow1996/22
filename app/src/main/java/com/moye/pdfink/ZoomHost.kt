@@ -225,32 +225,35 @@ class ZoomHost @JvmOverloads constructor(
      * TiledPageView 按自身高度取块就会只画顶部几行。
      */
     private fun syncViewport(tx0: Float, ty0: Float) {
-        val sc = TiledPageView.bucket(scale.coerceIn(ZoomTransform.MIN_SCALE, 4f))
+        val actualScale = scale.coerceIn(ZoomTransform.MIN_SCALE, 4f)
+        val renderScale = TiledPageView.bucket(actualScale)
         val bw = baseContentW.coerceAtLeast(1)
         val bh = baseContentH.coerceAtLeast(1)
-        val lw = (bw * sc).toInt().coerceAtLeast(1)
-        val lh = (bh * sc).toInt().coerceAtLeast(1)
-        // 逻辑画布在宿主视口中居中，再叠加用户平移
-        val lx = (width - lw) * 0.5f + tx0
-        val ly = (height - lh) * 0.5f + ty0
-        // 页面基准框在宿主中居中（gravity=center），子 View 局部 (0,0) 落在这里
+        val lw = (bw * renderScale).toInt().coerceAtLeast(1)
+        val lh = (bh * renderScale).toInt().coerceAtLeast(1)
+        // 实际显示几何只由连续倍率控制；renderScale 只决定 PDF 的采样清晰度。
+        val displayW = bw * actualScale
+        val displayH = bh * actualScale
+        val lx = (width - displayW) * 0.5f + tx0
+        val ly = (height - displayH) * 0.5f + ty0
+        // 页面基准框在宿主中居中（gravity=center），子 View 局部 (0,0) 落在这里。
         val ox = (width - bw) * 0.5f
         val oy = (height - bh) * 0.5f
-        viewport.scale = scale
-        viewport.bucket = sc
+        val renderPerDisplay = ZoomTransform.displayToRender(1f, actualScale, renderScale)
+        viewport.scale = actualScale
+        viewport.bucket = renderScale
         viewport.lw = lw
         viewport.lh = lh
         viewport.originX = ox - lx
         viewport.originY = oy - ly
-        // 宿主可见区 h∈[0,width] 对应逻辑 X∈[-lx,-lx+width]，与 ox/oy 无关
-        viewport.visLeft = -lx
-        viewport.visTop = -ly
-        viewport.visW = width
-        viewport.visH = height
+        // 分块索引用栅格坐标，所以将屏幕窗口换算到 renderScale 坐标空间。
+        viewport.visLeft = -lx * renderPerDisplay
+        viewport.visTop = -ly * renderPerDisplay
+        viewport.visW = (width * renderPerDisplay).toInt().coerceAtLeast(1)
+        viewport.visH = (height * renderPerDisplay).toInt().coerceAtLeast(1)
     }
 
-    private fun visualScale(): Float =
-        if (legacyViewScale) scale else TiledPageView.bucket(scale)
+    private fun visualScale(): Float = scale
 
     private fun panLimitX(): Float =
         ZoomTransform.panLimit(baseContentW, visualScale(), width)
@@ -269,14 +272,13 @@ class ZoomHost @JvmOverloads constructor(
         if (limY > 0f) rememberedPanY = ZoomTransform.fraction(ty, limY)
         syncViewport(tx, ty)
         if (legacyViewScale) {
-            // 旋转页：保持 v14 及以前的行为，不进新绘制链路
+            // 保留旧式变换兼容入口；常规 PDF 页面已统一走自绘 viewport。
             v.scaleX = scale
             v.scaleY = scale
             v.translationX = tx
             v.translationY = ty
         } else {
-            // v15：不再缩放 View，内容由 TiledPageView / InkView 按 viewport 自绘，
-            // 否则底图与笔迹位图会被插值放大到 4× 而糊掉。
+            // 页面底图和笔迹层都通过同一 viewport 变换，缩放倍率连续且可逆。
             v.scaleX = 1f
             v.scaleY = 1f
             v.translationX = 0f
@@ -323,7 +325,7 @@ class ZoomHost @JvmOverloads constructor(
      * 双击切换阅读倍率。缩放以双击点为锚点，尽量让目标文字留在原位置。
      */
     fun toggleSmartZoom(focusX: Float, focusY: Float) {
-        if (scale > 1.05f) {
+        if (kotlin.math.abs(scale - 1f) > 0.05f) {
             reset(silent = false, toTop = panExtraY > 0f)
         } else {
             zoomTo(1.65f, focusX, focusY)

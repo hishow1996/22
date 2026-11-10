@@ -8,6 +8,11 @@ import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 按 PDF 内容指纹归档批注。
@@ -44,8 +49,15 @@ class InkStore(private val ctx: Context) {
     }
 
     fun attach(uri: Uri): String {
-        flush() // 先排空上一份文档的残留写入
-        val fp = fingerprint(ctx, uri)
+        flush()
+        return activateFingerprint(fingerprint(ctx, uri))
+    }
+
+    /**
+     * 在 fingerprint 已于后台计算完成后切换批注文档目录。
+     * 排队写入使用入队时固定的 File，调用方先在 IO 线程 flush 即可。
+     */
+    fun activateFingerprint(fp: String): String {
         val d = File(ctx.filesDir, PREFIX + fp)
         d.mkdirs()
         dir = d
@@ -56,8 +68,26 @@ class InkStore(private val ctx: Context) {
 
     private fun file(key: String): File? = dir?.let { File(it, "$key.json") }
 
-    fun load(key: String): MutableList<Mark> {
-        val f = file(key) ?: return mutableListOf()
+    fun load(key: String): MutableList<Mark> = readMarks(file(key))
+
+    /**
+     * 文件路径在调用时捕获，后台读取时即使切换 PDF，也不会读到另一份文档。
+     * JSON 解析和磁盘访问都在 IO 线程，完成后只把结果交回主线程。
+     */
+    fun loadAsync(
+        key: String,
+        scope: CoroutineScope,
+        onLoaded: (List<Mark>) -> Unit
+    ): Job {
+        val capturedFile = file(key)
+        return scope.launch(Dispatchers.IO) {
+            val result = readMarks(capturedFile)
+            withContext(Dispatchers.Main) { onLoaded(result) }
+        }
+    }
+
+    private fun readMarks(file: File?): MutableList<Mark> {
+        val f = file ?: return mutableListOf()
         val src = if (f.exists()) f else File(f.parentFile, f.name + ".tmp")
         if (!src.exists()) return mutableListOf()
         return try {

@@ -80,6 +80,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var snapshots: SnapshotKeeper
     private var repo: PdfRepo? = null
     private var adapter: PagesAdapter? = null
+    private var openGeneration = 0
+    private var openingDocument = false
 
     private val history: InkHistory get() = vm.history
     private val state: UiState get() = vm.state
@@ -227,10 +229,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (e: Exception) { }
-            if (openUri(uri)) {
+            if (openUri(uri) { fp, openedRepo ->
+                    recents.add(uri, recents.displayName(uri), fp, openedRepo.count)
+                }) {
                 prefs().edit().putString("uri", uri.toString()).apply()
-                recents.add(uri, recents.displayName(uri), vm.currentFp,
-                    repo?.count ?: 0)
             }
         }
 
@@ -1047,6 +1049,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun showHome() {
+        if (openingDocument) {
+            openGeneration++
+            openingDocument = false
+            repo?.close()
+            repo = null
+        }
         pager.visibility = View.GONE
         emptyState.visibility = View.VISIBLE
         topBar.visibility = View.GONE
@@ -1186,32 +1194,55 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
     )
 
-    private fun openUri(uri: Uri): Boolean {
+    private fun openUri(
+        uri: Uri,
+        onOpened: ((String, PdfRepo) -> Unit)? = null
+    ): Boolean {
         val r = try { PdfRepo(this, uri) } catch (e: Exception) {
             showHome(); return false
         }
         if (r.count <= 0) { r.close(); showHome(); return false }
+
+        val generation = ++openGeneration
+        // 先把当前页已完成/正在结束的笔迹快照排进旧文档队列，再卸载旧页面。
+        activeViews.values.toList().forEach { it.persistForDocumentSwitch() }
+        pager.adapter = null
+        adapter = null
+        activeViews.clear()
         repo?.close()
         repo = r
+        openingDocument = true
         TileCache.clear()
-        vm.currentFp = inkStore.attach(uri)
-        activeViews.clear()
         history.clear()
         refreshUndoState()
+        pager.visibility = View.INVISIBLE
+        emptyState.visibility = View.GONE
 
-        val session = sessionRepo.session(vm.currentFp)
+        // 指纹读取会扫描 PDF 的头部、中部和尾部，放到 IO 线程，避免大文件卡住首屏。
+        workScope.launch(Dispatchers.IO) {
+            inkStore.flush()
+            val fp = InkStore.fingerprint(this@MainActivity, uri)
+            withContext(Dispatchers.Main) {
+                if (generation != openGeneration || repo !== r || isFinishing) return@withContext
+                vm.currentFp = inkStore.activateFingerprint(fp)
+                finishOpenUri(r, fp)
+                onOpened?.invoke(fp, r)
+            }
+        }
+        return true
+    }
+
+    private fun finishOpenUri(r: PdfRepo, fp: String) {
+        openingDocument = false
+        val session = sessionRepo.session(fp)
         pageViewports.clear()
         pageViewports.putAll(session.pageViewports)
         state.activeLayer = session.layer.coerceIn(0, 1)
         state.tint = session.tint.coerceIn(0, 2)
         state.brightness = session.brightness.coerceIn(-1f, 1f)
         state.pageRotation = session.rotation.coerceIn(0, 270)
-        // 横版 PDF 在竖屏时自动旋转 90°，避免横向内容缩得过窄。
-        // 结果写进会话，用户之后在「更多」里手动改旋转会覆盖它。
-        if (!state.landscape && session.rotation == 0 &&
-            r.ratio(0) > 1.2f) {
-            state.pageRotation = 90
-        }
+        // 页面宽高信息放到后台读取，首屏不因打开第一页而等待 PdfRenderer。 
+        val autoRotateCandidate = !state.landscape && session.rotation == 0
         state.showCorrection = session.showCorrection
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
         state.displayMode = session.displayMode
@@ -1283,7 +1314,21 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTempEraser()
         refreshTools()
         updatePagerInput()
-        return true
+
+        if (autoRotateCandidate) {
+            workScope.launch(Dispatchers.IO) {
+                val shouldRotate = runCatching { r.ratio(0) > 1.2f }.getOrDefault(false)
+                withContext(Dispatchers.Main) {
+                    if (shouldRotate && repo === r && state.pageRotation == 0) {
+                        state.pageRotation = 90
+                        savePrefs()
+                        adapter?.invalidateRenderCache()
+                        adapter?.notifyDataSetChanged()
+                    }
+                }
+            }
+        }
+
     }
 
     // ----- 全局时间轴 -----
@@ -1762,6 +1807,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     override fun onResume() {
         super.onResume()
+        PdfBitmapCache.restore()
         hideSystemBars()
     }
 
@@ -1821,7 +1867,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun saveSessionNow() {
-        if (vm.currentFp.isEmpty() || !::sessionRepo.isInitialized) return
+        if (openingDocument || vm.currentFp.isEmpty() || !::sessionRepo.isInitialized) return
         sessionRepo.saveSession(vm.currentFp, DocSession(
             page = currentPage(),
             zoom = currentZoom,
@@ -2119,7 +2165,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
-            adapter?.evictAll()
+            PdfBitmapCache.trim(level)
+        }
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
             activeViews.values.forEach { it.releaseBuffers() }
         }
     }
@@ -2133,7 +2181,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         applyOrientationLayout()
         // 竖屏使用单页宽度适配、横屏恢复用户选的模式，并触发重渲染
         applyPageMode()
-        if (repo != null) goToPage(keepPage)
+        if (repo != null && adapter != null && !openingDocument) goToPage(keepPage)
         saveSessionNow()
     }
 

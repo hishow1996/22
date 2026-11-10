@@ -52,6 +52,17 @@ class ZoomTransformTest {
     }
 
     @Test
+    fun continuousDisplayScaleIsIndependentFromTileResolution() {
+        val actualScale = 0.83f
+        val renderScale = TiledPageView.bucket(actualScale)
+        assertEquals(0.67f, renderScale, 0.0001f)
+        assertEquals(actualScale / renderScale,
+            ZoomTransform.renderToDisplayFactor(actualScale, renderScale), 0.0001f)
+        assertEquals(1f / ZoomTransform.renderToDisplayFactor(actualScale, renderScale),
+            ZoomTransform.displayToRender(1f, actualScale, renderScale), 0.0001f)
+    }
+
+    @Test
     fun invalidPageViewportValuesAreSanitized() {
         val safe = PageViewportState(Float.NaN, Float.POSITIVE_INFINITY, -8f).normalized()
         assertEquals(1f, safe.zoom, 0.0001f)
