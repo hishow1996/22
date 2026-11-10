@@ -342,7 +342,7 @@
             android:layout_height="38dp"
             style="@style/Tool"
             android:contentDescription="@string/cd_write"
-            android:src="@drawable/ic_mode_write" />
+            android:src="@drawable/ic_swap" />
 
         <ImageButton
             android:id="@+id/btnBookmark"
@@ -399,20 +399,33 @@
 
             <LinearLayout
                 android:id="@+id/homeHeader"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="48dp"
-                android:layout_gravity="top|start"
+                android:layout_gravity="top|end"
                 android:layout_marginTop="4dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingStart="6dp"
-                android:paddingEnd="6dp"
+                android:paddingEnd="12dp"
                 android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/btnHomeOpen"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@null"
+                    android:contentDescription="@string/cd_open"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="8dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_folder"
+                    android:tint="@color/icon" />
 
                 <ImageButton
                     android:id="@+id/btnHomeMore"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
+                    android:layout_marginStart="6dp"
                     android:background="@null"
                     android:contentDescription="@string/cd_more"
                     android:minWidth="0dp"
@@ -420,24 +433,6 @@
                     android:padding="0dp"
                     android:scaleType="centerInside"
                     android:src="@drawable/ic_more"
-                    android:tint="@color/icon" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
-
-                <ImageButton
-                    android:id="@+id/btnHomeOpen"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:background="@null"
-                    android:contentDescription="@string/cd_open"
-                    android:minWidth="0dp"
-                    android:minHeight="0dp"
-                    android:padding="0dp"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/ic_folder"
                     android:tint="@color/icon" />
 
             </LinearLayout>

@@ -545,11 +545,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnLasso.isSelected = currentTool == Tools.LASSO && !state.browse
         btnNote.isSelected = currentTool == Tools.NOTE && !state.browse
         btnEraser.isSelected = currentTool == Tools.ERASER && !state.browse
-        // 语义反转：做题态高亮；图标显示「点它会变成什么」
+        // 图标固定为原来的双向箭头；做题态高亮，靠选中态分辨模式
         btnBrowse.isSelected = !state.browse
-        btnBrowse.setImageResource(
-            if (state.browse) R.drawable.ic_mode_write
-            else R.drawable.ic_mode_browse)
         btnBrowse.contentDescription = getString(
             if (state.browse) R.string.cd_write else R.string.cd_browse)
         val dim = if (state.browse) 0.4f else 1f
