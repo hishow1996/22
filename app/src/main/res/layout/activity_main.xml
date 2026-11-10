@@ -426,7 +426,9 @@
                     android:layout_height="40dp"
                     android:background="@null"
                     android:contentDescription="@string/cd_open"
-                    android:padding="10dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="8dp"
                     android:scaleType="centerInside"
                     android:src="@drawable/ic_folder"
                     android:tint="@color/icon" />
@@ -437,7 +439,9 @@
                     android:layout_height="40dp"
                     android:background="@null"
                     android:contentDescription="@string/cd_more"
-                    android:padding="10dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="8dp"
                     android:scaleType="centerInside"
                     android:src="@drawable/ic_more"
                     android:tint="@color/icon" />
