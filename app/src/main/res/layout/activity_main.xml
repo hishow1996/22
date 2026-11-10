@@ -397,18 +397,6 @@
 
             </LinearLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_gravity="top|start"
-                android:layout_marginStart="18dp"
-                android:layout_marginTop="4dp"
-                android:gravity="center_vertical"
-                android:text="最近打开"
-                android:textColor="@color/icon"
-                android:textSize="17sp"
-                android:textStyle="bold" />
-
             <LinearLayout
                 android:id="@+id/homeHeader"
                 android:layout_width="wrap_content"
