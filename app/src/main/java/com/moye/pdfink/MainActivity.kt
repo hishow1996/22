@@ -1785,11 +1785,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnTempEraser.visibility =
             if (inDoc && state.tempEraserOn) View.VISIBLE else View.GONE
         btnTempEraser.isSelected = tempEraserActive
-        btnTempEraser.setColorFilter(ContextCompat.getColor(this,
-            if (tempEraserActive) R.color.accent else R.color.icon))
-        btnTempEraser.background = ContextCompat.getDrawable(this,
-            if (tempEraserActive) R.drawable.temp_eraser_on_bg
-            else R.drawable.round_btn)
+        // v12：只换图案，不再套圆形背景、不再整体染色（会染掉白色高光）
+        btnTempEraser.setImageResource(
+            if (tempEraserActive) R.drawable.ic_temp_eraser_on
+            else R.drawable.ic_temp_eraser)
         btnTempEraser.contentDescription = getString(
             if (tempEraserActive) R.string.cd_temp_eraser_off
             else R.string.cd_temp_eraser)

@@ -439,31 +439,30 @@
 
     </LinearLayout>
 
+    <!-- v12：无圆形边框区域，48dp 透明点击热区 + 11dp padding = 26dp 图案 -->
     <ImageButton
         android:id="@+id/btnShow"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_gravity="bottom|start"
         android:layout_margin="12dp"
-        android:background="@drawable/round_btn"
+        android:background="@null"
         android:contentDescription="@string/cd_show"
-        android:elevation="4dp"
-        android:padding="10dp"
+        android:padding="11dp"
         android:scaleType="centerInside"
         android:src="@drawable/ic_unfold"
-        android:tint="@color/icon"
+        android:tint="@color/icon_tap"
         android:visibility="gone" />
 
     <ImageButton
         android:id="@+id/btnTempEraser"
-        android:layout_width="42dp"
-        android:layout_height="42dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:layout_gravity="end|center_vertical"
         android:layout_marginEnd="18dp"
-        android:background="@drawable/round_btn"
+        android:background="@null"
         android:contentDescription="@string/cd_temp_eraser"
-        android:elevation="5dp"
-        android:padding="10dp"
+        android:padding="11dp"
         android:scaleType="centerInside"
         android:src="@drawable/ic_temp_eraser" />
 

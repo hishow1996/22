@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 点击图案的显示效果：按下瞬时变蓝，抬手恢复深灰。
+     颜色状态而非动画，不产生任何圆形/方形背景区域。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true" android:color="@color/accent" />
+    <item android:color="@color/icon" />
+</selector>
