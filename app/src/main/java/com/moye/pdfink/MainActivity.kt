@@ -429,6 +429,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         sessionRepo.setFollowSystemDark(state.followSystemDark)
     }
 
+    private fun formatFileSize(bytes: Long): String = when {
+        bytes < 1024L * 1024L ->
+            "${((bytes + 512L) / 1024L)} KB"
+        bytes < 1024L * 1024L * 1024L ->
+            String.format(java.util.Locale.ROOT, "%.1f MB",
+                bytes / (1024.0 * 1024.0))
+        else ->
+            String.format(java.util.Locale.ROOT, "%.1f GB",
+                bytes / (1024.0 * 1024.0 * 1024.0))
+    }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).roundToInt()
     private fun flash(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 
@@ -1127,8 +1138,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
             val s = sessionRepo.session(item.fp)
             val cur = (s.page + 1).coerceAtLeast(1)
-            card.findViewById<TextView>(R.id.cardProgress).text =
+            val pageText =
                 if (item.pages > 0) "$cur / ${item.pages}" else "第 ${cur} 页"
+            val sizeText = recents.fileSizeBytes(item)?.let { formatFileSize(it) }
+                ?: "大小未知"
+            card.findViewById<TextView>(R.id.cardProgress).text =
+                "$pageText · $sizeText"
             card.findViewById<View>(R.id.cardInkDot).visibility =
                 if (InkStore.hasAnyInk(this, item.fp)) View.VISIBLE else View.GONE
 

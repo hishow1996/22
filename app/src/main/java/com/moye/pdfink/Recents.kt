@@ -15,7 +15,8 @@ import org.json.JSONObject
 class Recents(ctx: Context) {
     data class Item(
         val uri: String, val name: String, val time: Long, val fp: String,
-        val pages: Int = 0, val custom: Boolean = false
+        val pages: Int = 0, val custom: Boolean = false,
+        val sizeBytes: Long = -1L
     )
 
     private val app = ctx.applicationContext
@@ -38,6 +39,54 @@ class Recents(ctx: Context) {
     }
 
     /**
+     * 读取文件大小：优先使用 DocumentsProvider 元数据，不读取 PDF 正文；
+     * 部分 Provider 不提供 SIZE 时，再通过文件描述符长度兜底。
+     */
+    private fun readSizeBytes(uri: Uri): Long? {
+        val fromColumns = try {
+            app.contentResolver.query(
+                uri, arrayOf(OpenableColumns.SIZE), null, null, null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    val i = c.getColumnIndex(OpenableColumns.SIZE)
+                    if (i >= 0 && !c.isNull(i)) c.getLong(i).takeIf { it >= 0L }
+                    else null
+                } else null
+            }
+        } catch (e: Exception) { null }
+        if (fromColumns != null) return fromColumns
+
+        val fromAsset = try {
+            app.contentResolver.openAssetFileDescriptor(uri, "r")?.use { afd ->
+                afd.length.takeIf { it >= 0L }
+            }
+        } catch (e: Exception) { null }
+        if (fromAsset != null) return fromAsset
+
+        return try {
+            app.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                pfd.statSize.takeIf { it >= 0L }
+            }
+        } catch (e: Exception) { null }
+    }
+
+    /**
+     * 读取并缓存最近文件大小。旧版本记录首次显示时懒加载，
+     * 后续重绘直接使用缓存，避免重复访问文件 Provider。
+     */
+    fun fileSizeBytes(item: Item): Long? {
+        if (item.sizeBytes >= 0L) return item.sizeBytes
+        val size = readSizeBytes(Uri.parse(item.uri)) ?: return null
+        val current = all()
+        if (current.any { it.fp == item.fp && it.sizeBytes != size }) {
+            save(current.map {
+                if (it.fp == item.fp) it.copy(sizeBytes = size) else it
+            })
+        }
+        return size
+    }
+
+    /**
      * 重新导入 / 打开一份卷子：按指纹去重并排最前。
      * 若这条记录曾被手动改名，保留用户命名，不用系统名覆盖。
      */
@@ -49,7 +98,7 @@ class Recents(ctx: Context) {
         val list = old.filter { it.fp != key && it.uri != uri.toString() }
             .toMutableList()
         list.add(0, Item(uri.toString(), finalName, System.currentTimeMillis(),
-            key, pages, existing?.custom == true))
+            key, pages, existing?.custom == true, readSizeBytes(uri) ?: -1L))
         save(list.take(12))
     }
 
@@ -60,7 +109,8 @@ class Recents(ctx: Context) {
         if (i < 0) return
         val it = list.removeAt(i)
         list.add(0, it.copy(uri = uri.toString(),
-            time = System.currentTimeMillis(), pages = pages))
+            time = System.currentTimeMillis(), pages = pages,
+            sizeBytes = readSizeBytes(uri) ?: it.sizeBytes))
         save(list)
     }
 
@@ -81,7 +131,8 @@ class Recents(ctx: Context) {
                 u.hashCode().toUInt().toString(16)
             }
             Item(u, o.optString("n"), o.optLong("t"), fp,
-                o.optInt("g", 0), o.optBoolean("c", false))
+                o.optInt("g", 0), o.optBoolean("c", false),
+                o.optLong("s", -1L))
         }
     } catch (e: Exception) { emptyList() }
 
@@ -100,7 +151,8 @@ class Recents(ctx: Context) {
             a.put(JSONObject()
                 .put("u", it.uri).put("n", it.name)
                 .put("t", it.time).put("f", it.fp)
-                .put("g", it.pages).put("c", it.custom))
+                .put("g", it.pages).put("c", it.custom)
+                .put("s", it.sizeBytes))
         }
         p.edit().putString("list", a.toString()).apply()
     }
