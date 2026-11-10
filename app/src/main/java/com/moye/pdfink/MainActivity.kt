@@ -1217,11 +1217,16 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.displayMode = session.displayMode
         // 用户未主动选择过显示方式时，横竖屏都默认适合宽度。
         if (!modeChosen) state.displayMode = DisplayMode.WIDTH
-        currentZoom = session.pageViewports[
+        val savedViewport = session.pageViewports[
             PageViewportState.storageKey(session.page, state.effectiveMode)
-        ]?.zoom?.coerceIn(1f, 4f) ?: session.zoom.coerceIn(1f, 4f)
-        currentPanX = session.panX
-        currentPanY = session.panY
+        ]
+        // v18 会话按显示模式分别记忆；新模式没有记录时从 1× / 页顶开始。
+        // 仅旧版完全没有逐页记录的会话才使用原来的全局像素缩放和平移。
+        currentZoom = savedViewport?.zoom?.coerceIn(1f, 4f)
+            ?: if (session.pageViewports.isEmpty()) session.zoom.coerceIn(1f, 4f)
+            else 1f
+        currentPanX = if (session.pageViewports.isEmpty()) session.panX else 0f
+        currentPanY = if (session.pageViewports.isEmpty()) session.panY else 0f
 
         val ad = PagesAdapter(
             r, this, state, workScope,
