@@ -18,9 +18,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlin.math.hypot
 import kotlin.math.min
 
-/** MotionEvent.CLASSIFICATION_PALM：API 34 的 flag-gated 常量，公开 android.jar 不含该字段，按 AOSP 取字面值 0x2 */
-private const val CLASSIFICATION_PALM = 0x2
-
 /** 题目页 / 草稿页之上的笔迹层：三缓冲（已落笔 / 当前笔 / 预测） + 可重放 Mark 序列。 */
 class InkView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -236,7 +233,7 @@ class InkView @JvmOverloads constructor(
         if (h.stylusOnly && ev.getToolType(0) != MotionEvent.TOOL_TYPE_STYLUS) return true
         if (h.palmGuard && isPalm(ev, 0)) return true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-            ev.classification == CLASSIFICATION_PALM
+            ev.classification == MotionEvent.CLASSIFICATION_PALM
         ) return true
         return false
     }

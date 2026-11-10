@@ -98,12 +98,10 @@ object GeometryCore {
             val n = m.pts.size / 2
             if (n == 0) continue
             if (m.shape != Shapes.FREE) {
-                // 形状命中即整删：橡皮轨迹包围盒（外扩笔宽半径）与形状包围盒相交即删除，
-                // 覆盖「橡皮落在形状内部/边线穿过」而顶点不在橡皮附近的情形。
-                val mb = bounds(m.pts)
-                val mbPx = floatArrayOf(mb[0] * w, mb[1] * h, mb[2] * w, mb[3] * h)
-                val eb = eraseBounds(erasePx, radiusPx + m.width * unit * 0.5f)
-                val hit = overlaps(mbPx, eb)
+                val hit = (0 until n).any { i ->
+                    nearErase(m.pts[2 * i] * w, m.pts[2 * i + 1] * h,
+                        erasePx, radiusPx + m.width * unit * 0.5f)
+                }
                 if (!hit) out.add(m)
                 continue
             }

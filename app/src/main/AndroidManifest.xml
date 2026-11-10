@@ -16,7 +16,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|layoutDirection"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|screenWidthSize|screenHeightSize|keyboardHidden|density|uiMode|layoutDirection"
             android:exported="true"
             android:screenOrientation="fullUser"
             android:windowSoftInputMode="stateAlwaysHidden">
