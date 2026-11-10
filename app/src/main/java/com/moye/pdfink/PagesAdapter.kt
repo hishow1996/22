@@ -89,7 +89,7 @@ class PagesAdapter(
         h.boundLogical = p0
         holders[position] = h
         h.zoom.reset(silent = true,
-            toTop = fitMode == PageContainer.WIDTH)
+            toTop = fitMode == PageContainer.WIDTH && (!state.landscape || state.pageRotation == 0))
         h.zoom.browseMode = state.browse
         h.zoom.onZoomChange = onZoomChange
         h.zoom.onFlip = onFlip
