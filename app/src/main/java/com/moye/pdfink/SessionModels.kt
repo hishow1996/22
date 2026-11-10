@@ -42,7 +42,7 @@ data class DocSession(
     val rotation: Int = 0,
     val showCorrection: Boolean = true,
     // v7：横屏显示模式与双指平移量
-    val displayMode: Int = DisplayMode.FIT,
+    val displayMode: Int = DisplayMode.WIDTH,
     val panX: Float = 0f,
     val panY: Float = 0f
 ) {
@@ -69,7 +69,7 @@ data class DocSession(
             o.optDouble("b", 0.0).toFloat(),
             o.optInt("r", 0),
             o.optBoolean("sc", true),
-            o.optInt("dm", DisplayMode.FIT).coerceIn(
+            o.optInt("dm", DisplayMode.WIDTH).coerceIn(
                 DisplayMode.FIT, DisplayMode.DOUBLE),
             o.optDouble("px", 0.0).toFloat(),
             o.optDouble("py", 0.0).toFloat()

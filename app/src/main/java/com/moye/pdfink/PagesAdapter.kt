@@ -48,6 +48,8 @@ class PagesAdapter(
     var fitMode = PageContainer.FIT
     var doublePage = false
     var onPanChange: ((Float, Float) -> Unit)? = null
+    /** 只有恢复会话的那一页用 initialPan，翻到的其它页回到页顶，不串平移量。 */
+    var restorePanAt: Int = -1
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val zoom: ZoomHost = v as ZoomHost
@@ -55,8 +57,8 @@ class PagesAdapter(
         val pageContainer: PageContainer = v.findViewById(R.id.pageContainer)
         val draftContainer: PageContainer = v.findViewById(R.id.draftContainer)
         val secondContainer: PageContainer = v.findViewById(R.id.secondContainer)
-        val image: ImageView = v.findViewById(R.id.pageImage)
-        val secondImage: ImageView = v.findViewById(R.id.secondImage)
+        val image: TiledPageView = v.findViewById(R.id.pageImage)
+        val secondImage: TiledPageView = v.findViewById(R.id.secondImage)
         val ink: InkView = v.findViewById(R.id.inkView)
         val secondInk: InkView = v.findViewById(R.id.secondInk)
         val draftInk: InkView = v.findViewById(R.id.draftInk)
@@ -86,7 +88,8 @@ class PagesAdapter(
         val showSecond = doublePage && p1 < repo.count
         h.boundLogical = p0
         holders[position] = h
-        h.zoom.reset(silent = true)
+        h.zoom.reset(silent = true,
+            toTop = fitMode == PageContainer.WIDTH && state.pageRotation == 0)
         h.zoom.onZoomChange = onZoomChange
         h.zoom.onFlip = onFlip
         h.zoom.onPanChange = onPanChange
@@ -114,9 +117,18 @@ class PagesAdapter(
 
         h.image.colorFilter = null
         h.secondImage.colorFilter = null
-        showAnyCached(h, p0, h.image)
-        if (showSecond) showAnyCached(h, p1, h.secondImage)
-        else h.secondImage.setImageBitmap(null)
+        // WIDTH 且未旋转 → 分块；FIT / DOUBLE / 旋转页 → 原来的整页 render
+        val useTiles = fitMode == PageContainer.WIDTH && state.pageRotation == 0
+        h.image.unbindTiled()
+        h.secondImage.unbindTiled()
+        if (useTiles) {
+            h.image.setImageBitmap(null)
+            h.secondImage.setImageBitmap(null)
+        } else {
+            showAnyCached(h, p0, h.image)
+            if (showSecond) showAnyCached(h, p1, h.secondImage)
+            else h.secondImage.setImageBitmap(null)
+        }
 
         h.ink.setPageLook(state.tint)
         h.secondInk.setPageLook(state.tint)
@@ -138,18 +150,26 @@ class PagesAdapter(
             // WIDTH 模式页面比容器高，把超出量交给 ZoomHost 做 1x 纵向平移边界
             h.zoom.panExtraX = 0f
             h.zoom.panExtraY = (ht - h.zoom.height).coerceAtLeast(0).toFloat()
-            if (initialZoom > 1.01f || initialPanX != 0f || initialPanY != 0f) {
+            if (position == restorePanAt &&
+                (initialZoom > 1.01f || initialPanX != 0f || initialPanY != 0f)) {
                 h.zoom.setScale(initialZoom, initialPanX, initialPanY)
+                restorePanAt = -1
             } else {
                 h.zoom.refreshPanBounds()
             }
 
-            ensureRendered(h, p0, h.image, w, ht, token, position)
-            if (showSecond) {
-                val w2 = h.secondContainer.width
-                val h2 = h.secondContainer.height
-                if (w2 > 0 && h2 > 0) {
-                    ensureRendered(h, p1, h.secondImage, w2, h2, token, position)
+            if (useTiles) {
+                // 只渲染可见条带，不再生成整页大位图
+                h.image.bindTiled(repo, scope, p0, w, ht,
+                    state.tint, state.brightness)
+            } else {
+                ensureRendered(h, p0, h.image, w, ht, token, position)
+                if (showSecond) {
+                    val w2 = h.secondContainer.width
+                    val h2 = h.secondContainer.height
+                    if (w2 > 0 && h2 > 0) {
+                        ensureRendered(h, p1, h.secondImage, w2, h2, token, position)
+                    }
                 }
             }
             scope.launch(Dispatchers.IO) {
@@ -208,7 +228,7 @@ class PagesAdapter(
         return null
     }
 
-    fun invalidateRenderCache() { shown.evictAll() }
+    fun invalidateRenderCache() { shown.evictAll(); TileCache.clear() }
 
     /** 亮度滑杆拖动时实时可见，松手后才真正重渲染。 */
     fun previewBrightness(b: Float) {
@@ -238,7 +258,10 @@ class PagesAdapter(
         clearPreview()
     }
 
-    fun resetZoom(page: Int) { holders[page]?.zoom?.reset() }
+    fun resetZoom(page: Int) {
+        holders[page]?.zoom?.reset(
+            toTop = fitMode == PageContainer.WIDTH && state.pageRotation == 0)
+    }
 
     override fun onViewRecycled(h: VH) {
         h.renderToken++
@@ -253,6 +276,8 @@ class PagesAdapter(
             h.boundPage = -1
             h.boundLogical = -1
         }
+        h.image.unbindTiled()
+        h.secondImage.unbindTiled()
         h.image.colorFilter = null
         h.image.setImageBitmap(null)
         h.secondImage.colorFilter = null

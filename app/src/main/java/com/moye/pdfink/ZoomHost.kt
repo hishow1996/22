@@ -139,20 +139,24 @@ class ZoomHost @JvmOverloads constructor(
         onPanChange?.invoke(tx, ty)
     }
 
-    fun reset(silent: Boolean = false) {
+    /**
+     * toTop：WIDTH 模式下「1:1 并回页顶」。内容比容器高时 gravity 居中，
+     * ty = panExtraY/2（正值向下）正好把页面顶边推到容器顶边。
+     */
+    fun reset(silent: Boolean = false, toTop: Boolean = false) {
         scale = 1f
         tx = 0f
-        ty = 0f
+        ty = if (toTop) panExtraY.coerceAtLeast(0f) * 0.5f else 0f
         val v = content
         if (v != null) {
             v.scaleX = 1f
             v.scaleY = 1f
             v.translationX = 0f
-            v.translationY = 0f
+            v.translationY = ty
         }
         if (!silent) {
             onZoomChange?.invoke(1f)
-            onPanChange?.invoke(0f, 0f)
+            onPanChange?.invoke(0f, ty)
         }
     }
 

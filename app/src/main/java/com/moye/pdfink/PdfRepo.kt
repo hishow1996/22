@@ -46,9 +46,15 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     private fun raw(page: Int, w: Int, h: Int): Bitmap = synchronized(renderer) {
-        // WIDTH 模式页面可到约 2600px 长边，固定 2200 上限会把它缩糊
-        val maxSide = if (Runtime.getRuntime().maxMemory() < 128L * 1024 * 1024)
-            1800f else 2600f
+        // 按可用堆分档：屏幕 WIDTH 走分块（不经过这里），
+        // 导出 / 缩略图才走整页，尽量接近显示宽度但避免 OOM
+        val mem = Runtime.getRuntime().maxMemory()
+        val maxSide = when {
+            mem >= 256L * 1024 * 1024 -> 3200f
+            mem >= 192L * 1024 * 1024 -> 2600f
+            mem >= 128L * 1024 * 1024 -> 2200f
+            else -> 1800f
+        }
         val s = min(1f, maxSide / maxOf(w, h).coerceAtLeast(1).toFloat())
         val rw = (w * s).toInt().coerceAtLeast(1)
         val rh = (h * s).toInt().coerceAtLeast(1)
@@ -65,6 +71,40 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
             cache.put(key, bmp)
             bmp
         }
+    }
+
+    /**
+     * 只渲染第 index 条纵向条带（目标像素坐标），横向严格 1:1。
+     * matrix = 缩放 s=目标宽/原页宽 + 平移 -条带顶部，
+     * PdfRenderer 会按 bitmap 边界裁剪，所以只分配 w×tileH 的位图。
+     */
+    fun renderTile(
+        page: Int, w: Int, h: Int, index: Int, tileH: Int,
+        tint: Int, brightness: Float
+    ): Bitmap {
+        val top = index * tileH
+        if (top >= h || w <= 0) {
+            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        }
+        val th = minOf(tileH, h - top)
+        val out = Bitmap.createBitmap(w, th, Bitmap.Config.ARGB_8888)
+        out.eraseColor(Color.WHITE)
+        synchronized(renderer) {
+            val p = renderer.openPage(page)
+            val s = w.toFloat() / p.width.coerceAtLeast(1).toFloat()
+            // preTranslate：M = T * S，点变换 = S·p + (0,-top)。
+            // 若把平移写在缩放之后右乘，平移量会被 s 再乘一次，条带整体偏移。
+            val m = Matrix().apply {
+                setScale(s, s)
+                preTranslate(0f, -top.toFloat())
+            }
+            p.render(out, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            p.close()
+        }
+        val filtered = PageFilter.apply(out, tint, brightness)
+        // apply 可能就是 out 本身，绝不能回收它
+        if (filtered !== out) out.recycle()
+        return filtered
     }
 
     fun render(

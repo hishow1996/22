@@ -34,7 +34,8 @@ class UiState {
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true
     // v7：横屏显示模式，用户设置原样保留，竖屏强制 FIT
-    @Volatile var displayMode = DisplayMode.FIT
+    // 横屏默认按宽度铺满；竖屏由 effective() 强制回 FIT
+    @Volatile var displayMode = DisplayMode.WIDTH
 
     val effectiveMode: Int
         get() = DisplayMode.effective(displayMode, landscape)

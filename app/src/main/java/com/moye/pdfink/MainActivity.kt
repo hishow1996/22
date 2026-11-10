@@ -126,6 +126,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         set(v) { vm.toolBeforeEraser = v }
     private var pendingPdfPages: List<Int> = emptyList()
     private var pendingPdfWidth: Int = 1240
+    /** 用户是否手动切过横屏显示模式；没切过就始终给 WIDTH 铺满 */
+    private var modeChosen = false
     private var pendingExport: (() -> Unit)? = null
     private var sysTop = 0
     private var sysBottom = 0
@@ -217,6 +219,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     // ----- SAF -----
     private val openDoc =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            hideSystemBars()
             if (uri == null) return@registerForActivityResult
             try {
                 contentResolver.takePersistableUriPermission(
@@ -279,6 +282,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
+        hideSystemBars()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            @Suppress("DEPRECATION")
+            window.decorView.setOnSystemUiVisibilityChangeListener { v ->
+                // 系统误把状态栏露出来时立刻重新隐藏，禁止边缘上滑滑出
+                if (v and View.SYSTEM_UI_FLAG_FULLSCREEN == 0) hideSystemBars()
+            }
+        }
         inkStore = InkStore(this)
         recents = Recents(this)
         sessionRepo = SessionRepository(this)
@@ -365,8 +376,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.brightness = p.getFloat("brightness", 0f)
         state.browse = p.getBoolean("browse", false)
         state.spread = p.getBoolean("spread", false)
-        state.displayMode = p.getInt("displayMode", DisplayMode.FIT)
+        state.displayMode = p.getInt("displayMode", DisplayMode.WIDTH)
             .coerceIn(DisplayMode.FIT, DisplayMode.DOUBLE)
+        modeChosen = p.getBoolean("modeChosen", false)
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
         state.edgeFlip = p.getBoolean("edge", true)
@@ -386,6 +398,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putInt("tint", state.tint); putFloat("brightness", state.brightness)
             putBoolean("browse", state.browse); putBoolean("spread", state.spread)
             putInt("displayMode", state.displayMode)
+            putBoolean("modeChosen", modeChosen)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
@@ -626,10 +639,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, ins ->
             val q = NotchCompat.safeInsets(this, ins)
-            val bars = ins.getInsets(WindowInsetsCompat.Type.systemBars())
-            sysTop = bars.top
-            sysBottom = bars.bottom
+            // 状态栏 / 导航栏已彻底隐藏（hideSystemBars），不再为它们留白；
+            // 刘海与物理安全区仍由 NotchCompat 提供，避免压住正文。
+            sysTop = 0
+            sysBottom = 0
             applySafeInsets(q[0], q[1], q[2], q[3])
+            // 只在系统又把栏露出来时重 hide，避免 hide 自身触发的 insets
+            // dispatch 形成重复调用
+            if (ins.isVisible(WindowInsetsCompat.Type.systemBars())) hideSystemBars()
             ins
         }
     }
@@ -647,6 +664,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.landscape = resources.configuration.orientation !=
             Configuration.ORIENTATION_PORTRAIT
         applyChrome()
+        hideSystemBars()
     }
 
     /**
@@ -675,7 +693,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.layoutParams = lpBottom
         bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8), cutBottom + dp(4))
 
-        pager.setPadding(0, barTop, 0, barBottom)
+        // 横屏左上角可能是刘海（荣耀 10 90°），左右按物理安全区避让；
+        // 系统开了「隐藏显示区域」时 safeL/safeR=0，就是真正铺满。
+        val padL = if (portrait) 0 else safeL
+        val padR = if (portrait) 0 else safeR
+        pager.setPadding(padL, barTop, padR, barBottom)
         val inDoc = repo != null && pager.visibility == View.VISIBLE
         val barVis = if (barsHidden || !inDoc) View.GONE else View.VISIBLE
         topBar.visibility = barVis
@@ -963,6 +985,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // itemCount 变化时先记住逻辑页，切完再按新映射跳回去
         val keepPage = if (repo != null) currentPage() else 0
         state.displayMode = mode
+        modeChosen = true
         savePrefs()
         applyPageMode()
         if (repo != null) goToPage(keepPage)
@@ -1128,6 +1151,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         if (r.count <= 0) { r.close(); showHome(); return false }
         repo?.close()
         repo = r
+        TileCache.clear()
         vm.currentFp = inkStore.attach(uri)
         activeViews.clear()
         history.clear()
@@ -1142,6 +1166,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
         currentZoom = session.zoom.coerceIn(1f, 4f)
         state.displayMode = session.displayMode
+        // 升级前存的 FIT 不该让横屏一直居中一条；用户没手动切过就强制铺满
+        if (!modeChosen && state.landscape) state.displayMode = DisplayMode.WIDTH
         currentPanX = session.panX
         currentPanY = session.panY
 
@@ -1176,6 +1202,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         } else session.page
         val logical = restored.coerceIn(0, r.count - 1)
         val page = viewPosOf(logical)
+        ad.restorePanAt = page
         pager.setCurrentItem(page, false)
         focusKey = "p$logical"
         updatePage(page)
@@ -1534,10 +1561,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     /** 按可用堆分档，麒麟 970 / 6GB 上避免一次合成过大的 ARGB_8888 位图。 */
     private fun baseRenderWidth(): Int {
         val mem = Runtime.getRuntime().maxMemory()
+        // 屏幕走 1:1 分块，导出整页按堆分档，尽量接近显示宽度又不 OOM
         return when {
-            mem < 128L * 1024 * 1024 -> 720
-            mem < 256L * 1024 * 1024 -> 900
-            else -> 1240
+            mem < 128L * 1024 * 1024 -> 1200
+            mem < 256L * 1024 * 1024 -> 1800
+            else -> 2400
         }
     }
 
@@ -1545,13 +1573,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val r = repo ?: return 900 to 1273
         val ratio = r.ratioWithRotation(page, state.pageRotation).coerceIn(0.3f, 3f)
         var w = when {
-            Runtime.getRuntime().maxMemory() < 128L * 1024 * 1024 -> 900
-            Runtime.getRuntime().maxMemory() < 256L * 1024 * 1024 -> 1200
-            else -> 1600
+            Runtime.getRuntime().maxMemory() < 128L * 1024 * 1024 -> 1200
+            Runtime.getRuntime().maxMemory() < 256L * 1024 * 1024 -> 1800
+            else -> 2400
         }
         if (state.effectiveSpread) w = (w * 0.72f).toInt().coerceAtLeast(640)
         var h = (w / ratio).toInt()
-        val maxH = (w * 1.6f).toInt().coerceAtMost(1800)
+        val maxH = (w * 2.2f).toInt().coerceAtMost(3400)
         if (h > maxH) { h = maxH; w = (h * ratio).toInt() }
         return w to h
     }
@@ -1650,14 +1678,30 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         } catch (e: Exception) { false }
     }
 
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars()
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            WindowInsetsControllerCompat(window, window.decorView).apply {
-                hide(WindowInsetsCompat.Type.systemBars())
-                systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
+        if (hasFocus) hideSystemBars()
+    }
+
+    /** 状态栏 / 导航栏彻底不显示，且不允许边缘上滑临时滑出。 */
+    private fun hideSystemBars() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsetsControllerCompat(window, window.decorView)
+                .hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
         }
     }
 

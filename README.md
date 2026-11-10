@@ -422,3 +422,56 @@ v11 的 `temp_eraser_on_bg.xml`（白圆 + 蓝描边）删除。
 **真机验收补充**
   42. 两个悬浮按钮没有白圆底与描边，只剩图案；48dp 热区仍好点
   43. 点橡皮图案变常驻蓝且白色高光仍在，再点恢复深灰；左下角呼出按钮点按变蓝
+
+## 横屏铺满 v14：全屏 + 1:1 分块 + 状态栏彻底隐藏
+
+用户三要求：铺满横屏屏幕、文字清晰、顶部状态栏不显示。
+
+**P0 状态栏彻底不显示**
+
+- 主题补 `windowFullscreen`；API 26/28（荣耀 10）用
+  `FLAG_FULLSCREEN + HIDE_NAVIGATION + IMMERSIVE`（**非 STICKY**），
+  并挂 `OnSystemUiVisibilityChangeListener`：系统一旦把状态栏露出来就立刻重 hide
+- 统一 `hideSystemBars()`，在启动 / `onResume` / 焦点恢复 / SAF 选文件返回 /
+  旋转 / insets 回调都重 hide。删掉原来的
+  `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`（那个允许边缘上滑临时滑出）
+- `setupInsets()` 不再把已隐藏的 `systemBars().top` 算进留白，
+  `sysTop/sysBottom = 0`；刘海仍由 `NotchCompat` 的 `safeT/L/R/B` 提供
+- 横屏 `pager` 左右 padding = `safeL/safeR`，避免 90° 时左上角刘海压住正文；
+  系统开了「隐藏显示区域」时为 0，就是真正铺满
+
+**P1 横屏默认铺满**
+
+`UiState` / `DocSession` / `loadPrefs` 默认都改成 `DisplayMode.WIDTH`。
+新增 `modeChosen`：用户没手动切过模式时，横屏打开卷子强制 WIDTH，
+覆盖升级前存下的旧 FIT；手动切过就尊重选择。竖屏仍强制 FIT。
+隐藏工具栏时上下 padding 已归零（v7），纸页贴满上下；上下看完整页
+沿用双指同向拖动，**单指照常写字**。
+
+**P2 文字清晰（A 分块）**
+
+新增 `TiledPageView` + `TileCache`：用 `canvas.clipBounds` 拿可见区，
+按 400px 高条带渲染。`PdfRepo.renderTile()` 给 `PdfRenderer.Page.render()`
+传 matrix（缩放 `目标宽/原页宽` + 平移 `-条带顶部`），PDF 渲染器按位图边界
+裁剪，只分配 `w×400` 的位图，**横向严格 1:1，文字不糊**。
+缓存按字节限额（12–32MB），只留可见块 + 上下各 1 块预取；`clear()` 递增
+epoch，切文件 / 尺寸变化后旧任务不会把旧文件的块写回新 key。
+
+- WIDTH 且未旋转 → 分块；FIT / DOUBLE / 旋转页 → 原来的整页 render（页面小，不糊）
+- 导出 / 缩略图仍整页，但 `PdfRepo.raw()` 上限按堆放宽到 1800/2200/2600/3200，
+  `baseRenderWidth()` / `pageSize()` 分档提到 1200/1800/2400，尽量贴近屏幕口径。
+  **如实说明**：导出受整页内存约束，不是 1:1 分块；低堆机仍会降档。
+- 旋转页不走分块（低频功能），按新上限整页渲染
+
+**P3 配套**
+
+- 会话只在恢复的那一页用 `initialPan`，翻到的其它页回页顶，不串平移量
+- 缩放复位在 WIDTH 下「回 1:1 并回页顶」（`ZoomHost.reset(toTop=true)`）
+- 亮度实时预览的 `colorFilter` 也带进分块绘制的 paint
+- 亮度/护眼作用于每个条带，不再复制整页位图
+
+**真机验收补充**
+  44. 横屏冷启动即按宽度铺满，纸页左右不留空、上下可双指看完整页
+  45. 放大后文字边缘锐利，条带接缝无白线、无错位、笔迹落点准
+  46. 状态栏在边缘上滑 / 切后台 / 选文件返回 / 旋转后都不显示
+  47. 手动切过模式后尊重选择；竖屏不受影响；导出 PNG/PDF 正常
