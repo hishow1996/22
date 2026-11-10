@@ -26,7 +26,8 @@ class MainViewModel : ViewModel() {
     var focusKey = "p0"
     var lastTriTap = 0L
     var currentFp = ""
-    var tempEraserArmed = false
-    var armedTool = Tools.PEN
+    // v11：悬浮橡皮改「点击切换」，armed(按住中) 换成 active(已切换)
+    var tempEraserActive = false
+    var toolBeforeEraser = Tools.PEN
     var createdPage = -1
 }

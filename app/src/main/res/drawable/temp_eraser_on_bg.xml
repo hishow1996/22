@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 悬浮橡皮切换态：白圆 + 品牌蓝描边，零文字 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#FFFFFFFF" />
+    <stroke android:width="2dp" android:color="@color/accent" />
+</shape>

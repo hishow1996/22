@@ -118,12 +118,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private var lastTriTap: Long
         get() = vm.lastTriTap
         set(v) { vm.lastTriTap = v }
-    private var tempEraserArmed: Boolean
-        get() = vm.tempEraserArmed
-        set(v) { vm.tempEraserArmed = v }
-    private var armedTool: Int
-        get() = vm.armedTool
-        set(v) { vm.armedTool = v }
+    private var tempEraserActive: Boolean
+        get() = vm.tempEraserActive
+        set(v) { vm.tempEraserActive = v }
+    private var toolBeforeEraser: Int
+        get() = vm.toolBeforeEraser
+        set(v) { vm.toolBeforeEraser = v }
     private var pendingPdfPages: List<Int> = emptyList()
     private var pendingPdfWidth: Int = 1240
     private var pendingExport: (() -> Unit)? = null
@@ -469,8 +469,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun selectTool(t: Int) {
         if (t != Tools.ERASER && t != Tools.LASSO && t != Tools.NOTE) lastDrawTool = t
         currentTool = t
+        // 顶栏选了别的工具时，悬浮橡皮的切换态自动复位，避免两处状态打架
+        if (t != Tools.ERASER) tempEraserActive = false
         if (t != Tools.LASSO) activeViews.values.forEach { it.cancelSelection() }
         refreshTools()
+        refreshTempEraser()
     }
 
     private fun refreshTools() {
@@ -679,9 +682,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.visibility = barVis
         btnShow.visibility =
             if (barsHidden && inDoc) View.VISIBLE else View.GONE
-        btnTempEraser.visibility =
-            if (barsHidden || !inDoc || !state.tempEraserOn) View.GONE
-            else View.VISIBLE
+        // v11：barsHidden 不参与，隐藏栏后右下角仍常驻橡皮
+        refreshTempEraser()
         emptyState.setPadding(safeL, 0, safeR, safeB)
         val ml = btnHomeMore.layoutParams as FrameLayout.LayoutParams
         ml.topMargin = cutTop + dp(8)
@@ -747,13 +749,24 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             v.layoutParams = p
         }
 
-        // 悬浮橡皮：横屏在右侧中部留白里，竖屏纸页几乎占满宽度，改到底栏上方
+        // v11 悬浮橡皮：隐藏栏时统一右下角，与左下角 btnShow 左右对称。
+        // cutBottom 已是 max(系统栏, 刘海下边)，+12dp 保证不贴底、不压刘海。
+        // 栏显示时维持原位置（竖屏底栏上方 / 横屏右侧中部留白）。
         val fl = btnTempEraser.layoutParams as FrameLayout.LayoutParams
-        fl.gravity = if (portrait) Gravity.END or Gravity.BOTTOM
-        else Gravity.END or Gravity.CENTER_VERTICAL
         fl.topMargin = 0
-        fl.bottomMargin = if (portrait) barBottom + dp(10) else 0
-        fl.marginEnd = if (portrait) dp(12) else dp(18)
+        if (barsHidden) {
+            fl.gravity = Gravity.END or Gravity.BOTTOM
+            fl.bottomMargin = cutBottom + dp(12)
+            fl.marginEnd = safeR + dp(12)
+        } else if (portrait) {
+            fl.gravity = Gravity.END or Gravity.BOTTOM
+            fl.bottomMargin = barBottom + dp(10)
+            fl.marginEnd = dp(12)
+        } else {
+            fl.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            fl.bottomMargin = 0
+            fl.marginEnd = dp(18)
+        }
         btnTempEraser.layoutParams = fl
 
         val sl = btnShow.layoutParams as FrameLayout.LayoutParams
@@ -957,12 +970,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (tempEraserArmed && ev.actionMasked == MotionEvent.ACTION_UP &&
-            !isOnTempButton(ev)
-        ) {
-            tempEraserArmed = false
-            selectTool(armedTool)
-        }
         if (barsHidden && ev.pointerCount == 3 &&
             ev.actionMasked == MotionEvent.ACTION_POINTER_DOWN
         ) {
@@ -982,7 +989,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnShow.visibility = View.GONE
         shapeBar.visibility = View.GONE
         selectionBar.visibility = View.GONE
-        btnTempEraser.visibility = View.GONE
+        refreshTempEraser()
         edgeLeft.visibility = View.GONE
         edgeRight.visibility = View.GONE
         emptyState.setPadding(safeL, 0, safeR, safeB)
@@ -1174,8 +1181,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         updatePage(page)
         pager.post { activeViews.values.forEach { it.setPageLook(state.tint) } }
         refreshBookmark()
-        btnTempEraser.visibility =
-            if (barsHidden || !state.tempEraserOn) View.GONE else View.VISIBLE
+        refreshTempEraser()
         refreshTools()
         updatePagerInput()
         return true
@@ -1323,8 +1329,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             state.tempEraserOn
         }) {
             state.tempEraserOn = !state.tempEraserOn
-            btnTempEraser.visibility =
-                if (state.tempEraserOn) View.VISIBLE else View.GONE
+            if (!state.tempEraserOn && tempEraserActive) {
+                tempEraserActive = false
+                selectTool(toolBeforeEraser)
+            }
+            refreshTempEraser()
         },
         MenuAction(R.drawable.ic_home, getString(R.string.cd_home), { false }) {
             showHome()
@@ -1766,31 +1775,44 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshBrushSlots()
     }
 
-    private fun setupTempEraser() {
-        btnTempEraser = findViewById(R.id.btnTempEraser)
+    /**
+     * v11 悬浮橡皮唯一显隐 / 选中态出口。
+     * 只看「有卷子 + 开关开着」：barsHidden 不参与，首页态强制隐藏。
+     */
+    private fun refreshTempEraser() {
+        if (!::btnTempEraser.isInitialized || !::pager.isInitialized) return
+        val inDoc = repo != null && pager.visibility == View.VISIBLE
         btnTempEraser.visibility =
-            if (state.tempEraserOn) View.VISIBLE else View.GONE
-        btnTempEraser.setOnTouchListener { _, ev ->
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    armedTool =
-                        if (currentTool == Tools.ERASER) lastDrawTool else currentTool
-                    tempEraserArmed = true
-                    selectTool(Tools.ERASER)
-                    true
-                }
-                MotionEvent.ACTION_UP -> true
-                else -> true
-            }
-        }
+            if (inDoc && state.tempEraserOn) View.VISIBLE else View.GONE
+        btnTempEraser.isSelected = tempEraserActive
+        btnTempEraser.setColorFilter(ContextCompat.getColor(this,
+            if (tempEraserActive) R.color.accent else R.color.icon))
+        btnTempEraser.background = ContextCompat.getDrawable(this,
+            if (tempEraserActive) R.drawable.temp_eraser_on_bg
+            else R.drawable.round_btn)
+        btnTempEraser.contentDescription = getString(
+            if (tempEraserActive) R.string.cd_temp_eraser_off
+            else R.string.cd_temp_eraser)
     }
 
-    private fun isOnTempButton(ev: MotionEvent): Boolean {
-        if (!state.tempEraserOn) return false
-        val loc = IntArray(2)
-        btnTempEraser.getLocationOnScreen(loc)
-        return ev.rawX >= loc[0] && ev.rawX <= loc[0] + btnTempEraser.width &&
-            ev.rawY >= loc[1] && ev.rawY <= loc[1] + btnTempEraser.height
+    private fun setupTempEraser() {
+        btnTempEraser = findViewById(R.id.btnTempEraser)
+        btnTempEraser.setOnClickListener { toggleTempEraser() }
+        refreshTempEraser()
+    }
+
+    /** 点一下切成橡皮并高亮，再点切回上一个绘图工具。 */
+    private fun toggleTempEraser() {
+        if (tempEraserActive) {
+            tempEraserActive = false
+            selectTool(toolBeforeEraser)
+        } else {
+            toolBeforeEraser =
+                if (currentTool == Tools.ERASER) lastDrawTool else currentTool
+            tempEraserActive = true
+            selectTool(Tools.ERASER)
+        }
+        refreshTempEraser()
     }
 
     override fun dispatchKeyEvent(ev: KeyEvent): Boolean {

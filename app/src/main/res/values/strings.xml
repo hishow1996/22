@@ -55,6 +55,7 @@
     <string name="cd_menu_item">菜单项</string>
     <string name="cd_brush_slot">笔刷预设槽</string>
     <string name="cd_temp_eraser">临时橡皮</string>
+    <string name="cd_temp_eraser_off">退出临时橡皮</string>
     <string name="cd_page_seek">页码进度</string>
     <string name="cd_page">当前页码</string>
     <string name="cd_snapshot">某一天的批注版本</string>

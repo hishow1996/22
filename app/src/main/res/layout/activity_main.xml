@@ -465,7 +465,6 @@
         android:elevation="5dp"
         android:padding="10dp"
         android:scaleType="centerInside"
-        android:src="@drawable/ic_temp_eraser"
-        android:tint="@color/icon" />
+        android:src="@drawable/ic_temp_eraser" />
 
 </FrameLayout>

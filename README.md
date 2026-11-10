@@ -362,3 +362,35 @@ Android Studio（Ladybug+，JDK 17）打开本目录，Sync 后 Run。
 
 **真机验收补充**
   39. 每条记录左侧为红底圆角方块 + 白色粗体 PDF 字样，与图三一致
+
+## 悬浮橡皮 v11：隐藏栏常驻右下角 + 点击切换
+
+**P0 常驻**：原先 5 处显隐（applyChrome / openUri / showHome / 菜单开关 /
+setupTempEraser）都带 `barsHidden → GONE`，隐藏功能栏后橡皮就消失了。
+现在收敛成唯一出口 `refreshTempEraser()`：
+
+- 显示条件 = `有卷子 && state.tempEraserOn`，**barsHidden 完全不参与**
+- 首页态 / 无卷子 / 关掉「更多」里的开关 → 一律 GONE
+- 菜单开关和初始化不再各自写一套 visibility，也修掉了「首页态误显示橡皮」的隐患
+
+**P1 位置**：隐藏栏时统一 `END|BOTTOM`，
+`bottomMargin = cutBottom + dp(12)`（`cutBottom` 已是 max(系统栏, 刘海下边)），
+`marginEnd = safeR + dp(12)`，与左下角恢复按钮 `btnShow` 的
+`cutBottom + dp(12)` 左右对称，横竖屏一致、不贴底、不压刘海。
+栏显示时维持原位置（竖屏底栏上方 / 横屏右侧中部留白）。
+
+**P2 交互**：由「按住 = 橡皮，抬手自动回笔」改为**点击切换**。
+
+- 点一下 → 切成橡皮，图标变品牌蓝、白圆加 2dp 蓝描边；再点 → 切回上一个绘图工具
+- 删除 `tempEraserArmed` / `armedTool` / `isOnTempButton()` /
+  `dispatchTouchEvent` 里的抬手回弹拦截，改成 `tempEraserActive` /
+  `toolBeforeEraser`
+- 顶栏若选了别的工具，`selectTool()` 自动把切换态复位，两处状态不打架
+- 「更多」里关掉悬浮橡皮时，若正处在橡皮态也会切回绘图工具
+
+左下角恢复按钮、隐藏栏三指双击恢复、一键清除（仍在「更多」）都原样保留；
+这个按钮是**局部擦除**，不是清空。
+
+**真机验收补充**
+  40. 隐藏功能栏后右下角仍显示橡皮按钮，与左下角恢复按钮左右对称
+  41. 点一下切成橡皮并高亮，再点切回原工具；首页态橡皮隐藏
