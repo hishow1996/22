@@ -32,8 +32,11 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     fun ratio(page: Int): Float = synchronized(renderer) {
         ratios[page] ?: run {
             val p = renderer.openPage(page)
-            val r = p.width.toFloat() / p.height.coerceAtLeast(1).toFloat()
-            p.close()
+            val r = try {
+                p.width.toFloat() / p.height.coerceAtLeast(1).toFloat()
+            } finally {
+                p.close()
+            }
             ratios[page] = r
             r
         }
@@ -65,11 +68,19 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         } else {
             val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
             bmp.eraseColor(Color.WHITE)
-            val p = renderer.openPage(page)
-            p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            p.close()
-            cache.put(key, bmp)
-            bmp
+            try {
+                val p = renderer.openPage(page)
+                try {
+                    p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                } finally {
+                    p.close()
+                }
+                cache.put(key, bmp)
+                bmp
+            } catch (failure: Throwable) {
+                if (!bmp.isRecycled) bmp.recycle()
+                throw failure
+            }
         }
     }
 
@@ -88,22 +99,29 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         }
         val out = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
         out.eraseColor(Color.WHITE)
-        synchronized(renderer) {
-            val p = renderer.openPage(page)
-            val a = lw.toFloat() / p.width.coerceAtLeast(1).toFloat()
-            // preTranslate：M = T * S，点变换 = A·p - (left,top)。
-            // 若把平移写在缩放之后右乘，平移量会被 A 再乘一次，整块偏移。
-            val m = Matrix().apply {
-                setScale(a, a)
-                preTranslate(-left.toFloat() / a, -top.toFloat() / a)
+        try {
+            synchronized(renderer) {
+                val p = renderer.openPage(page)
+                try {
+                    val a = lw.toFloat() / p.width.coerceAtLeast(1).toFloat()
+                    // preTranslate：M = T * S，点变换 = A·p - (left,top)。
+                    // 若把平移写在缩放之后右乘，平移量会被 A 再乘一次，整块偏移。
+                    val m = Matrix().apply {
+                        setScale(a, a)
+                        preTranslate(-left.toFloat() / a, -top.toFloat() / a)
+                    }
+                    p.render(out, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                } finally {
+                    p.close()
+                }
             }
-            p.render(out, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-            p.close()
+            val filtered = PageFilter.apply(out, tint, brightness)
+            if (filtered !== out) out.recycle()
+            filtered
+        } catch (failure: Throwable) {
+            if (!out.isRecycled) out.recycle()
+            throw failure
         }
-        val filtered = PageFilter.apply(out, tint, brightness)
-        // apply 可能就是 out 本身，绝不能回收它
-        if (filtered !== out) out.recycle()
-        return filtered
     }
 
     fun render(
@@ -137,8 +155,11 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     override fun close() {
-        renderer.close()
-        pfd.close()
-        cache.evictAll()
+        try {
+            synchronized(renderer) { renderer.close() }
+        } finally {
+            pfd.close()
+            cache.evictAll()
+        }
     }
 }

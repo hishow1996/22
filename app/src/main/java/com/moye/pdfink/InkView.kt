@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
@@ -288,6 +289,28 @@ class InkView @JvmOverloads constructor(
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         val h = host ?: return false
         if (h.browseMode) return false
+        val vp = viewport
+        val mapped = if (hiResMode && vp != null && vp.bucket > 0f) {
+            MotionEvent.obtain(ev).apply {
+                val inv = 1f / vp.bucket
+                val matrix = Matrix().apply {
+                    setValues(floatArrayOf(
+                        inv, 0f, ZoomTransform.pageCoordinate(0f, vp.originX, vp.bucket),
+                        0f, inv, ZoomTransform.pageCoordinate(0f, vp.originY, vp.bucket),
+                        0f, 0f, 1f
+                    ))
+                }
+                transform(matrix)
+            }
+        } else ev
+        return try {
+            handleTouchEvent(mapped, h)
+        } finally {
+            if (mapped !== ev) mapped.recycle()
+        }
+    }
+
+    private fun handleTouchEvent(ev: MotionEvent, h: Host): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 if (blocked(ev)) return false

@@ -34,7 +34,7 @@ class ZoomHost @JvmOverloads constructor(
     val viewport = Viewport()
     /** 变换数值变了就通知各层 invalidate。 */
     var onViewportChanged: (() -> Unit)? = null
-    /** 倍率跨过 1× 时通知 InkView 切换矢量重绘模式。 */
+    /** 倍率偏离 1× 时通知 InkView 切换矢量重绘模式。 */
     var onScaleCommit: ((Float) -> Unit)? = null
     /** 页面旋转过（低频）仍沿用旧的 View 变换，行为完全不变。 */
     var legacyViewScale = false
@@ -139,7 +139,7 @@ class ZoomHost @JvmOverloads constructor(
                     val dy = ev.y - lastSingleY
                     val dxAbs = abs(ev.x - singleStartX)
                     val dyAbs = abs(ev.y - singleStartY)
-                    val canPan = GestureArbiter.canPanY(panExtraY, scale)
+                    val canPan = panLimitY() > 0.5f
                     val zoomed = scale > 1.01f
                     if (!singlePanning && (
                             GestureArbiter.isVerticalPan(dxAbs, dyAbs, dp16, canPan) ||
@@ -198,7 +198,7 @@ class ZoomHost @JvmOverloads constructor(
                     onFlip?.invoke(if (dx > 0f) -1 else 1)
                 } else if (!flipDone) {
                     if (spreadDelta > 3f) {
-                        scale = (scale * d / startDist).coerceIn(1f, 4f)
+                        scale = (scale * d / startDist).coerceIn(ZoomTransform.MIN_SCALE, 4f)
                     }
                     startDist = d
                     tx += dx
@@ -209,10 +209,9 @@ class ZoomHost @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (scale <= 1.01f) {
-                    scale = 1f
-                    // 不清零 tx/ty：WIDTH 模式的上下平移要保留，
-                    // applyTransform 会按 panExtra 边界把它们钳回合法范围
+                if (scale <= ZoomTransform.MIN_SCALE + 0.0001f) {
+                    scale = ZoomTransform.MIN_SCALE
+                    // 只有到达最小倍率才钳位；小于 1× 的倍率必须保留。
                     applyTransform()
                 }
                 startDist = 0f
@@ -226,7 +225,7 @@ class ZoomHost @JvmOverloads constructor(
      * TiledPageView 按自身高度取块就会只画顶部几行。
      */
     private fun syncViewport(tx0: Float, ty0: Float) {
-        val sc = TiledPageView.bucket(scale.coerceIn(1f, 4f))
+        val sc = TiledPageView.bucket(scale.coerceIn(ZoomTransform.MIN_SCALE, 4f))
         val bw = baseContentW.coerceAtLeast(1)
         val bh = baseContentH.coerceAtLeast(1)
         val lw = (bw * sc).toInt().coerceAtLeast(1)
@@ -250,13 +249,14 @@ class ZoomHost @JvmOverloads constructor(
         viewport.visH = height
     }
 
+    private fun visualScale(): Float =
+        if (legacyViewScale) scale else TiledPageView.bucket(scale)
+
     private fun panLimitX(): Float =
-        panExtraX.coerceAtLeast(0f) * scale * 0.5f +
-            width * (scale - 1f).coerceAtLeast(0f) * 0.5f
+        ZoomTransform.panLimit(baseContentW, visualScale(), width)
 
     private fun panLimitY(): Float =
-        panExtraY.coerceAtLeast(0f) * scale * 0.5f +
-            height * (scale - 1f).coerceAtLeast(0f) * 0.5f
+        ZoomTransform.panLimit(baseContentH, visualScale(), height)
 
     private fun applyTransform() {
         val v = content ?: return
@@ -331,8 +331,8 @@ class ZoomHost @JvmOverloads constructor(
     }
 
     private fun zoomTo(nextScale: Float, focusX: Float, focusY: Float) {
-        val next = nextScale.coerceIn(1f, 4f)
-        val old = scale.coerceAtLeast(1f)
+        val next = nextScale.coerceIn(ZoomTransform.MIN_SCALE, 4f)
+        val old = scale.coerceAtLeast(ZoomTransform.MIN_SCALE)
         if (kotlin.math.abs(next - old) < 0.001f) return
         tx = ZoomTransform.anchoredTranslation(old, next, width.toFloat(), focusX, tx)
         ty = ZoomTransform.anchoredTranslation(old, next, height.toFloat(), focusY, ty)
@@ -359,7 +359,7 @@ class ZoomHost @JvmOverloads constructor(
 
     /** 会话恢复：还原倍率与旧版像素平移量，兼容 v17 及更早版本。 */
     fun setScale(s: Float, px: Float = 0f, py: Float = 0f) {
-        scale = s.coerceIn(1f, 4f)
+        scale = s.coerceIn(ZoomTransform.MIN_SCALE, 4f)
         tx = px
         ty = py
         applyTransform()

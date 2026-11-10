@@ -10,7 +10,7 @@ data class PageViewportState(
     val panY: Float = 0f
 ) {
     fun normalized(): PageViewportState = PageViewportState(
-        zoom = safe(zoom, 1f).coerceIn(1f, 4f),
+        zoom = safe(zoom, 1f).coerceIn(ZoomTransform.MIN_SCALE, 4f),
         panX = safe(panX, 0f).coerceIn(-1f, 1f),
         panY = safe(panY, 0f).coerceIn(-1f, 1f)
     )
@@ -29,6 +29,16 @@ data class PageViewportState(
 
 /** ZoomHost 与单元测试共用的缩放锚点 / 归一化平移计算。 */
 object ZoomTransform {
+    const val MIN_SCALE = 0.5f
+
+    /** 页面缩小到视口以内时居中；内容超出时仅开放真实溢出范围。 */
+    fun panLimit(contentSize: Int, bucket: Float, viewportSize: Int): Float =
+        ((contentSize.coerceAtLeast(0) * bucket.coerceAtLeast(0f)) -
+            viewportSize.coerceAtLeast(0)).coerceAtLeast(0f) * 0.5f
+
+    /** 从局部屏幕坐标反算页面逻辑坐标，供所有笔迹工具共用。 */
+    fun pageCoordinate(screen: Float, origin: Float, bucket: Float): Float =
+        if (bucket <= 0f) screen else (screen + origin) / bucket
 
     fun anchoredTranslation(
         oldScale: Float,

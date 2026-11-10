@@ -11,7 +11,7 @@ package com.moye.pdfink
  */
 class Viewport {
     @Volatile var scale = 1f      // 真实倍率（连续）
-    @Volatile var bucket = 1f     // 量化档 1 / 1.5 / 2 / 3 / 4
+    @Volatile var bucket = 1f     // 量化档 0.5 / 0.67 / 0.8 / 1 / 1.5 / 2 / 3 / 4
     @Volatile var lw = 0          // 逻辑画布宽 = baseW * bucket
     @Volatile var lh = 0          // 逻辑画布高 = baseH * bucket
     @Volatile var originX = 0f    // 绘制原点：子 View 局部 (0,0) 对应的逻辑 X

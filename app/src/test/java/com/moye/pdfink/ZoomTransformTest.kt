@@ -30,6 +30,28 @@ class ZoomTransformTest {
     }
 
     @Test
+    fun zoomOutCanReachHalfScaleAndValuesAreClampedConsistently() {
+        assertEquals(0.5f, PageViewportState(0.1f).normalized().zoom, 0.0001f)
+        assertEquals(4f, PageViewportState(8f).normalized().zoom, 0.0001f)
+    }
+
+    @Test
+    fun smallerPageIsCenteredAndCannotBeDraggedIntoBlankSpace() {
+        assertEquals(0f, ZoomTransform.panLimit(1000, 0.5f, 900), 0.0001f)
+        assertEquals(150f, ZoomTransform.panLimit(1200, 1f, 900), 0.0001f)
+    }
+
+    @Test
+    fun inverseMappingKeepsInkUnderTheFingerAtAnyZoomAndPan() {
+        val pagePoint = 246f
+        val bucket = 0.67f
+        val origin = -172f
+        val screenPoint = pagePoint * bucket - origin
+        assertEquals(pagePoint,
+            ZoomTransform.pageCoordinate(screenPoint, origin, bucket), 0.0001f)
+    }
+
+    @Test
     fun invalidPageViewportValuesAreSanitized() {
         val safe = PageViewportState(Float.NaN, Float.POSITIVE_INFINITY, -8f).normalized()
         assertEquals(1f, safe.zoom, 0.0001f)

@@ -112,7 +112,7 @@ class PagesAdapter(
             h.draftInk.invalidate()
         }
         h.zoom.onScaleCommit = { sc ->
-            val hi = sc > 1.01f && state.pageRotation == 0
+            val hi = kotlin.math.abs(sc - 1f) > 0.01f && state.pageRotation == 0
             h.ink.hiResMode = hi
             h.secondInk.hiResMode = hi
             h.draftInk.hiResMode = hi
@@ -220,12 +220,8 @@ class PagesAdapter(
                     }
                 }
             }
-            scope.launch(Dispatchers.IO) {
-                try {
-                    repo.prefetch(p0 - 1, w, ht)
-                    repo.prefetch(p1 + 1, w, ht)
-                } catch (e: Exception) { }
-            }
+            // 不再提前整页 rasterize 相邻页：常规页面使用分块渲染，
+            // 这些整页位图不会被使用，却会与当前可见块争用 PdfRenderer 和堆内存。
         }
     }
 
@@ -253,6 +249,27 @@ class PagesAdapter(
             return
         }
         scope.launch(Dispatchers.IO) {
+            // 旋转页先显示轻量预览，减少大尺寸整页栅格化完成前的空白等待。
+            val longest = maxOf(w, ht)
+            if (longest > 1200) {
+                val factor = 1200f / longest.toFloat()
+                val pw = (w * factor).toInt().coerceAtLeast(1)
+                val ph = (ht * factor).toInt().coerceAtLeast(1)
+                val previewKey = key(page, pw, ph)
+                val preview = shown.get(previewKey) ?: try {
+                    repo.render(page, pw, ph, state.tint, state.brightness,
+                        state.pageRotation).also { shown.put(previewKey, it) }
+                } catch (_: Exception) { null }
+                if (preview != null) withContext(Dispatchers.Main) {
+                    if (h.renderToken == token &&
+                        h.bindingAdapterPosition == position &&
+                        image.isAttachedToWindow
+                    ) {
+                        image.colorFilter = null
+                        image.setImageBitmap(preview)
+                    }
+                }
+            }
             val b = try {
                 repo.render(page, w, ht, state.tint, state.brightness,
                     state.pageRotation)

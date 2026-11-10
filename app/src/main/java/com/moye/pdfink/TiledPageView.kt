@@ -5,18 +5,24 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.util.LruCache
 import android.widget.ImageView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlin.math.max
+import kotlin.math.abs
+import kotlin.math.floor
 
 /**
- * 条带（现升级为二维网格块）缓存：按字节限额，只保留可见块与相邻预取块。
- * clear() 递增 epoch，切文件 / 尺寸变化后旧任务不会把旧文件的块写回新 key。
+ * 条带缓存按字节限额。epoch 隔离切文件前后产生的旧块。
  */
 object TileCache {
     @Volatile var epoch = 0
@@ -36,49 +42,84 @@ object TileCache {
 }
 
 /**
- * 按 viewport 自绘「放大后页面的可见窗口」。
- *
- * 不再依赖父 View 的 scaleX/scaleY（那会把位图插值放大）。
- * 每个网格块按目标像素 1:1 渲染，PDF 源矩阵 A = logicalW / pageWidth，
- * 所以双指放大到 4× 时仍是原生 PDF 采样，文字锐利。
- *
- * 非分块页（页面旋转过）走 ImageView 的 setImageBitmap 原路径，不加 viewport。
+ * 按 viewport 自绘页面窗口。当前可见块优先，邻近块低优先级预取；
+ * 每个 View 限制待处理块数，并在换页/回收时取消尚未开始的任务。
  */
 class TiledPageView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : ImageView(context, attrs) {
 
     companion object {
-        const val TILE_H = 400      // 正方形网格边长（同时作 TILE_W）
+        const val TILE_H = 400
         const val PREFETCH = 1
-        // 每轴最多块数：防御个别 ROM 给出异常可见范围，避免退化成整页大图
-        const val MAX_TILES = 6
+        const val MAX_PENDING_TILES = 10
 
-        /** 缩放分档：档内只换可见块不重渲染，档间才换分辨率，不闪。 */
+        // PdfRenderer 本身要求串行访问；单通道避免为每个块创建竞争线程。
+        private val renderDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+        /** 新增低于 1× 的渲染档位。 */
         fun bucket(s: Float): Float = when {
+            s < 0.60f -> 0.5f
+            s < 0.74f -> 0.67f
+            s < 0.89f -> 0.8f
             s < 1.25f -> 1f
             s < 1.75f -> 1.5f
             s < 2.5f -> 2f
             s < 3.5f -> 3f
             else -> 4f
         }
+
+        /** 返回可见区与预取区覆盖的全部块，不对横屏宽视口作固定数量截断。 */
+        fun tileRange(pageSize: Int, start: Float, size: Int): IntRange {
+            if (pageSize <= 0 || size <= 0) return IntRange.EMPTY
+            val count = (pageSize + TILE_H - 1) / TILE_H
+            val first = (floor(start / TILE_H).toInt() - PREFETCH).coerceAtLeast(0)
+            val last = (floor((start + size) / TILE_H).toInt() + PREFETCH)
+                .coerceAtMost(count - 1)
+            return if (last < first) IntRange.EMPTY else first..last
+        }
     }
+
+    private data class TileSpec(
+        val x: Int, val y: Int, val width: Int, val height: Int,
+        val cacheKey: String, val visible: Boolean, val distance: Float
+    )
 
     var viewport: Viewport? = null
 
     private var repo: PdfRepo? = null
-    private var scope: CoroutineScope? = null
     private var page = -1
     private var baseW = 0
     private var baseH = 0
     private var tint = 0
     private var brightness = 0f
-    private var ep = 0
-    private var generation = 0
-    private var tiled = false
+    @Volatile private var ep = 0
+    @Volatile private var generation = 0
+    @Volatile private var tiled = false
+    private var parentScope: CoroutineScope? = null
+    private var generationJob: Job? = null
+    private var tileScope: CoroutineScope? = null
+    // pending / failed 只在主线程访问。
     private val pending = HashSet<String>()
+    private val failed = HashSet<String>()
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val white = Paint().apply { color = Color.WHITE }
+
+    private fun createGenerationScope(sc: CoroutineScope) {
+        generationJob?.cancel()
+        generationJob = SupervisorJob(sc.coroutineContext[Job])
+        tileScope = CoroutineScope(sc.coroutineContext + generationJob!!)
+    }
+
+    private fun refreshEpoch() {
+        if (ep == TileCache.epoch) return
+        ep = TileCache.epoch
+        generation++
+        pending.clear()
+        failed.clear()
+        parentScope?.let(::createGenerationScope)
+    }
 
     fun bindTiled(
         r: PdfRepo, sc: CoroutineScope, p: Int, w: Int, h: Int,
@@ -86,12 +127,18 @@ class TiledPageView @JvmOverloads constructor(
     ) {
         if (w <= 0 || h <= 0) return
         generation++
+        parentScope = sc
+        createGenerationScope(sc)
         pending.clear()
-        repo = r; scope = sc; page = p
-        baseW = w; baseH = h; tint = t; brightness = b
+        failed.clear()
+        repo = r
+        page = p
+        baseW = w
+        baseH = h
+        tint = t
+        brightness = b
         ep = TileCache.epoch
         tiled = true
-        // 条带加载前先铺与滤镜一致的底色，夜间模式不会闪一下白
         white.color = when (t) {
             PageFilter.NIGHT -> 0xFF1B2430.toInt()
             PageFilter.WARM -> 0xFFF2E1C4.toInt()
@@ -104,84 +151,136 @@ class TiledPageView @JvmOverloads constructor(
     fun unbindTiled() {
         tiled = false
         generation++
+        generationJob?.cancel()
+        generationJob = null
+        tileScope = null
+        parentScope = null
         pending.clear()
+        failed.clear()
     }
 
     private fun key(col: Int, row: Int, s: Float, lw: Int, lh: Int) =
         "$ep-$page-${lw}x$lh-$col-$row-$s-$tint-$brightness"
 
     override fun onDraw(canvas: Canvas) {
+        refreshEpoch()
         val vp = viewport
         if (!tiled || baseW <= 0 || baseH <= 0 || vp == null ||
             vp.lw <= 0 || vp.lh <= 0) {
             super.onDraw(canvas)
             return
         }
-        // 逻辑画布与可见原点全部由 ZoomHost 统一下发，两层像素级对齐
+
         val s = vp.bucket
         val lw = vp.lw
         val lh = vp.lh
-        // 挑块用「可见逻辑窗」，定位用「绘制原点」，两者不能混
         val left = vp.visLeft
         val top = vp.visTop
         val originX = vp.originX
         val originY = vp.originY
         val visW = vp.visW.coerceAtLeast(1)
         val visH = vp.visH.coerceAtLeast(1)
-        paint.colorFilter = colorFilter   // 亮度滑杆实时预览
+        paint.colorFilter = colorFilter
 
-        val c0 = max(0, (left / TILE_H).toInt() - PREFETCH)
-        val c1 = (((left + visW) / TILE_H).toInt() + PREFETCH)
-            .coerceAtMost((lw + TILE_H - 1) / TILE_H - 1)
-        val r0 = max(0, (top / TILE_H).toInt() - PREFETCH)
-        val r1 = (((top + visH) / TILE_H).toInt() + PREFETCH)
-            .coerceAtMost((lh + TILE_H - 1) / TILE_H - 1)
-        if (c1 < c0 || r1 < r0) return
-        // 防御：一次最多 MAX_TILES×MAX_TILES 块，低堆机器不会退化成整页大图
-        val cc1 = c1.coerceAtMost(c0 + MAX_TILES - 1)
-        val rr1 = r1.coerceAtMost(r0 + MAX_TILES - 1)
+        val cols = tileRange(lw, left, visW)
+        val rows = tileRange(lh, top, visH)
+        if (cols.isEmpty() || rows.isEmpty()) return
+
+        val centerX = left + visW * 0.5f
+        val centerY = top + visH * 0.5f
+        val specs = ArrayList<TileSpec>(
+            (cols.last - cols.first + 1) * (rows.last - rows.first + 1)
+        )
+        for (row in rows) {
+            val y = row * TILE_H
+            val tileH = minOf(TILE_H, lh - y)
+            if (tileH <= 0) continue
+            for (col in cols) {
+                val x = col * TILE_H
+                val tileW = minOf(TILE_H, lw - x)
+                if (tileW <= 0) continue
+                val isVisible = x < left + visW && x + tileW > left &&
+                    y < top + visH && y + tileH > top
+                val dx = x + tileW * 0.5f - centerX
+                val dy = y + tileH * 0.5f - centerY
+                specs.add(TileSpec(
+                    x, y, tileW, tileH, key(col, row, s, lw, lh),
+                    isVisible, abs(dx) + abs(dy)
+                ))
+            }
+        }
 
         canvas.save()
         canvas.translate(-originX, -originY)
-        for (row in r0..rr1) {
-            val ty = row * TILE_H
-            val th = minOf(TILE_H, lh - ty)
-            if (th <= 0) continue
-            for (col in c0..cc1) {
-                val txl = col * TILE_H
-                val tw = minOf(TILE_H, lw - txl)
-                if (tw <= 0) continue
-                val k = key(col, row, s, lw, lh)
-                val bmp = TileCache.get(k)
-                if (bmp != null) {
-                    canvas.drawBitmap(bmp, txl.toFloat(), ty.toFloat(), paint)
-                } else {
-                    canvas.drawRect(txl.toFloat(), ty.toFloat(),
-                        (txl + tw).toFloat(), (ty + th).toFloat(), white)
-                    request(col, row, s, lw, lh, txl, ty, tw, th, k)
+        val missing = ArrayList<TileSpec>()
+        for (spec in specs) {
+            val bitmap = TileCache.get(spec.cacheKey)
+            if (bitmap != null) {
+                canvas.drawBitmap(bitmap, spec.x.toFloat(), spec.y.toFloat(), paint)
+            } else {
+                canvas.drawRect(
+                    spec.x.toFloat(), spec.y.toFloat(),
+                    (spec.x + spec.width).toFloat(),
+                    (spec.y + spec.height).toFloat(), white
+                )
+                if (spec.cacheKey !in pending && spec.cacheKey !in failed) {
+                    missing.add(spec)
                 }
             }
         }
         canvas.restore()
+
+        // 可见块先提交，邻近预取块后提交；完成一批后再提交下一批。
+        val slots = (MAX_PENDING_TILES - pending.size).coerceAtLeast(0)
+        if (slots > 0) {
+            missing.sortedWith(
+                compareBy<TileSpec> { !it.visible }.thenBy { it.distance }
+            ).take(slots).forEach(::request)
+        }
     }
 
-    private fun request(
-        col: Int, row: Int, s: Float, lw: Int, lh: Int,
-        txl: Int, ty: Int, tw: Int, th: Int, k: String
-    ) {
+    private fun request(spec: TileSpec) {
         val r = repo ?: return
-        val sc = scope ?: return
-        if (!pending.add(k)) return
+        val sc = tileScope ?: return
+        val k = spec.cacheKey
+        if (pending.size >= MAX_PENDING_TILES || !pending.add(k)) return
         val gen = generation
-        val p = page; val t = tint; val b = brightness
-        sc.launch(Dispatchers.IO) {
-            val bmp = try {
-                r.renderTile(p, lw, lh, txl, ty, tw, th, t, b)
-            } catch (e: Exception) { null }
-            if (bmp != null) TileCache.put(k, bmp)
-            withContext(Dispatchers.Main) {
-                pending.remove(k)
-                if (gen == generation && tiled) invalidate()
+        val epoch = ep
+        val pageToRender = page
+        val renderW = viewport?.lw ?: baseW
+        val renderH = viewport?.lh ?: baseH
+        val tintToRender = tint
+        val brightnessToRender = brightness
+        var renderFailed = false
+        val job = sc.launch(renderDispatcher) {
+            var bitmap: Bitmap? = null
+            try {
+                currentCoroutineContext().ensureActive()
+                bitmap = r.renderTile(
+                    pageToRender, renderW, renderH,
+                    spec.x, spec.y, spec.width, spec.height,
+                    tintToRender, brightnessToRender
+                )
+                currentCoroutineContext().ensureActive()
+                if (gen == generation && tiled && epoch == TileCache.epoch) {
+                    TileCache.put(k, bitmap!!)
+                    bitmap = null
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                renderFailed = true
+            } finally {
+                bitmap?.let { if (!it.isRecycled) it.recycle() }
+            }
+        }
+        job.invokeOnCompletion {
+            mainHandler.post {
+                if (gen == generation) {
+                    pending.remove(k)
+                    if (renderFailed) failed.add(k)
+                    if (tiled) invalidate()
+                }
             }
         }
     }

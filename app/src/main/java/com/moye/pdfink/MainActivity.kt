@@ -1222,8 +1222,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         ]
         // v18 会话按显示模式分别记忆；新模式没有记录时从 1× / 页顶开始。
         // 仅旧版完全没有逐页记录的会话才使用原来的全局像素缩放和平移。
-        currentZoom = savedViewport?.zoom?.coerceIn(1f, 4f)
-            ?: if (session.pageViewports.isEmpty()) session.zoom.coerceIn(1f, 4f)
+        currentZoom = savedViewport?.zoom?.coerceIn(ZoomTransform.MIN_SCALE, 4f)
+            ?: if (session.pageViewports.isEmpty()) session.zoom.coerceIn(ZoomTransform.MIN_SCALE, 4f)
             else 1f
         currentPanX = if (session.pageViewports.isEmpty()) session.panX else 0f
         currentPanY = if (session.pageViewports.isEmpty()) session.panY else 0f
@@ -1246,7 +1246,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             // 更新访问顺序，超出上限时优先淘汰最久未访问的页面/模式记录。
             pageViewports.remove(key)
             pageViewports[key] = viewport.normalized()
-            while (pageViewports.size > 500)
+            while (pageViewports.size > 500) {
                 val oldest = pageViewports.keys.firstOrNull() ?: break
                 pageViewports.remove(oldest)
             }
