@@ -9,10 +9,10 @@ import org.junit.Test
 class DisplayModeTest {
 
     @Test
-    fun portraitAlwaysUsesWidthFitAndDisablesDoublePage() {
-        for (m in DisplayMode.FIT..DisplayMode.DOUBLE) {
-            assertEquals(DisplayMode.WIDTH, DisplayMode.effective(m, false))
-        }
+    fun portraitAllowsFitOrWidthAndDisablesDoublePage() {
+        assertEquals(DisplayMode.FIT, DisplayMode.effective(DisplayMode.FIT, false))
+        assertEquals(DisplayMode.WIDTH, DisplayMode.effective(DisplayMode.WIDTH, false))
+        assertEquals(DisplayMode.WIDTH, DisplayMode.effective(DisplayMode.DOUBLE, false))
         assertEquals(15, DisplayMode.viewCount(DisplayMode.DOUBLE, false, 15))
         assertEquals(4, DisplayMode.logical(DisplayMode.DOUBLE, false, 4))
         assertEquals(4, DisplayMode.viewPos(DisplayMode.DOUBLE, false, 4))

@@ -47,6 +47,9 @@ class PagesAdapter(
     var initialPanY = 0f
     var fitMode = PageContainer.FIT
     var doublePage = false
+    var activePosition = 0
+    var pageViewportProvider: ((Int) -> PageViewportState?)? = null
+    var onPageViewportChange: ((Int, PageViewportState) -> Unit)? = null
     var onPanChange: ((Float, Float) -> Unit)? = null
     /** 只有恢复会话的那一页用 initialPan，翻到的其它页回到页顶，不串平移量。 */
     var restorePanAt: Int = -1
@@ -91,9 +94,14 @@ class PagesAdapter(
         h.zoom.reset(silent = true,
             toTop = fitMode == PageContainer.WIDTH && (!state.landscape || state.pageRotation == 0))
         h.zoom.browseMode = state.browse
-        h.zoom.onZoomChange = onZoomChange
+        h.zoom.onZoomChange = { value ->
+            if (position == activePosition) onZoomChange(value)
+        }
         h.zoom.onFlip = onFlip
-        h.zoom.onPanChange = onPanChange
+        h.zoom.onPanChange = { px, py ->
+            if (position == activePosition) onPanChange?.invoke(px, py)
+            onPageViewportChange?.invoke(p0, h.zoom.pageViewportState())
+        }
         // 页面旋转过（低频）沿用旧 View 变换；其余走 v15 的高分辨率自绘
         h.zoom.legacyViewScale = state.pageRotation != 0
         h.zoom.onViewportChanged = {
@@ -178,13 +186,17 @@ class PagesAdapter(
             // WIDTH 模式页面比容器高，把超出量交给 ZoomHost 做 1x 纵向平移边界
             h.zoom.panExtraX = 0f
             h.zoom.panExtraY = (ht - h.zoom.height).coerceAtLeast(0).toFloat()
-            if (position == restorePanAt &&
-                (initialZoom > 1.01f || initialPanX != 0f || initialPanY != 0f)) {
-                h.zoom.setScale(initialZoom, initialPanX, initialPanY)
-                restorePanAt = -1
-            } else {
-                h.zoom.refreshPanBounds()
+            val remembered = pageViewportProvider?.invoke(p0)
+            when {
+                remembered != null -> h.zoom.setPageViewportState(remembered)
+                position == restorePanAt &&
+                    (initialZoom > 1.01f || initialPanX != 0f || initialPanY != 0f) -> {
+                    h.zoom.setScale(initialZoom, initialPanX, initialPanY)
+                }
+                else -> h.zoom.reset(silent = false,
+                    toTop = fitMode == PageContainer.WIDTH)
             }
+            if (position == restorePanAt) restorePanAt = -1
 
             if (useTiles) {
                 // 基准尺寸不变；放大倍率由 viewport 在 onDraw 里换算成逻辑画布
@@ -260,6 +272,11 @@ class PagesAdapter(
 
     /** 当前页真实倍率：避免用全局 currentZoom 导致放大后翻页仍误禁翻页。 */
     fun zoomOf(pos: Int): Float = holders[pos]?.zoom?.zoomScale ?: 1f
+
+    fun panOf(pos: Int): Pair<Float, Float> {
+        val host = holders[pos]?.zoom ?: return 0f to 0f
+        return host.panX to host.panY
+    }
 
     /** 切换浏览 / 做题时，已绑定的所有页立刻生效，不用等重新 bind。 */
     fun setBrowseMode(v: Boolean) {

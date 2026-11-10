@@ -17,7 +17,8 @@ object DisplayMode {
     const val DOUBLE = 2     // 相邻两页并排
 
     fun effective(mode: Int, landscape: Boolean): Int =
-        if (landscape) mode.coerceIn(FIT, DOUBLE) else WIDTH
+        if (landscape) mode.coerceIn(FIT, DOUBLE)
+        else if (mode == FIT) FIT else WIDTH
 
     fun isDouble(mode: Int, landscape: Boolean) =
         effective(mode, landscape) == DOUBLE

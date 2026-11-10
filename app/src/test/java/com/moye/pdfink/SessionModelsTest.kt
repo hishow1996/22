@@ -34,6 +34,27 @@ class SessionModelsTest {
     }
 
     @Test
+    fun pageViewportPositionsRoundTrip() {
+        val original = DocSession(page = 3, pageViewports = mapOf(
+            PageViewportState.storageKey(0, DisplayMode.WIDTH) to
+                PageViewportState(1.65f, 0.25f, -0.6f),
+            PageViewportState.storageKey(3, DisplayMode.FIT) to
+                PageViewportState(2.4f, -0.35f, 0.8f)
+        ))
+        val restored = DocSession.fromJson(JSONObject(original.toJson().toString()))
+        val widthKey = PageViewportState.storageKey(0, DisplayMode.WIDTH)
+        val fitKey = PageViewportState.storageKey(3, DisplayMode.FIT)
+        assertEquals(1.65f, restored.pageViewports[widthKey]!!.zoom, 0.0001f)
+        assertEquals(0.25f, restored.pageViewports[widthKey]!!.panX, 0.0001f)
+        assertEquals(-0.6f, restored.pageViewports[widthKey]!!.panY, 0.0001f)
+        assertEquals(2.4f, restored.pageViewports[fitKey]!!.zoom, 0.0001f)
+        assertEquals(0, PageViewportState.storageKey(0, DisplayMode.FIT))
+        assertEquals(1, PageViewportState.storageKey(0, DisplayMode.WIDTH))
+        assertEquals(2, PageViewportState.storageKey(0, DisplayMode.DOUBLE))
+        assertEquals(9, PageViewportState.storageKey(3, DisplayMode.FIT))
+    }
+
+    @Test
     fun defaultsAreSafeForFirstLaunch() {
         val d = DocSession.fromJson(JSONObject("{}"))
         assertEquals(0, d.page)

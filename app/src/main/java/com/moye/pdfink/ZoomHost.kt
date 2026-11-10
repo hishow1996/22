@@ -2,6 +2,7 @@ package com.moye.pdfink
 
 import android.content.Context
 import android.util.AttributeSet
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.widget.FrameLayout
@@ -9,7 +10,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 
 /**
- * 双指缩放 + 平移 + 双指横滑翻页。
+ * 双击智能放大 + 单指平移 + 双指缩放 / 平移 / 横滑翻页。
  * 在 dispatch 层截获多指事件，因此不受子 View 的 disallowIntercept 影响。
  * 变换施加在 content 上，ViewGroup 会把触摸坐标逆变换给 InkView，笔迹自动跟随。
  *
@@ -52,6 +53,21 @@ class ZoomHost @JvmOverloads constructor(
     private var flipDone = false
     private var dp70 = 0f
     private var dp16 = 0f
+    private var doubleTapActive = false
+    // 在整页模式暂时没有可移动范围时保留上次的阅读位置比例。
+    private var rememberedPanX = 0f
+    private var rememberedPanY = 0f
+
+    private val doubleTapDetector by lazy {
+        GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                doubleTapActive = true
+                parent?.requestDisallowInterceptTouchEvent(true)
+                toggleSmartZoom(e.x, e.y)
+                return true
+            }
+        }).apply { setIsLongpressEnabled(false) }
+    }
 
     /** 由 PagesAdapter 按 state.browse 下发；浏览模式需自己消费 DOWN。 */
     var browseMode = false
@@ -70,6 +86,15 @@ class ZoomHost @JvmOverloads constructor(
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (browseMode) doubleTapDetector.onTouchEvent(ev)
+        if (doubleTapActive) {
+            if (ev.actionMasked == MotionEvent.ACTION_UP ||
+                ev.actionMasked == MotionEvent.ACTION_CANCEL) {
+                doubleTapActive = false
+                parent?.requestDisallowInterceptTouchEvent(false)
+            }
+            return true
+        }
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             // 做题模式：写字时禁止 ViewPager2 抢事件。
             // 浏览模式把横向拦截权还给它，单指左右翻页才能生效。
@@ -225,15 +250,23 @@ class ZoomHost @JvmOverloads constructor(
         viewport.visH = height
     }
 
+    private fun panLimitX(): Float =
+        panExtraX.coerceAtLeast(0f) * scale * 0.5f +
+            width * (scale - 1f).coerceAtLeast(0f) * 0.5f
+
+    private fun panLimitY(): Float =
+        panExtraY.coerceAtLeast(0f) * scale * 0.5f +
+            height * (scale - 1f).coerceAtLeast(0f) * 0.5f
+
     private fun applyTransform() {
         val v = content ?: return
         // 内容超出量随 scale 放大；scale=1 且 panExtra=0 时上限为 0，等价原行为
-        val limX = panExtraX.coerceAtLeast(0f) * scale * 0.5f +
-            width * (scale - 1f).coerceAtLeast(0f) * 0.5f
-        val limY = panExtraY.coerceAtLeast(0f) * scale * 0.5f +
-            height * (scale - 1f).coerceAtLeast(0f) * 0.5f
+        val limX = panLimitX()
+        val limY = panLimitY()
         tx = tx.coerceIn(-limX, limX)
         ty = ty.coerceIn(-limY, limY)
+        if (limX > 0f) rememberedPanX = ZoomTransform.fraction(tx, limX)
+        if (limY > 0f) rememberedPanY = ZoomTransform.fraction(ty, limY)
         syncViewport(tx, ty)
         if (legacyViewScale) {
             // 旋转页：保持 v14 及以前的行为，不进新绘制链路
@@ -263,6 +296,8 @@ class ZoomHost @JvmOverloads constructor(
         scale = 1f
         tx = 0f
         ty = if (toTop) panExtraY.coerceAtLeast(0f) * 0.5f else 0f
+        rememberedPanX = 0f
+        rememberedPanY = if (toTop && panLimitY() > 0f) 1f else 0f
         val v = content
         if (v != null) {
             v.scaleX = 1f
@@ -284,7 +319,45 @@ class ZoomHost @JvmOverloads constructor(
     val panX: Float get() = tx
     val panY: Float get() = ty
 
-    /** 会话恢复：还原倍率与平移量，平移归零时也不影响 FIT 模式。 */
+    /**
+     * 双击切换阅读倍率。缩放以双击点为锚点，尽量让目标文字留在原位置。
+     */
+    fun toggleSmartZoom(focusX: Float, focusY: Float) {
+        if (scale > 1.05f) {
+            reset(silent = false, toTop = panExtraY > 0f)
+        } else {
+            zoomTo(1.65f, focusX, focusY)
+        }
+    }
+
+    private fun zoomTo(nextScale: Float, focusX: Float, focusY: Float) {
+        val next = nextScale.coerceIn(1f, 4f)
+        val old = scale.coerceAtLeast(1f)
+        if (kotlin.math.abs(next - old) < 0.001f) return
+        tx = ZoomTransform.anchoredTranslation(old, next, width.toFloat(), focusX, tx)
+        ty = ZoomTransform.anchoredTranslation(old, next, height.toFloat(), focusY, ty)
+        scale = next
+        applyTransform()
+    }
+
+    /** 按可移动范围的比例保存位置，适应栏显隐、旋转和不同屏幕尺寸。 */
+    fun pageViewportState(): PageViewportState = PageViewportState(
+        zoom = scale,
+        panX = rememberedPanX,
+        panY = rememberedPanY
+    ).normalized()
+
+    fun setPageViewportState(saved: PageViewportState) {
+        val state = saved.normalized()
+        scale = state.zoom
+        rememberedPanX = state.panX
+        rememberedPanY = state.panY
+        tx = ZoomTransform.offset(panLimitX(), rememberedPanX)
+        ty = ZoomTransform.offset(panLimitY(), rememberedPanY)
+        applyTransform()
+    }
+
+    /** 会话恢复：还原倍率与旧版像素平移量，兼容 v17 及更早版本。 */
     fun setScale(s: Float, px: Float = 0f, py: Float = 0f) {
         scale = s.coerceIn(1f, 4f)
         tx = px

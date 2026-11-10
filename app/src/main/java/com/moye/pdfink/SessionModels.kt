@@ -44,7 +44,8 @@ data class DocSession(
     // v7：横屏显示模式与双指平移量
     val displayMode: Int = DisplayMode.WIDTH,
     val panX: Float = 0f,
-    val panY: Float = 0f
+    val panY: Float = 0f,
+    val pageViewports: Map<Int, PageViewportState> = emptyMap()
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("p", page)
@@ -58,6 +59,15 @@ data class DocSession(
         .put("dm", displayMode)
         .put("px", panX.toDouble())
         .put("py", panY.toDouble())
+        .put("pv", JSONObject().apply {
+            pageViewports.entries.filter { it.key >= 0 }.takeLast(500).forEach { entry ->
+                val v = entry.value.normalized()
+                put(entry.key.toString(), JSONObject()
+                    .put("z", v.zoom.toDouble())
+                    .put("x", v.panX.toDouble())
+                    .put("y", v.panY.toDouble()))
+            }
+        })
 
     companion object {
         fun fromJson(o: JSONObject): DocSession = DocSession(
@@ -72,7 +82,25 @@ data class DocSession(
             o.optInt("dm", DisplayMode.WIDTH).coerceIn(
                 DisplayMode.FIT, DisplayMode.DOUBLE),
             o.optDouble("px", 0.0).toFloat(),
-            o.optDouble("py", 0.0).toFloat()
+            o.optDouble("py", 0.0).toFloat(),
+            readPageViewports(o.optJSONObject("pv"))
         )
+
+        private fun readPageViewports(json: JSONObject?): Map<Int, PageViewportState> {
+            if (json == null) return emptyMap()
+            val result = LinkedHashMap<Int, PageViewportState>()
+            val keys = json.keys()
+            while (keys.hasNext() && result.size < 500) {
+                val key = keys.next()
+                val page = key.toIntOrNull()?.takeIf { it >= 0 } ?: continue
+                val value = json.optJSONObject(key) ?: continue
+                result[page] = PageViewportState(
+                    zoom = value.optDouble("z", 1.0).toFloat(),
+                    panX = value.optDouble("x", 0.0).toFloat(),
+                    panY = value.optDouble("y", 0.0).toFloat()
+                ).normalized()
+            }
+            return result
+        }
     }
 }

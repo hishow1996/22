@@ -34,8 +34,8 @@ class UiState {
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true
-    // v7：横屏保留用户选择；竖屏统一按宽度适配，超高页面可纵向平移
-    // displayMode 继续保存横屏偏好，旋转回横屏时恢复原选择
+    // v7/v18：横屏保留 FIT / WIDTH / DOUBLE；竖屏支持 FIT / WIDTH，默认 WIDTH
+    // displayMode 跨方向保留，竖屏下 DOUBLE 自动降级为 WIDTH
     @Volatile var displayMode = DisplayMode.WIDTH
 
     val effectiveMode: Int

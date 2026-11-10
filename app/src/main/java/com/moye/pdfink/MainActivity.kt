@@ -112,6 +112,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         set(v) { vm.currentZoom = v }
     private var currentPanX = 0f
     private var currentPanY = 0f
+    private val pageViewports = LinkedHashMap<Int, PageViewportState>()
     private var focusKey: String
         get() = vm.focusKey
         set(v) { vm.focusKey = v }
@@ -126,7 +127,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         set(v) { vm.toolBeforeEraser = v }
     private var pendingPdfPages: List<Int> = emptyList()
     private var pendingPdfWidth: Int = 1240
-    /** 用户是否手动切过横屏显示模式；没切过就始终给 WIDTH 铺满 */
+    /** 用户是否主动选择过显示模式；未选择时竖屏和横屏默认 WIDTH */
     private var modeChosen = false
     private var pendingExport: (() -> Unit)? = null
     private var sysTop = 0
@@ -344,6 +345,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         pager.offscreenPageLimit = 1
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
+                adapter?.activePosition = position
+                currentZoom = adapter?.zoomOf(position) ?: 1f
+                val pan = adapter?.panOf(position) ?: (0f to 0f)
+                currentPanX = pan.first
+                currentPanY = pan.second
                 focusKey = "p${DisplayMode.logical(
                     state.displayMode, state.landscape, position)}"
                 updatePage(position)
@@ -991,6 +997,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     /** 栏的显隐统一走 applyChrome，保证 padding 与 visibility 永远一致。 */
     private fun toggleBars(hide: Boolean) {
         if (barsHidden == hide) return
+        // 工具栏显隐会改变视口高度；先保存当前位置，再用归一化状态适配新尺寸。
+        saveSessionNow()
         barsHidden = hide
         applyChrome()
         refreshPageLayout()
@@ -1192,6 +1200,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshUndoState()
 
         val session = sessionRepo.session(vm.currentFp)
+        pageViewports.clear()
+        pageViewports.putAll(session.pageViewports)
         state.activeLayer = session.layer.coerceIn(0, 1)
         state.tint = session.tint.coerceIn(0, 2)
         state.brightness = session.brightness.coerceIn(-1f, 1f)
@@ -1204,10 +1214,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         state.showCorrection = session.showCorrection
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
-        currentZoom = session.zoom.coerceIn(1f, 4f)
         state.displayMode = session.displayMode
-        // 升级前存的 FIT 不该让横屏一直居中一条；用户没手动切过就强制铺满
-        if (!modeChosen && state.landscape) state.displayMode = DisplayMode.WIDTH
+        // 用户未主动选择过显示方式时，横竖屏都默认适合宽度。
+        if (!modeChosen) state.displayMode = DisplayMode.WIDTH
+        currentZoom = session.pageViewports[
+            PageViewportState.storageKey(session.page, state.effectiveMode)
+        ]?.zoom?.coerceIn(1f, 4f) ?: session.zoom.coerceIn(1f, 4f)
         currentPanX = session.panX
         currentPanY = session.panY
 
@@ -1221,6 +1233,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         ad.initialZoom = currentZoom
         ad.initialPanX = currentPanX
         ad.initialPanY = currentPanY
+        ad.pageViewportProvider = { page ->
+            pageViewports[PageViewportState.storageKey(page, state.effectiveMode)]
+        }
+        ad.onPageViewportChange = { page, viewport ->
+            val key = PageViewportState.storageKey(page, state.effectiveMode)
+            // 更新访问顺序，超出上限时优先淘汰最久未访问的页面/模式记录。
+            pageViewports.remove(key)
+            pageViewports[key] = viewport.normalized()
+            while (pageViewports.size > 500)
+                val oldest = pageViewports.keys.firstOrNull() ?: break
+                pageViewports.remove(oldest)
+            }
+        }
         ad.fitMode = if (state.effectiveMode == DisplayMode.WIDTH)
             PageContainer.WIDTH else PageContainer.FIT
         ad.doublePage = state.effectiveMode == DisplayMode.DOUBLE
@@ -1244,6 +1269,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val logical = restored.coerceIn(0, r.count - 1)
         val page = viewPosOf(logical)
         ad.restorePanAt = page
+        ad.activePosition = page
         pager.setCurrentItem(page, false)
         focusKey = "p$logical"
         updatePage(page)
@@ -1405,6 +1431,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_home, getString(R.string.cd_home), { false }) {
             showHome()
+        },
+        MenuAction(R.drawable.ic_fold, getString(R.string.cd_immersive), { barsHidden }) {
+            toggleBars(true)
         }
     ) + if (state.landscape) listOf(
         MenuAction(R.drawable.ic_fit_screen, getString(R.string.cd_fit_screen), {
@@ -1416,7 +1445,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_double_page, getString(R.string.cd_double_page), {
             state.effectiveMode == DisplayMode.DOUBLE
         }) { setDisplayMode(DisplayMode.DOUBLE) }
-    ) else emptyList<MenuAction>()
+    ) else listOf(
+        MenuAction(R.drawable.ic_fit_screen, getString(R.string.cd_fit_screen), {
+            state.effectiveMode == DisplayMode.FIT
+        }) { setDisplayMode(DisplayMode.FIT) },
+        MenuAction(R.drawable.ic_fit_width, getString(R.string.cd_fit_width), {
+            state.effectiveMode == DisplayMode.WIDTH
+        }) { setDisplayMode(DisplayMode.WIDTH) }
+    )
 
     private fun showMenu() {
         val pv = layoutInflater.inflate(R.layout.popup_menu, null)
@@ -1792,7 +1828,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             showCorrection = state.showCorrection,
             displayMode = state.displayMode,
             panX = currentPanX,
-            panY = currentPanY
+            panY = currentPanY,
+            pageViewports = pageViewports.toMap()
         ))
     }
 
