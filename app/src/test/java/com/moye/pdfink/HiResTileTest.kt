@@ -3,6 +3,7 @@ package com.moye.pdfink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.max
 
 /** 放大分档、逻辑画布与可见窗口：底图与笔迹必须用同一组数。 */
 class HiResTileTest {
@@ -23,17 +24,23 @@ class HiResTileTest {
     }
 
     @Test fun `visible window stays screen sized`() {
-        // 关键：可见窗口恒为 width×height，块数不随倍率增长，4× 不多吃内存
+        // 关键：可见窗口恒为 width×height；带内块数经 MAX_TILES 防御后不随倍率增长
         val w = 1080f; val h = 1528f
         for (s in listOf(1f, 2f, 4f)) {
             val left = w * (s - 1f) * 0.5f - 0f
             val top = h * (s - 1f) * 0.5f - 0f
             assertEquals(w, (left + w) - left, 0.01f)
             assertEquals(h, (top + h) - top, 0.01f)
-            val cols = ((left + w) / TiledPageView.TILE_H).toInt() + 1
-            val rows = ((top + h) / TiledPageView.TILE_H).toInt() + 1
-            assertTrue("$s tiles too many", cols <= TiledPageView.MAX_TILES + 2 &&
-                rows <= TiledPageView.MAX_TILES + 2)
+            // 与 TiledPageView 实现同式：floor 末端 + PREFETCH，防御 clamp 到 c0+MAX_TILES-1
+            val c0 = max(0, (left / TiledPageView.TILE_H).toInt() - TiledPageView.PREFETCH)
+            val c1 = (((left + w) / TiledPageView.TILE_H).toInt() + TiledPageView.PREFETCH)
+                .coerceAtMost(c0 + TiledPageView.MAX_TILES - 1)
+            val r0 = max(0, (top / TiledPageView.TILE_H).toInt() - TiledPageView.PREFETCH)
+            val r1 = (((top + h) / TiledPageView.TILE_H).toInt() + TiledPageView.PREFETCH)
+                .coerceAtMost(r0 + TiledPageView.MAX_TILES - 1)
+            assertTrue("$s tiles too many",
+                (c1 - c0 + 1) <= TiledPageView.MAX_TILES &&
+                (r1 - r0 + 1) <= TiledPageView.MAX_TILES)
         }
     }
 

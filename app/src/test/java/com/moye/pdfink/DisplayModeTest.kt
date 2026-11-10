@@ -73,9 +73,10 @@ class DisplayModeTest {
     }
 
     @Test
-    fun legacySessionDefaultsToFitWithZeroPan() {
+    fun legacySessionDefaultsToWidthWithZeroPan() {
+        // v7 起默认按宽度铺满；旧会话 JSON 无 dm 字段时同样落 WIDTH
         val back = DocSession.fromJson(org.json.JSONObject("{}"))
-        assertEquals(DisplayMode.FIT, back.displayMode)
+        assertEquals(DisplayMode.WIDTH, back.displayMode)
         assertEquals(0f, back.panX, 0.0001f)
         assertEquals(0f, back.panY, 0.0001f)
     }
