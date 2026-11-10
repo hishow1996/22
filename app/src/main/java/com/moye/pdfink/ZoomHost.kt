@@ -53,6 +53,14 @@ class ZoomHost @JvmOverloads constructor(
     private var dp70 = 0f
     private var dp16 = 0f
 
+    /** 由 PagesAdapter 按 state.browse 下发；浏览模式需自己消费 DOWN。 */
+    var browseMode = false
+    private var singleStartX = 0f
+    private var singleStartY = 0f
+    private var lastSingleX = 0f
+    private var lastSingleY = 0f
+    private var singlePanning = false
+
     override fun onFinishInflate() {
         super.onFinishInflate()
         content = findViewById(R.id.spreadRoot)
@@ -63,19 +71,72 @@ class ZoomHost @JvmOverloads constructor(
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-            parent?.requestDisallowInterceptTouchEvent(true)
+            // 做题模式：写字时禁止 ViewPager2 抢事件。
+            // 浏览模式把横向拦截权还给它，单指左右翻页才能生效。
+            parent?.requestDisallowInterceptTouchEvent(!browseMode)
+            singleStartX = ev.x
+            singleStartY = ev.y
+            lastSingleX = ev.x
+            lastSingleY = ev.y
+            singlePanning = false
         }
         val multi = ev.pointerCount >= 2
-        if (multi) zooming = true
-        if (zooming) {
-            if (ev.actionMasked == MotionEvent.ACTION_POINTER_DOWN && ev.pointerCount == 2) {
-                super.dispatchTouchEvent(ev)
+        if (multi && !zooming) {
+            // 多指开始才临时锁父级：双指横滑翻页不会被 ViewPager2 抢走
+            parent?.requestDisallowInterceptTouchEvent(true)
+            if (!browseMode) {
+                // 第一根手指已在 InkView 里起了一笔。多指期间所有 MOVE/UP
+                // 都被这里吞掉，若不补发 CANCEL，那一笔会永远残留在 live 缓冲。
+                val c = MotionEvent.obtain(ev.downTime, ev.eventTime,
+                    MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
+                try { super.dispatchTouchEvent(c) } finally { c.recycle() }
             }
+            zooming = true
+        }
+        if (zooming) {
             handle(ev)
             if (ev.actionMasked == MotionEvent.ACTION_UP ||
                 ev.actionMasked == MotionEvent.ACTION_CANCEL
             ) {
                 zooming = false
+                startDist = 0f
+                parent?.requestDisallowInterceptTouchEvent(!browseMode)
+            }
+            return true
+        }
+        if (browseMode) {
+            // 关键：浏览模式必须自己消费 DOWN。否则 InkView 已 return false，
+            // 整棵树无人消费 DOWN，系统会停止派发后续 MOVE/POINTER_DOWN/UP，
+            // 双指缩放、上下平移、横滑翻页会「一起失效」。
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = ev.x - lastSingleX
+                    val dy = ev.y - lastSingleY
+                    val dxAbs = abs(ev.x - singleStartX)
+                    val dyAbs = abs(ev.y - singleStartY)
+                    val canPan = GestureArbiter.canPanY(panExtraY, scale)
+                    val zoomed = scale > 1.01f
+                    if (!singlePanning && (
+                            GestureArbiter.isVerticalPan(dxAbs, dyAbs, dp16, canPan) ||
+                            GestureArbiter.isZoomedPan(dxAbs, dyAbs, dp16, zoomed))) {
+                        singlePanning = true
+                        // 放大后横向翻页已禁用，锁住父级避免 ViewPager2 抢
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (singlePanning) {
+                        ty += dy
+                        if (zoomed) tx += dx   // 放大后横向拖动 = 平移，不是翻页
+                        applyTransform()
+                    }
+                    lastSingleX = ev.x
+                    lastSingleY = ev.y
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (singlePanning) {
+                        singlePanning = false
+                        parent?.requestDisallowInterceptTouchEvent(false)
+                    }
+                }
             }
             return true
         }

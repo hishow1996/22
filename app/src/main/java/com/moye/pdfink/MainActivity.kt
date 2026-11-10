@@ -347,6 +347,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 focusKey = "p${DisplayMode.logical(
                     state.displayMode, state.landscape, position)}"
                 updatePage(position)
+                updatePagerInput(position)
                 refreshBookmark()
                 saveSessionNow()
             }
@@ -374,7 +375,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         currentShape = p.getInt("shape", Shapes.LINE)
         state.tint = p.getInt("tint", PageFilter.WHITE).coerceIn(0, 2)
         state.brightness = p.getFloat("brightness", 0f)
-        state.browse = p.getBoolean("browse", false)
+        // v16：默认浏览。老版本存过 false 的也算升级首次，强制回浏览；
+        // 之后用户切到做题会写进偏好，重开保持上次模式。
+        val browseMigrated = p.getBoolean("browseMigrated", false)
+        state.browse = if (browseMigrated) p.getBoolean("browse", true) else true
+        if (!browseMigrated) {
+            prefs().edit().putBoolean("browseMigrated", true).apply()
+        }
         state.spread = p.getBoolean("spread", false)
         state.displayMode = p.getInt("displayMode", DisplayMode.WIDTH)
             .coerceIn(DisplayMode.FIT, DisplayMode.DOUBLE)
@@ -396,7 +403,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putInt("color", colorIndex); putInt("width", widthIndex)
             putInt("eraser", eraserIndex); putInt("shape", currentShape)
             putInt("tint", state.tint); putFloat("brightness", state.brightness)
-            putBoolean("browse", state.browse); putBoolean("spread", state.spread)
+            putBoolean("browse", state.browse)
+            putBoolean("browseMigrated", true)
+            putBoolean("spread", state.spread)
             putInt("displayMode", state.displayMode)
             putBoolean("modeChosen", modeChosen)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
@@ -480,6 +489,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun selectTool(t: Int) {
+        // 浏览态点绘图按钮 = 一步切回做题并选中该工具；
+        // 原来会悄悄改 currentTool 但 InkView 不收触摸，等于点了没反应。
+        if (state.browse) setBrowseMode(false)
         if (t != Tools.ERASER && t != Tools.LASSO && t != Tools.NOTE) lastDrawTool = t
         currentTool = t
         // 顶栏选了别的工具时，悬浮橡皮的切换态自动复位，避免两处状态打架
@@ -489,6 +501,22 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTempEraser()
     }
 
+    /** 默认浏览；点按钮切到做题做笔记，再点回浏览。偏好持久化。 */
+    private fun setBrowseMode(v: Boolean) {
+        if (state.browse == v) return
+        state.browse = v
+        if (v && tempEraserActive) {
+            // 浏览态不能擦，先把悬浮橡皮的切换态复位
+            tempEraserActive = false
+            currentTool = lastDrawTool
+        }
+        savePrefs()
+        adapter?.setBrowseMode(v)
+        refreshTools()
+        refreshTempEraser()
+        updatePagerInput()
+    }
+
     private fun refreshTools() {
         btnPen.isSelected = currentTool == Tools.PEN && !state.browse
         btnHighlight.isSelected = currentTool == Tools.HIGHLIGHT && !state.browse
@@ -496,7 +524,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnLasso.isSelected = currentTool == Tools.LASSO && !state.browse
         btnNote.isSelected = currentTool == Tools.NOTE && !state.browse
         btnEraser.isSelected = currentTool == Tools.ERASER && !state.browse
-        btnBrowse.isSelected = state.browse
+        // 语义反转：做题态高亮；图标显示「点它会变成什么」
+        btnBrowse.isSelected = !state.browse
+        btnBrowse.setImageResource(
+            if (state.browse) R.drawable.ic_mode_write
+            else R.drawable.ic_mode_browse)
+        btnBrowse.contentDescription = getString(
+            if (state.browse) R.string.cd_write else R.string.cd_browse)
         val dim = if (state.browse) 0.4f else 1f
         listOf(btnPen, btnHighlight, btnShape, btnLasso, btnNote, btnEraser).forEach {
             it.alpha = dim
@@ -572,10 +606,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
         findViewById<ImageButton>(R.id.btnPrev).setOnClickListener { step(-1) }
         findViewById<ImageButton>(R.id.btnNext).setOnClickListener { step(1) }
-        btnBrowse.setOnClickListener {
-            state.browse = !state.browse
-            savePrefs(); refreshTools(); updatePagerInput()
-        }
+        btnBrowse.setOnClickListener { setBrowseMode(!state.browse) }
         btnBookmark.setOnClickListener {
             inkStore.toggleBookmark(currentPage())
             refreshBookmark()
@@ -937,8 +968,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         pager.setCurrentItem(viewPosOf(page), smooth)
     }
 
-    private fun updatePagerInput() {
-        pager.isUserInputEnabled = state.browse && currentZoom <= 1.01f
+    private fun updatePagerInput(pos: Int = pager.currentItem) {
+        // currentZoom 是全局值、切页不重置；按当前页真实倍率判断，
+        // 否则放大后翻到下一页仍会误禁横向翻页。
+        val z = adapter?.zoomOf(pos) ?: 1f
+        pager.isUserInputEnabled = state.browse && z <= 1.01f
     }
 
     private fun step(delta: Int) {
@@ -1191,6 +1225,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             PageContainer.WIDTH else PageContainer.FIT
         ad.doublePage = state.effectiveMode == DisplayMode.DOUBLE
         ad.onPanChange = { px, py -> currentPanX = px; currentPanY = py }
+        ad.setBrowseMode(state.browse)
         adapter = ad
         pager.adapter = ad
         pager.visibility = View.VISIBLE
@@ -1833,7 +1868,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         if (!::btnTempEraser.isInitialized || !::pager.isInitialized) return
         val inDoc = repo != null && pager.visibility == View.VISIBLE
         btnTempEraser.visibility =
-            if (inDoc && state.tempEraserOn) View.VISIBLE else View.GONE
+            if (inDoc && state.tempEraserOn && !state.browse) View.VISIBLE else View.GONE
         btnTempEraser.isSelected = tempEraserActive
         // v12：只换图案，不再套圆形背景、不再整体染色（会染掉白色高光）
         btnTempEraser.setImageResource(

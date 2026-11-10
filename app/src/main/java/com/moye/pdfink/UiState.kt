@@ -18,7 +18,8 @@ class UiState {
     @Volatile var spread = false
     @Volatile var tint = PageFilter.WHITE
     @Volatile var brightness = 0f
-    @Volatile var browse = false
+    // 默认浏览（看题翻页），点按钮切到做题做笔记
+    @Volatile var browse = true
     @Volatile var stylusOnly = false
     @Volatile var palmGuard = true
     @Volatile var edgeFlip = true

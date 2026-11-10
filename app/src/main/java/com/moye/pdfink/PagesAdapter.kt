@@ -90,6 +90,7 @@ class PagesAdapter(
         holders[position] = h
         h.zoom.reset(silent = true,
             toTop = fitMode == PageContainer.WIDTH && state.pageRotation == 0)
+        h.zoom.browseMode = state.browse
         h.zoom.onZoomChange = onZoomChange
         h.zoom.onFlip = onFlip
         h.zoom.onPanChange = onPanChange
@@ -255,6 +256,14 @@ class PagesAdapter(
                 }
             }
         }
+    }
+
+    /** 当前页真实倍率：避免用全局 currentZoom 导致放大后翻页仍误禁翻页。 */
+    fun zoomOf(pos: Int): Float = holders[pos]?.zoom?.zoomScale ?: 1f
+
+    /** 切换浏览 / 做题时，已绑定的所有页立刻生效，不用等重新 bind。 */
+    fun setBrowseMode(v: Boolean) {
+        for (h in holders.values) h.zoom.browseMode = v
     }
 
     fun bitmapFor(page: Int): Bitmap? {

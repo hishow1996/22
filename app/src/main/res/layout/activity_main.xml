@@ -341,8 +341,8 @@
             android:layout_width="38dp"
             android:layout_height="38dp"
             style="@style/Tool"
-            android:contentDescription="@string/cd_browse"
-            android:src="@drawable/ic_swap" />
+            android:contentDescription="@string/cd_write"
+            android:src="@drawable/ic_mode_write" />
 
         <ImageButton
             android:id="@+id/btnBookmark"

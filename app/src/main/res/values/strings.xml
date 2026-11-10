@@ -47,7 +47,8 @@
     <string name="cd_show">展开工具栏</string>
     <string name="cd_prev">上一页</string>
     <string name="cd_next">下一页</string>
-    <string name="cd_browse">滑动翻页</string>
+    <string name="cd_browse">切回浏览模式，滑动翻页</string>
+    <string name="cd_write">切到做题做笔记模式</string>
     <string name="cd_close">关闭</string>
     <string name="cd_thumb">缩略图</string>
     <string name="cd_draft">草稿页</string>
