@@ -18,6 +18,18 @@ class InkStore(private val ctx: Context) {
     companion object {
         private const val PREFIX = "ink_"
 
+        /** 首页卡片用：不 attach 也能判断某份卷子是否写过笔迹。 */
+        fun hasAnyInk(ctx: Context, fp: String): Boolean {
+            if (fp.isEmpty()) return false
+            val d = File(ctx.filesDir, PREFIX + fp)
+            if (!d.isDirectory) return false
+            return d.listFiles()?.any { f ->
+                f.name.endsWith(".json") && try {
+                    (JSONObject(f.readText()).optJSONArray("ops")?.length() ?: 0) > 0
+                } catch (e: Exception) { false }
+            } ?: false
+        }
+
         fun fingerprint(ctx: Context, uri: Uri): String = try {
             Fingerprint.from { ctx.contentResolver.openInputStream(uri)!! }
         } catch (e: Exception) {

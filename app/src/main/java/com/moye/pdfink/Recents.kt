@@ -7,19 +7,19 @@ import org.json.JSONObject
 
 /** 最近打开的卷子书架：按内容指纹去重，同一份卷子换入口打开不会变成两条。 */
 class Recents(ctx: Context) {
-    data class Item(val uri: String, val name: String, val time: Long, val fp: String)
+    data class Item(val uri: String, val name: String, val time: Long, val fp: String, val pages: Int = 0)
 
     private val p = ctx.getSharedPreferences("moye_recents", Context.MODE_PRIVATE)
 
-    fun add(uri: Uri, name: String, fp: String) {
+    fun add(uri: Uri, name: String, fp: String, pages: Int = 0) {
         val key = fp.ifEmpty { uri.toString().hashCode().toUInt().toString(16) }
         val list = all().filter { it.fp != key && it.uri != uri.toString() }.toMutableList()
-        list.add(0, Item(uri.toString(), name, System.currentTimeMillis(), key))
+        list.add(0, Item(uri.toString(), name, System.currentTimeMillis(), key, pages))
         val a = JSONArray()
         list.take(12).forEach {
             a.put(JSONObject()
                 .put("u", it.uri).put("n", it.name)
-                .put("t", it.time).put("f", it.fp))
+                .put("t", it.time).put("f", it.fp).put("g", it.pages))
         }
         p.edit().putString("list", a.toString()).apply()
     }
@@ -32,7 +32,7 @@ class Recents(ctx: Context) {
             val fp = o.optString("f", "").ifEmpty {
                 u.hashCode().toUInt().toString(16)
             }
-            Item(u, o.optString("n"), o.optLong("t"), fp)
+            Item(u, o.optString("n"), o.optLong("t"), fp, o.optInt("g", 0))
         }
     } catch (e: Exception) { emptyList() }
 
@@ -41,7 +41,7 @@ class Recents(ctx: Context) {
         all().filter { it.fp != fp }.forEach {
             a.put(JSONObject()
                 .put("u", it.uri).put("n", it.name)
-                .put("t", it.time).put("f", it.fp))
+                .put("t", it.time).put("f", it.fp).put("g", it.pages))
         }
         p.edit().putString("list", a.toString()).apply()
     }
@@ -53,7 +53,7 @@ class Recents(ctx: Context) {
             val n = if (it.fp == fp) name.trim() else it.name
             a.put(JSONObject()
                 .put("u", it.uri).put("n", n)
-                .put("t", it.time).put("f", it.fp))
+                .put("t", it.time).put("f", it.fp).put("g", it.pages))
         }
         p.edit().putString("list", a.toString()).apply()
     }

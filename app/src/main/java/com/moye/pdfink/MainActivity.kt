@@ -145,6 +145,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var toolsStrip: LinearLayout
     private lateinit var bottomBar: LinearLayout
     private lateinit var emptyState: View
+    private lateinit var homeBar: View
+    private lateinit var homeHero: View
+    private lateinit var homeBrand: View
+    private lateinit var homeShelf: LinearLayout
     private lateinit var colorRow: LinearLayout
     private lateinit var widthRow: LinearLayout
     private lateinit var shapeBar: LinearLayout
@@ -213,9 +217,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (e: Exception) { }
-            prefs().edit().putString("uri", uri.toString()).apply()
-            openUri(uri)
-            recents.add(uri, recents.displayName(uri), vm.currentFp)
+            if (openUri(uri)) {
+                prefs().edit().putString("uri", uri.toString()).apply()
+                recents.add(uri, recents.displayName(uri), vm.currentFp,
+                    repo?.count ?: 0)
+            }
         }
 
     private val createBackup =
@@ -286,6 +292,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         toolsStrip = findViewById(R.id.toolsStrip)
         bottomBar = findViewById(R.id.bottomBar)
         emptyState = findViewById(R.id.emptyState)
+        homeBar = findViewById(R.id.homeBar)
+        homeHero = findViewById(R.id.homeHero)
+        homeBrand = findViewById(R.id.homeBrand)
+        homeShelf = findViewById(R.id.homeShelf)
         colorRow = findViewById(R.id.colorRow)
         widthRow = findViewById(R.id.widthRow)
         shapeBar = findViewById(R.id.shapeBar)
@@ -323,9 +333,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         })
 
         val saved = prefs().getString("uri", null)
-        if (saved != null) {
-            try { openUri(Uri.parse(saved)) } catch (e: Exception) { showEmpty() }
-        } else showEmpty()
+        // 冷启动且已有历史卷子 → 先落在书架首页；点卡片才回卷子，会话照旧恢复。
+        // 系统重建 Activity（savedInstanceState 非空）或还没有历史时，直接回上一份卷子。
+        val direct = savedInstanceState != null || recents.all().isEmpty()
+        if (saved != null && direct) {
+            try { openUri(Uri.parse(saved)) } catch (e: Exception) { showHome() }
+        } else showHome()
     }
 
     // ----- prefs -----
@@ -480,6 +493,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val open = View.OnClickListener { openDoc.launch(arrayOf("application/pdf")) }
         findViewById<ImageButton>(R.id.btnOpen).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnOpenEmpty).setOnClickListener(open)
+        findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
+        findViewById<ImageButton>(R.id.btnHomeMore).setOnClickListener { showHomeMenu() }
 
         btnPen.setOnClickListener { selectTool(Tools.PEN) }
         btnHighlight.setOnClickListener { selectTool(Tools.HIGHLIGHT) }
@@ -626,6 +641,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8), cutBottom + dp(4))
 
         pager.setPadding(0, barTop, 0, barBottom)
+        emptyState.setPadding(safeL, 0, safeR, safeB)
+        homeBar.setPadding(0, cutTop + dp(8), 0, dp(8))
+        homeBrand.visibility = if (portrait) View.VISIBLE else View.GONE
+        homeHero.setPadding(0, if (portrait) dp(12) else dp(4), 0,
+            if (portrait) dp(20) else dp(8))
         for (v in listOf(shapeBar, selectionBar)) {
             val lp = v.layoutParams as FrameLayout.LayoutParams
             lp.topMargin = barTop + dp(2)
@@ -851,7 +871,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         return super.dispatchTouchEvent(ev)
     }
 
-    private fun showEmpty() {
+    private fun showHome() {
         pager.visibility = View.GONE
         emptyState.visibility = View.VISIBLE
         topBar.visibility = View.GONE
@@ -860,11 +880,105 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         shapeBar.visibility = View.GONE
         selectionBar.visibility = View.GONE
         btnTempEraser.visibility = View.GONE
+        emptyState.setPadding(safeL, 0, safeR, safeB)
+        renderHomeShelf()
     }
 
-    private fun openUri(uri: Uri) {
-        val r = try { PdfRepo(this, uri) } catch (e: Exception) { showEmpty(); return }
-        if (r.count <= 0) { r.close(); showEmpty(); return }
+    /** 首屏卡片：文件名 / 上次页码进度 / 写过笔迹的蓝点，零说明性小字。 */
+    private fun renderHomeShelf() {
+        homeShelf.removeAllViews()
+        for (item in recents.all()) {
+            val card = layoutInflater.inflate(
+                R.layout.item_home_card, homeShelf, false)
+            card.findViewById<TextView>(R.id.cardName).text = item.name
+            val s = sessionRepo.session(item.fp)
+            val cur = (s.page + 1).coerceAtLeast(1)
+            card.findViewById<TextView>(R.id.cardProgress).text =
+                if (item.pages > 0) "$cur / ${item.pages}" else "第 ${cur} 页"
+            card.findViewById<View>(R.id.cardInkDot).visibility =
+                if (InkStore.hasAnyInk(this, item.fp)) View.VISIBLE else View.GONE
+            card.setOnClickListener {
+                val u = Uri.parse(item.uri)
+                if (openUri(u)) {
+                    prefs().edit().putString("uri", item.uri).apply()
+                    recents.add(u, recents.displayName(u), vm.currentFp,
+                        repo?.count ?: item.pages)
+                } else flash("!")
+            }
+            card.setOnLongClickListener {
+                showShelfActions(item) { renderHomeShelf() }
+                true
+            }
+            homeShelf.addView(card)
+        }
+    }
+
+    /** 首页「更多」：只放不依赖当前卷子的全局动作，避免点了没反应。 */
+    private fun showHomeMenu() {
+        val grid = GridLayout(this).apply {
+            columnCount = 4
+            background = ContextCompat.getDrawable(
+                this@MainActivity, R.drawable.popup_bg)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        val popup = PopupWindow(grid, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+            isOutsideTouchable = true
+            elevation = dp(8).toFloat()
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        }
+        val on = ContextCompat.getColor(this, R.color.accent)
+        val off = ContextCompat.getColor(this, R.color.icon)
+        for (a in homeMenuActions()) {
+            val b = layoutInflater.inflate(R.layout.item_menu, grid, false) as ImageButton
+            b.layoutParams = GridLayout.LayoutParams().apply {
+                width = dp(52); height = dp(52)
+            }
+            b.setImageResource(a.icon)
+            b.setColorFilter(if (a.active()) on else off)
+            b.contentDescription = a.label
+            b.setOnClickListener { popup.dismiss(); a.run() }
+            b.setOnLongClickListener { flash(a.label); true }
+            grid.addView(b)
+        }
+        popup.showAsDropDown(findViewById(R.id.btnHomeMore), 0, dp(6))
+    }
+
+    private fun homeMenuActions() = listOf(
+        MenuAction(R.drawable.ic_backup, getString(R.string.cd_backup), { false }) {
+            createBackup.launch("moye-backup.moye")
+        },
+        MenuAction(R.drawable.ic_restore, getString(R.string.cd_restore), { false }) {
+            openBackup.launch(arrayOf("*/*"))
+        },
+        MenuAction(R.drawable.ic_hand, getString(R.string.cd_hand), { rightHanded }) {
+            rightHanded = !rightHanded
+            savePrefs(); applyHandedness()
+        },
+        MenuAction(R.drawable.ic_awake, getString(R.string.cd_awake), { state.keepAwake }) {
+            state.keepAwake = !state.keepAwake
+            sessionRepo.setKeepAwake(state.keepAwake)
+            savePrefs(); applyAwake()
+        },
+        MenuAction(R.drawable.ic_dark, getString(R.string.cd_dark), {
+            state.followSystemDark
+        }) {
+            state.followSystemDark = !state.followSystemDark
+            sessionRepo.setFollowSystemDark(state.followSystemDark)
+            savePrefs(); applySystemDark(null)
+        },
+        MenuAction(R.drawable.ic_stylus, getString(R.string.cd_stylus), {
+            state.stylusOnly
+        }) {
+            state.stylusOnly = !state.stylusOnly; savePrefs()
+        }
+    )
+
+    private fun openUri(uri: Uri): Boolean {
+        val r = try { PdfRepo(this, uri) } catch (e: Exception) {
+            showHome(); return false
+        }
+        if (r.count <= 0) { r.close(); showHome(); return false }
         repo?.close()
         repo = r
         vm.currentFp = inkStore.attach(uri)
@@ -908,6 +1022,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             if (barsHidden || !state.tempEraserOn) View.GONE else View.VISIBLE
         refreshTools()
         updatePagerInput()
+        return true
     }
 
     // ----- 全局时间轴 -----
@@ -1051,6 +1166,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             state.tempEraserOn = !state.tempEraserOn
             btnTempEraser.visibility =
                 if (state.tempEraserOn) View.VISIBLE else View.GONE
+        },
+        MenuAction(R.drawable.ic_home, getString(R.string.cd_home), { false }) {
+            showHome()
         }
     )
 
@@ -1213,11 +1331,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 setPadding(dp(8), dp(10), dp(8), dp(10))
                 setOnClickListener {
                     val u = Uri.parse(item.uri)
-                    try {
-                        openUri(u)
+                    if (openUri(u)) {
                         prefs().edit().putString("uri", item.uri).apply()
-                        recents.add(u, recents.displayName(u), vm.currentFp)
-                    } catch (e: Exception) { flash("!") }
+                        recents.add(u, recents.displayName(u), vm.currentFp,
+                            repo?.count ?: 0)
+                    } else flash("!")
                     dialog.dismiss()
                 }
                 setOnLongClickListener {
@@ -1581,23 +1699,24 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         d.window?.setLayout(dp(320), dp(300))
     }
 
-    private fun showShelfActions(item: Recents.Item) {
+    private fun showShelfActions(item: Recents.Item, onDone: () -> Unit = {}) {
         val v = layoutInflater.inflate(R.layout.dialog_shelf, null)
         val d = AlertDialog.Builder(this).setView(v).create()
         v.findViewById<ImageButton>(R.id.btnRename).setOnClickListener {
             d.dismiss()
-            showRename(item)
+            showRename(item, onDone)
         }
         v.findViewById<ImageButton>(R.id.btnRemoveShelf).setOnClickListener {
             recents.remove(item.fp)
             d.dismiss()
             flash("✓")
+            onDone()
         }
         d.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         d.show()
     }
 
-    private fun showRename(item: Recents.Item) {
+    private fun showRename(item: Recents.Item, onDone: () -> Unit = {}) {
         val et = EditText(this).apply {
             setText(item.name)
             textSize = 16f
@@ -1609,6 +1728,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val d = AlertDialog.Builder(this).setView(et)
             .setPositiveButton("✓") { _, _ ->
                 recents.rename(item.fp, et.text.toString())
+                onDone()
             }
             .setNegativeButton("×", null)
             .create()

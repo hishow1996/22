@@ -74,4 +74,5 @@
     <string name="cd_next_bookmark">下一个书签</string>
     <string name="cd_shelf_actions">书架条目操作</string>
     <string name="cd_menu_ink">笔色粗细与笔刷预设</string>
+    <string name="cd_home">返回书架首页</string>
 </resources>
