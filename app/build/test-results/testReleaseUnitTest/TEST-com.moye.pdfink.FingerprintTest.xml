@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.moye.pdfink.FingerprintTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-10T04:37:13" hostname="bj-qingyan-claw-v9" time="0.242">
+  <properties/>
+  <testcase name="differentContentGivesDifferentFingerprint" classname="com.moye.pdfink.FingerprintTest" time="0.063"/>
+  <testcase name="providerChunkingDoesNotChangeResult" classname="com.moye.pdfink.FingerprintTest" time="0.083"/>
+  <testcase name="emptyStreamIsStable" classname="com.moye.pdfink.FingerprintTest" time="0.029"/>
+  <testcase name="headMiddleTailAllContribute" classname="com.moye.pdfink.FingerprintTest" time="0.052"/>
+  <testcase name="sameBytesGiveSameFingerprint" classname="com.moye.pdfink.FingerprintTest" time="0.014"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

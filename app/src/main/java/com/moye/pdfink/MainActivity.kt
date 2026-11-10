@@ -147,6 +147,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var emptyState: View
     private lateinit var colorRow: LinearLayout
     private lateinit var widthRow: LinearLayout
+    private lateinit var brushRow: LinearLayout
     private lateinit var shapeBar: LinearLayout
     private lateinit var selectionBar: LinearLayout
     private lateinit var seek: SeekBar
@@ -288,6 +289,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         emptyState = findViewById(R.id.emptyState)
         colorRow = findViewById(R.id.colorRow)
         widthRow = findViewById(R.id.widthRow)
+        brushRow = findViewById(R.id.brushRow)
         shapeBar = findViewById(R.id.shapeBar)
         selectionBar = findViewById(R.id.selectionBar)
         seek = findViewById(R.id.seek)

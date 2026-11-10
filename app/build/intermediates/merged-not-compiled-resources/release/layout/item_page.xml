@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.moye.pdfink.ZoomHost xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/zoomHost"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:id="@+id/spreadRoot"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp">
+
+        <com.moye.pdfink.PageContainer
+            android:id="@+id/pageContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:background="#FFFFFFFF"
+            android:elevation="3dp"
+            android:outlineProvider="bounds">
+
+            <ImageView
+                android:id="@+id/pageImage"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/cd_prev"
+                android:scaleType="fitXY" />
+
+            <com.moye.pdfink.InkView
+                android:id="@+id/inkView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </com.moye.pdfink.PageContainer>
+
+        <com.moye.pdfink.PageContainer
+            android:id="@+id/draftContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="10dp"
+            android:background="#FFFFFFFF"
+            android:elevation="3dp"
+            android:outlineProvider="bounds"
+            android:visibility="gone">
+
+            <com.moye.pdfink.InkView
+                android:id="@+id/draftInk"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/cd_draft" />
+
+        </com.moye.pdfink.PageContainer>
+
+    </LinearLayout>
+
+</com.moye.pdfink.ZoomHost>

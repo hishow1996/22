@@ -30,7 +30,7 @@ object Fingerprint {
                     if (n <= 0) break
                     total += n
                     if (headLen < BLK) {
-                        val k = min(n, BLK - headLen)
+                        val k = minOf(n, BLK - headLen)
                         System.arraycopy(buf, 0, head, headLen, k)
                         headLen += k
                     }

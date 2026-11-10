@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/confirmRoot"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/popup_bg"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <ImageButton
+        android:id="@+id/btnConfirmNo"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_confirm_no"
+        android:src="@drawable/ic_close" />
+
+    <ImageButton
+        android:id="@+id/btnConfirmYes"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_confirm_yes"
+        android:src="@drawable/ic_check" />
+
+</LinearLayout>

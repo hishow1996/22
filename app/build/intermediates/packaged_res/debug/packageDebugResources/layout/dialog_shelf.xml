@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/shelfRoot"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/popup_bg"
+    android:contentDescription="@string/cd_shelf_actions"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <ImageButton
+        android:id="@+id/btnRename"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_rename"
+        android:src="@drawable/ic_rename" />
+
+    <ImageButton
+        android:id="@+id/btnRemoveShelf"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_remove"
+        android:src="@drawable/ic_trash" />
+
+</LinearLayout>
