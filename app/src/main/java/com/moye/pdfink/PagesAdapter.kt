@@ -150,23 +150,9 @@ class PagesAdapter(
         h.secondInk.viewport = h.zoom.secondViewport
         h.draftInk.viewport = h.zoom.draftViewport
 
-        // v29：竖屏 FILL / WIDTH 顶部对齐。spreadRoot gravity=center 会把
-        // 页面垂直居中，只要页高 < 可用高就上下各留一大片米白；隐藏栏后
-        // 可用高变大而页面基准不变，留白反而更宽。横屏三模式不动。
-        val alignTop = !state.landscape && fitMode != PageContainer.FIT
-        h.spreadRoot.gravity =
-            if (alignTop) Gravity.START or Gravity.TOP else Gravity.CENTER
-        h.pageContainer.layoutParams = params().apply {
-            if (alignTop) gravity = Gravity.TOP
-        }
-        h.secondContainer.layoutParams = params().apply {
-            marginStart = (10 * h.itemView.resources.displayMetrics.density).toInt()
-            if (alignTop) gravity = Gravity.TOP
-        }
-        h.draftContainer.layoutParams = params().apply {
-            marginStart = (10 * h.itemView.resources.displayMetrics.density).toInt()
-            if (alignTop) gravity = Gravity.TOP
-        }
+        // v31：三态对齐表。v29 的「非 FIT 一律顶部对齐」把「适应宽度」也
+        // 贴到栏下、底部堆出约 455px 空白；现在 FIT / WIDTH 回垂直居中，
+        // 只有 FILL（严格 cover）保持靠左上。横屏三模式不动。
         h.pageContainer.fitMode = fitMode
         h.secondContainer.fitMode = PageContainer.FIT
         h.draftContainer.fitMode = PageContainer.FIT
@@ -181,6 +167,32 @@ class PagesAdapter(
         h.pageContainer.ratio = ratio0 ?: 0.75f
         h.secondContainer.ratio = ratio1 ?: ratio0 ?: 0.75f
         h.draftContainer.ratio = h.pageContainer.ratio
+
+        // 页高 ≥ 可用高时（WIDTH 的长页）仍回页顶，保证能上下拖看完整页；
+        // 页高 < 可用高时上下均分留白。宿主未测量完成时不误判。
+        val availW = (h.zoom.width.takeIf { it > 0 } ?: h.itemView.width).toFloat()
+        val availH = (h.zoom.height.takeIf { it > 0 } ?: h.itemView.height).toFloat()
+        val pageH = if (h.pageContainer.ratio > 0f && availW > 0f)
+            availW / h.pageContainer.ratio else availH
+        val alignTop = PageAlignment.resolve(
+            portrait = !state.landscape,
+            fitMode = fitMode,
+            pageHeight = pageH,
+            availableHeight = availH
+        ) == PageAlignment.TOP_START
+        h.spreadRoot.gravity =
+            if (alignTop) Gravity.START or Gravity.TOP else Gravity.CENTER
+        h.pageContainer.layoutParams = params().apply {
+            gravity = if (alignTop) Gravity.TOP else Gravity.CENTER_VERTICAL
+        }
+        h.secondContainer.layoutParams = params().apply {
+            marginStart = (10 * h.itemView.resources.displayMetrics.density).toInt()
+            gravity = if (alignTop) Gravity.TOP else Gravity.CENTER_VERTICAL
+        }
+        h.draftContainer.layoutParams = params().apply {
+            marginStart = (10 * h.itemView.resources.displayMetrics.density).toInt()
+            gravity = if (alignTop) Gravity.TOP else Gravity.CENTER_VERTICAL
+        }
         h.pageContainer.visibility = if (ratiosReady) View.VISIBLE else View.INVISIBLE
         h.secondContainer.visibility = when {
             !showSecond -> View.GONE

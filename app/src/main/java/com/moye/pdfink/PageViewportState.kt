@@ -19,11 +19,28 @@ data class PageViewportState(
     )
 
     companion object {
-        /** 同一页的 FIT / WIDTH / DOUBLE 阅读位置分别保存。 */
+        /** v31：FILL 专属槽位，避开旧 page*3+mode 键空间，无需会话版本迁移。 */
+        const val FILL_KEY_BASE = 1_500_000_000
+
+        /** 同一页的 FIT / WIDTH / DOUBLE 阅读位置分别保存（旧公式不变）。 */
         fun storageKey(page: Int, mode: Int): Int {
             val safePage = page.coerceAtLeast(0).coerceAtMost((Int.MAX_VALUE - 2) / 3)
             return safePage * 3 + mode.coerceIn(DisplayMode.FIT, DisplayMode.DOUBLE)
         }
+
+        /**
+         * v31：三态各用各的钥匙。竖屏「铺满屏幕 FILL」与「适应宽度 WIDTH」
+         * 的 displayMode 都是 WIDTH，旧公式会共用 key —— 铺满态放大到 2×
+         * 后切到适应宽度会带着 2× 回来，根本不是 1× 居中。
+         *
+         * 旧会话里 page*3+WIDTH 的记录自然留给「适应宽度」，阅读位置不丢；
+         * FILL 槽为空 → 默认从 1× 干净起步，也守住 v29 默认铺满。
+         */
+        fun storageKey(page: Int, mode: Int, fillScreen: Boolean): Int =
+            if (fillScreen) {
+                FILL_KEY_BASE + page.coerceAtLeast(0)
+                    .coerceAtMost(Int.MAX_VALUE - FILL_KEY_BASE)
+            } else storageKey(page, mode)
     }
 
     private fun safe(value: Float, fallback: Float): Float =

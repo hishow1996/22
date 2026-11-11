@@ -120,6 +120,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private var currentPanX = 0f
     private var currentPanY = 0f
     private val pageViewports = LinkedHashMap<Int, PageViewportState>()
+    /**
+     * v31：三态各存各的倍率 / 位置。横屏仍按 displayMode 分，不走 FILL 槽；
+     * 竖屏 FILL（displayMode 也是 WIDTH）才用独立槽位，避免与适应宽度串倍率。
+     */
+    private fun viewportKey(page: Int): Int = PageViewportState.storageKey(
+        page, state.effectiveMode, fillScreen && !state.landscape
+    )
     private var focusKey: String
         get() = vm.focusKey
         set(v) { vm.focusKey = v }
@@ -1243,8 +1250,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      * v29：竖屏三态互斥且唯一，不再让「会话残留 FIT / modeChosen」把默认
      * 悄悄拉回 WIDTH / FIT 而看起来三态都一样。横屏三模式一概不动。
      *  - 铺满屏幕 FILL  ：页高 = 可用高，四边零留白（默认）
-     *  - 适应宽度 WIDTH：页宽 = 可用宽，顶部对齐，上下超出可平移
-     *  - 适应屏幕 FIT  ：整页 contain 居中（唯一允许留白，用户主动选）
+     *  - 适应宽度 WIDTH：页宽 = 可用宽，垂直居中；长页超出时回页顶可平移
+     *  - 适应屏幕 FIT  ：整页 contain 居中（用户主动选，上下均分留白）
      */
     private fun currentFitMode(): Int = FitModeResolver.resolve(
         portrait = !state.landscape,
@@ -1259,7 +1266,21 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         modeChosen = true
         savePrefs()
         applyPageMode()
+        // v31：切到「适应屏幕 / 适应宽度」就是回到 1× 居中，不带任何
+        // 铺满态的放大倍率。FILL 保留自己槽位里的记忆，切回来仍在原位。
+        if (!fill) resetPortraitViewport()
         saveSessionNow()
+    }
+
+    /** 1× / 页顶 / 居中；resetZoom 会经 onViewportSettled 写回目标模式的槽位。 */
+    private fun resetPortraitViewport() {
+        if (state.landscape) return
+        val pos = pager.currentItem
+        adapter?.resetZoom(pos)
+        currentZoom = 1f
+        currentPanX = 0f
+        currentPanY = 0f
+        updatePagerInput()
     }
 
     private fun applyPageMode() {
@@ -1583,7 +1604,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             state.displayMode = DisplayMode.WIDTH
         }
         val savedViewport = session.pageViewports[
-            PageViewportState.storageKey(session.page, state.effectiveMode)
+            viewportKey(session.page)
         ]
         // v18 会话按显示模式分别记忆；新模式没有记录时从 1× / 页顶开始。
         // 仅旧版完全没有逐页记录的会话才使用原来的全局像素缩放和平移。
@@ -1604,10 +1625,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         ad.initialPanX = currentPanX
         ad.initialPanY = currentPanY
         ad.pageViewportProvider = { page ->
-            pageViewports[PageViewportState.storageKey(page, state.effectiveMode)]
+            pageViewports[viewportKey(page)]
         }
         ad.onPageViewportChange = { page, viewport ->
-            val key = PageViewportState.storageKey(page, state.effectiveMode)
+            val key = viewportKey(page)
             // 更新访问顺序，超出上限时优先淘汰最久未访问的页面/模式记录。
             pageViewports.remove(key)
             pageViewports[key] = viewport.normalized()

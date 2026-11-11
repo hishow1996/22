@@ -1296,3 +1296,47 @@ v29 完成图里的 2340/2340 在这台机型上是 2268/2268，比例仍是 100
 （新增隐藏栏物理避让）+ 静态断言 + `verify.sh` 补 2 条（共 88）+ README +
 刘海遮挡对照图。真机荣耀 10 验：竖屏顶栏图标完整可见、与挖孔不重叠；
 隐藏栏后纸页顶部不被挡；旋转横屏后刘海在左、顶部不多留白。
+
+## v31 适应两态居中与放大铺满
+
+**现象**：「适应屏幕 / 适应宽度」下页面贴在顶栏下、底部堆约 455px 米白（1080×2340
+实测白页 `y250–1768`），不是居中；放大后能像图三那样贴满阅读区，但起步留白过渡、
+居中 frame 的绘制起点、三态倍率串位都没收尾。
+
+**P0 三态对齐表（`PageAlignment.kt`，纯 JVM）**
+
+v29 为修隐藏栏留白写了「非 FIT 一律 `START|TOP`」，连带把「适应宽度」的居中也带走。
+现在改成按真实页高决定：
+
+| 模式 | 对齐 | 结果 |
+|---|---|---|
+| 适应屏幕 FIT | CENTER | 整页 contain，上下均分 |
+| 适应宽度 WIDTH | CENTER | 页高 < 可用高时上下均分；≥ 可用高时回页顶可拖 |
+| 铺满屏幕 FILL | START\|TOP | 严格 cover，四边零留白（v29 原样） |
+
+`PagesAdapter` 在 ratio 就绪后用 `availW / ratio` 估页高，与 `ZoomHost` 可用高比较；
+宿主未测量完成时一律 CENTER，不误判成「超出」。横屏三模式恒 CENTER，一行不改。
+`spreadRoot.gravity` 与三个 `PageContainer` 的 `layout_gravity` 全按表设。
+
+**P1 放大铺满**：不重写缩放架构，保留 v15 的连续倍率 + 1:1 分块（可见窗口恒等于阅读区）。
+`ViewportFillTest` 6 条纯 JVM 断言覆盖：1× 居中白边对称、约 1.29× 到 cover 倍率时白边
+归零、居中 frame 在 2× 时 `visibleTop≈0`（从视口顶起画、不残留米白）、FIT/WIDTH/FILL
+× 2×/4× 三组 frame 的 `visW/visH` 都覆盖宿主且平移范围开放。明确**不做**「点一下跳满」，
+缩放保持跟手；任意模式放大都能到图三。
+
+**P2 三态倍率 key 独立**：竖屏 FILL 与 WIDTH 的 `displayMode` 都是 `WIDTH`，旧
+`storageKey(page, mode)` 让两者共用 key —— 铺满态放大到 2× 切到适应宽度会带着 2× 回来。
+`PageViewportState.storageKey(page, mode, fillScreen)` 给 FILL 独立槽位
+（`FILL_KEY_BASE = 1_500_000_000`），旧三槽公式与 `SessionModelsTest` 断言一字不改，
+**不需要会话版本迁移**：旧 `page*3+WIDTH` 记录自然留给「适应宽度」，阅读位置不丢；
+FILL 槽为空 → 默认从 1× 干净起步，也守住 v29 默认铺满。横屏不进 FILL 槽。
+`setPortraitMode(fit=true|fill=false)` 切到两个「适应」时经 `resetPortraitViewport()`
+回到 1× / 页顶 / 居中；FILL 保留自己槽位里的记忆，切回来仍在原位。
+
+**边界**：A4 竖页与 19:9 屏比例不同，「适应」要完整显示整页必然上下留白；居中是把
+455px 均分成上下各约 227px，不是消灭留白。消灭留白是 FILL / 放大态的职责。
+
+**验收**：`PageAlignmentTest` 6 条 + `ViewportFillTest` 6 条 + `ViewportKeyTest` 5 条
++ 静态断言 + `verify.sh` 补 4 条（共 92）+ README + 三格对照图。真机荣耀 10 验：
+切两适应看上下对称 → 双指放大到 2× 文字贴满四边、左右裁切可拖 → 切回适应回 1× 居中
+→ 隐藏栏重新居中 → 默认打开仍铺满 → 横屏三模式 / 刘海避让 / 上下滑 / 返回栈回归。
