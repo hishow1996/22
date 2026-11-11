@@ -35,6 +35,7 @@ import android.widget.PopupWindow
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
@@ -58,6 +59,10 @@ import kotlin.math.roundToInt
 class MainActivity : AppCompatActivity(), InkView.Host {
 
     private val vm: MainViewModel by viewModels()
+
+    /** v23：首页（根）退出确认时间窗；两次侧滑间隔超过 2s 就重新算第一次。 */
+    private var lastExitBackAt = 0L
+    private val exitBackWindowMs = 2000L
 
     private data class MenuAction(
         val icon: Int, val label: String,
@@ -353,6 +358,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         buildBrushSlots()
         setupTempEraser()
         setupClicks()
+        setupBackNavigation()
         setupInsets()
         applyHandedness()
         applyOrientationLayout()
@@ -678,19 +684,74 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTools()
     }
 
+    /**
+     * v23：统一返回入口。targetSdk 35 上 Android 15 强制 OnBackInvoked，
+     * 覆写 onBackPressed() 在高版本收不到事件；OnBackPressedDispatcher
+     * 由 activity-ktx 1.9.3 自动桥接，API 26–35 一套代码通吃。
+     */
+    private fun setupBackNavigation() {
+        onBackPressedDispatcher.addCallback(
+            this, object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() { handleBack() }
+            })
+    }
+
+    /** 系统返回与「更多 → 返回书架首页」共用；菜单路径不触发退出提醒。 */
+    private fun goHome() {
+        saveSessionNow()
+        showHome()
+    }
+
+    /**
+     * 返回优先级：选区 / 沉浸栏 → 做题态回首页 → 首页退出确认（两次）。
+     * 做题态第一次侧滑既「返回上一界面」，也记为退出确认第一下，
+     * 这样从卷子里连滑两次就退出；从首页冷启动同样是两次。
+     */
+    private fun handleBack() {
+        // SAF 选择器 / 文档加载中不接管，避免打断打开流程
+        if (openingDocument) return
+        // 1 套索选区：先取消，属于关掉中间状态，不算退出确认第一下
+        if (activeViews.values.any { it.hasSelection() }) {
+            activeViews.values.forEach { it.cancelSelection() }
+            refreshTools()
+            lastExitBackAt = 0L
+            return
+        }
+        // 2 沉浸阅读：先恢复工具栏
+        if (barsHidden) {
+            toggleBars(false)
+            lastExitBackAt = 0L
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        val inDoc = repo != null && pager.visibility == View.VISIBLE
+        if (inDoc) {
+            // 3 返回上一界面：做题 → 首页书架，并记为确认第一下
+            goHome()
+            lastExitBackAt = now
+            flash(getString(R.string.back_exit_hint))
+            return
+        }
+        // 4 首页（根）：第一次提醒，2s 内第二次才真正退出
+        if (now - lastExitBackAt <= exitBackWindowMs) {
+            lastExitBackAt = 0L
+            finish()
+        } else {
+            lastExitBackAt = now
+            flash(getString(R.string.back_exit_hint))
+        }
+    }
+
     private fun attachEdge(v: View, left: Boolean) {
         v.setOnTouchListener { _, ev ->
             if (!state.edgeFlip || repo == null) return@setOnTouchListener false
+            // v23：不再锁定父级横向拦截。
+            // 最外侧 24dp 已让给系统返回手势，热区内仍可点击翻页，
+            // 但不再抢 ViewPager2 / 系统手势的横向裁决权。
             when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { pager.requestDisallowInterceptTouchEvent(true); true }
-                MotionEvent.ACTION_UP -> {
-                    step(if (left) -1 else 1)
-                    pager.requestDisallowInterceptTouchEvent(false)
-                    true
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    pager.requestDisallowInterceptTouchEvent(false); true
-                }
+                MotionEvent.ACTION_DOWN -> true
+                MotionEvent.ACTION_UP -> { step(if (left) -1 else 1); true }
+                MotionEvent.ACTION_CANCEL -> true
                 else -> true
             }
         }
@@ -799,8 +860,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             lp.width = if (portrait) dp(10) else dp(14)
             v.layoutParams = lp
         }
-        edgeLeft.translationX = safeL.toFloat()
-        edgeRight.translationX = -safeR.toFloat()
+        // v23：热区从贴边内移 24dp，屏幕最外侧留出无任何 View 消费 DOWN
+        // 的系统返回手势区；热区本身仍可点击翻页，只是不再贴边。
+        edgeLeft.translationX = safeL.toFloat() + dp(24)
+        edgeRight.translationX = -safeR.toFloat() - dp(24)
 
         // 竖屏常驻只留 6 项；被收起的全部搬进浮层，不靠横向滚动凑合
         val layerDot = findViewById<View>(R.id.layerDot)
@@ -1562,7 +1625,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             refreshTempEraser()
         },
         MenuAction(R.drawable.ic_home, getString(R.string.cd_home), { false }) {
-            showHome()
+            goHome()
         },
         MenuAction(R.drawable.ic_fold, getString(R.string.cd_immersive), { barsHidden }) {
             toggleBars(true)
@@ -1911,7 +1974,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                     or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)

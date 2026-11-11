@@ -833,3 +833,93 @@ v18 ⇄、默认浏览与手势链、首页两态全部原样保留。
 
 **边界**：v21 放大镜短闪、v20 ⇄/★ 图标变蓝、v19 竖屏铺满、v18 ⇄、
 v12 去圆底悬浮按钮、首页记录常驻、米白+蓝线图标、5 档粗细全部原样。
+
+## 统一返回栈与侧滑退出 v23
+
+用户要求：**返回逻辑和手机返回一致，侧滑返回上一界面，连续侧滑两次退出**；
+补充：**首页时也要侧滑两次，第一次侧滑进行提醒**。全做、按推荐。
+
+**诊断：当前根本没有返回栈**
+
+全工程 `onBackPressed` / `OnBackPressedDispatcher` / `OnBackInvokedCallback` /
+`finish()` 命中均为 0 —— 系统返回键与侧滑走默认行为，**一次就退出**；而
+「更多 → 返回书架首页」走 `showHome()` 只切界面、不结束 Activity。两条路径
+不一致。
+
+还有一个必须先绕开的坑：`targetSdk = 35`，Android 15 对 targetSdk≥35
+**强制启用 OnBackInvoked、不可关闭**，直接覆写 `onBackPressed()` 在高版本
+收不到事件。Manifest 原先也没写 `enableOnBackInvokedCallback`。
+
+侧滑「不像手机」是三层叠加：
+1. `edgeLeft/edgeRight` 贴屏幕左右边缘、`match_parent` 高，
+   `attachEdge()` 在 `ACTION_DOWN` 就 `return true` 消费并锁定父级拦截 ——
+   系统返回正是从这条边缘起手
+2. v16 浏览态单指横滑交给 ViewPager2 翻页，边缘与中间同一动作结果不同
+3. `hideSystemBars()` 在 API 26/28 用 `IMMERSIVE`（非 STICKY）+ 「栏一露出
+   立刻重 hide」；legacy 沉浸下从边缘滑入会先显示系统栏并**消费这次滑动**，
+   荣耀 10 / EMUI 8.1/9 上很可能就是「第一次侧滑没反应」的来源
+
+第 3 条涉及厂商 ROM 手势实现，属静态推断，需真机确认；前两条是代码事实。
+
+**口径：合并模型**
+
+用户同时要求「连续两次退出」「首页也两次」「第一次提醒」，因此：
+做题态第一次侧滑 = **返回上一界面（回首页）**，同时记为退出确认第一下并提醒；
+首页第一次侧滑 = 提醒（不退出）；2s 窗口内第二次 = `finish()`。
+这样从卷子里 / 从首页冷启动**都是两次退出**，且第一次都有提醒。
+
+**P0 返回栈（`handleBack()` 优先级）**
+
+`setupBackNavigation()` 用 `OnBackPressedDispatcher.addCallback`
+（`androidx.activity:activity-ktx:1.9.3` 自动桥接 OnBackInvoked），
+API 26–35 一套代码；Manifest 显式 `enableOnBackInvokedCallback="true"`。
+
+1. 套索选区 active → `cancelSelection()`，重置确认计时
+2. `barsHidden` → `toggleBars(false)` 恢复工具栏，重置确认计时
+3. 做题态 → `goHome()`（`saveSessionNow()` + `showHome()`），记为第一下 + 提醒
+4. 首页根 → 窗口内第二次 `finish()`，否则 `flash(back_exit_hint)` 提醒
+
+`PopupWindow`（2 个，focusable）与 `AlertDialog`（8 个）是独立 Window，
+系统自行 dismiss，dispatcher 不介入。`openingDocument`（SAF / 文档加载）
+期间不接管。提醒文案「再侧滑一次退出墨页」是全 App 唯一一处提示文字，
+由用户本轮明确要求；零动效、零其他说明小字。
+
+**P1 让侧滑真的能触发**
+
+- `edgeLeft/edgeRight` 从贴边内移 **24dp**（`translationX = safeL + dp(24)` /
+  `-safeR - dp(24)`），屏幕最外侧留出没有任何 View 消费 `ACTION_DOWN` 的
+  系统返回手势区；热区仍可点击翻页，只是不再贴边
+- `attachEdge()` 删掉全部父级拦截锁定，横向裁决权还给系统 / ViewPager2
+- API<30 的 `SYSTEM_UI_FLAG_IMMERSIVE` → **`IMMERSIVE_STICKY`**，避免首次
+  边缘滑动被「先显示系统栏」吞掉；保留可见性监听器立刻重 hide，
+  状态栏依旧不常驻（与 v14 的细微取舍见下方限制）
+- 全程不调用 `setSystemGestureExclusionRects`（工程本来就没有）
+- 中间区域横向滑仍翻页；边缘起手 = 返回，两者不重叠
+
+**P2 配套**
+
+`goHome()` 抽出，`handleBack()` 与「更多 → 返回书架首页」共用同一函数，
+菜单路径不弹提醒；`goHome()` 先 `saveSessionNow()`，补上 v21 之后
+「返回首页这一跳漏存逐页视口」的缺口。首页态不会误返回到已销毁的文档。
+
+**P3 验收**
+
+静态断言：无 `onBackPressed` 覆写、dispatcher 已注册、四级优先级、
+2s 窗口、边缘热区不消费最外侧、无父级拦截锁定、STICKY、
+Manifest 显式启用。`verify.sh` 补 4 条（共 69）。真机荣耀 10 验：
+卷子里侧滑 → 回首页且记录仍在 → 再侧滑 → 退出；首页冷启动侧滑 1 → 提醒、
+侧滑 2 → 退出、间隔超 2s 重新计；隐藏工具栏 / 选区 / 浮层逐级关闭；
+中间横滑仍翻页；状态栏始终不显示。
+
+**已知限制（如实说明）**
+
+1. `IMMERSIVE_STICKY` 在部分 EMUI 上会让系统栏极短暂半透明露出后被
+   监听器压回，与 v14「绝对不露」有细微取舍；换来的是首次侧滑不再被吞。
+   真机若仍被吞，可进一步改为「只 FULLSCREEN、不 HIDE_NAVIGATION」。
+2. Android 14+/15 预测式返回会在侧滑时显示「回桌面」预览，而第一级其实是
+   App 内部切页，观感有轻微错位；系统动画，不影响实际行为。
+3. 从卷子里退出需要「回首页 + 退出」两次，中间的提醒文案同时承担
+   「已到根页」与「再滑退出」两重语义，这是为满足两次退出的合并口径。
+
+**边界**：v22 首页 88dp 白圆盘、v21 放大镜短闪、v20 ⇄/★、v19 竖屏铺满、
+v18 ⇄、v12 去圆底、红底 PDF 徽标、米白+蓝线图标、5 档粗细全部原样保留。
