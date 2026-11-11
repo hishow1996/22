@@ -25,6 +25,8 @@ class ZoomHost @JvmOverloads constructor(
     var onZoomChange: ((Float) -> Unit)? = null
     var onFlip: ((Int) -> Unit)? = null
     var onPanChange: ((Float, Float) -> Unit)? = null
+    /** 缩放 / 浏览拖动期间暂停高清图块补渲染，结束后再恢复。 */
+    var onViewportGestureChanged: ((Boolean) -> Unit)? = null
 
     /** 页面超出容器的像素（未缩放时），由 PagesAdapter 在 layout 后写入。 */
     @Volatile var panExtraX = 0f
@@ -116,6 +118,7 @@ class ZoomHost @JvmOverloads constructor(
         }
         val multi = ev.pointerCount >= 2
         if (multi && !zooming) {
+            onViewportGestureChanged?.invoke(true)
             // 多指开始才临时锁父级：双指横滑翻页不会被 ViewPager2 抢走
             parent?.requestDisallowInterceptTouchEvent(true)
             if (!browseMode) {
@@ -135,6 +138,7 @@ class ZoomHost @JvmOverloads constructor(
                 zooming = false
                 startDist = 0f
                 parent?.requestDisallowInterceptTouchEvent(!browseMode)
+                onViewportGestureChanged?.invoke(false)
             }
             return true
         }
@@ -154,6 +158,7 @@ class ZoomHost @JvmOverloads constructor(
                             GestureArbiter.isVerticalPan(dxAbs, dyAbs, dp16, canPan) ||
                             GestureArbiter.isZoomedPan(dxAbs, dyAbs, dp16, zoomed))) {
                         singlePanning = true
+                        onViewportGestureChanged?.invoke(true)
                         // 放大后横向翻页已禁用，锁住父级避免 ViewPager2 抢
                         parent?.requestDisallowInterceptTouchEvent(true)
                     }
@@ -169,6 +174,7 @@ class ZoomHost @JvmOverloads constructor(
                     if (singlePanning) {
                         singlePanning = false
                         parent?.requestDisallowInterceptTouchEvent(false)
+                        onViewportGestureChanged?.invoke(false)
                     }
                 }
             }

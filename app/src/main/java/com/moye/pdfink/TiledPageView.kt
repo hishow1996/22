@@ -80,6 +80,15 @@ class TiledPageView @JvmOverloads constructor(
 
     var viewport: Viewport? = null
 
+    /** 手势期间只维护预览与现有清晰块，松手后再补齐当前高清视口。 */
+    var deferHighResolution: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                invalidate()
+            }
+        }
+
     private val ownerId = owners.incrementAndGet()
     private var repo: PdfRepo? = null
     private var page = -1
@@ -147,6 +156,7 @@ class TiledPageView @JvmOverloads constructor(
         retryAfter.clear()
         retryCount.clear()
         previewGrid = emptyList()
+        deferHighResolution = false
         repo = null
     }
 
@@ -338,12 +348,14 @@ class TiledPageView @JvmOverloads constructor(
             slots--
         }
 
-        val visibleCurrent = missingCurrent
-            .filter { it.visible }
-            .sortedBy { it.distance }
-        visibleCurrent.take(slots).forEach { spec ->
-            request(spec, bucket, logicalW, logicalH)
-            slots--
+        if (!deferHighResolution) {
+            val visibleCurrent = missingCurrent
+                .filter { it.visible }
+                .sortedBy { it.distance }
+            visibleCurrent.take(slots).forEach { spec ->
+                request(spec, bucket, logicalW, logicalH)
+                slots--
+            }
         }
 
         if (slots > 0) {
@@ -353,7 +365,7 @@ class TiledPageView @JvmOverloads constructor(
             }
         }
 
-        if (slots > 0) {
+        if (slots > 0 && !deferHighResolution) {
             missingCurrent.filter { !it.visible }
                 .sortedBy { it.distance }
                 .take(slots)

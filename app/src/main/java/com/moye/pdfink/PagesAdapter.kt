@@ -107,6 +107,12 @@ class PagesAdapter(
             h.secondInk.invalidate()
             h.draftInk.invalidate()
         }
+        h.zoom.onViewportGestureChanged = { active ->
+            h.image.deferHighResolution = active
+            h.secondImage.deferHighResolution = active
+        }
+        h.image.deferHighResolution = false
+        h.secondImage.deferHighResolution = false
         h.zoom.onScaleCommit = { sc ->
             val hi = kotlin.math.abs(sc - 1f) > 0.0001f
             h.ink.hiResMode = hi
