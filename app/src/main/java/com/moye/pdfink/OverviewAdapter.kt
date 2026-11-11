@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class OverviewAdapter(
-    private val repo: PdfRepo,
+    private val repo: PageSource,
     private val store: InkStore,
     private val bookmarks: Set<Int>,
     private val scope: CoroutineScope,

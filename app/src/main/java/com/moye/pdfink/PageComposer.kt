@@ -13,7 +13,7 @@ import android.graphics.Path
 object PageComposer {
 
     fun compose(
-        repo: PdfRepo,
+        repo: PageSource,
         store: InkStore,
         page: Int,
         w: Int,

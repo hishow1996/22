@@ -13,6 +13,7 @@
 
     <!-- 图三：红色圆角方块 + 白色粗体 PDF 字样 -->
     <FrameLayout
+        android:id="@+id/cardBadgeFrame"
         android:layout_width="34dp"
         android:layout_height="34dp"
         android:background="@drawable/pdf_badge_bg"

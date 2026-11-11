@@ -122,7 +122,7 @@ class TiledPageView @JvmOverloads constructor(
         }
 
     private val ownerId = owners.incrementAndGet()
-    private var repo: PdfRepo? = null
+    private var repo: PageSource? = null
     private var page = -1
     private var baseW = 0
     private var baseH = 0
@@ -156,7 +156,7 @@ class TiledPageView @JvmOverloads constructor(
     private val background = Paint().apply { color = Color.WHITE }
 
     fun bindTiled(
-        r: PdfRepo, p: Int, w: Int, h: Int, t: Int, b: Float,
+        r: PageSource, p: Int, w: Int, h: Int, t: Int, b: Float,
         pageRotation: Int = 0, isCurrentPage: Boolean = true
     ) {
         if (w <= 0 || h <= 0) return

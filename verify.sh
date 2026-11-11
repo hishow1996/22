@@ -86,3 +86,7 @@ echo "  75. 跟手度：首次 MOVE 即切预览、判定阈值补回死区位�
 echo "  76. 左右滑翻页保留且防重复；放大态关闭 pager 输入、做题态不误触"
 echo "  77. v27 fillMigrated 迁移：旧偏好/旧会话一次性回到默认铺满，用户手动选择仍记住"
 echo "  78. 首次打开三条入口（冷启动恢复 / SAF 新选 / 首页点记录）直接 FILL，方向同步不误判"
+echo "  79. v28 Format color badges: PDF 红/16sp 原样，W/X/P/IMG/TXT/ZIP/FILE 按类型换色换字"
+echo "  80. Recents 老记录按文件名回填 kind，不丢记录；custom 命名不被覆盖"
+echo "  81. 任意文件可打开：图片/文本内嵌复用分块批注，Office/压缩包转交系统并回记"
+echo "  82. PageSource 接口全覆盖；旋转逆映射输出仍 tw×th；副行不编造页码"

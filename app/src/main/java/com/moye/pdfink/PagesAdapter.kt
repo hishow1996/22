@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 
 class PagesAdapter(
-    private val repo: PdfRepo,
+    private val repo: PageSource,
     private val host: InkView.Host,
     private val state: UiState,
     private val scope: CoroutineScope,

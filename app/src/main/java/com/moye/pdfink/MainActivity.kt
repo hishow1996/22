@@ -83,7 +83,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var recents: Recents
     private lateinit var sessionRepo: SessionRepository
     private lateinit var snapshots: SnapshotKeeper
-    private var repo: PdfRepo? = null
+    private var repo: PageSource? = null
     private var adapter: PagesAdapter? = null
     private var openGeneration = 0
     private var openingDocument = false
@@ -246,11 +246,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (e: Exception) { }
-            if (openUri(uri) { fp, openedRepo ->
-                    recents.add(uri, recents.displayName(uri), fp, openedRepo.count)
-                }) {
-                prefs().edit().putString("uri", uri.toString()).apply()
-            }
+            // v28：任意类型都能选；内嵌类型走原管线，其余转交系统 App，
+            // 两种情况都写入浏览记录（见 openAny）。
+            if (!openAny(uri)) flash("!")
         }
 
     private val createBackup =
@@ -388,7 +386,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // 系统重建 Activity（savedInstanceState 非空）或还没有历史时，直接回上一份卷子。
         val direct = savedInstanceState != null || recents.all().isEmpty()
         if (saved != null && direct) {
-            try { openUri(Uri.parse(saved)) } catch (e: Exception) { showHome() }
+            val u = Uri.parse(saved)
+            val k = FileType.from(
+                try { recents.displayName(u) } catch (e: Exception) { "" },
+                recents.mimeOf(u))
+            // 外部类型冷启动留在书架，避免一启动就跳到别的 App。
+            if (k.embedded) {
+                try { openAny(u) } catch (e: Exception) { showHome() }
+            } else showHome()
         } else showHome()
     }
 
@@ -1310,23 +1315,41 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             card.findViewById<TextView>(R.id.cardName).text = title
 
+            // v28：参照微信 / WPS / Office / Drive 的「格式色方块 + 白缩写」。
+            // PDF 逐像素沿用图三那块红底 16sp「PDF」，其它类型只换底色和字。
+            val kind = FileKind.fromKey(item.kind)
+            val badgeFrame = card.findViewById<FrameLayout>(R.id.cardBadgeFrame)
+            val badge = card.findViewById<TextView>(R.id.cardBadge)
+            if (kind == FileKind.PDF) {
+                badgeFrame.background = ContextCompat.getDrawable(
+                    this, R.drawable.pdf_badge_bg)
+                badge.text = "PDF"
+            } else {
+                badgeFrame.background = GradientDrawable().apply {
+                    setColor(kind.color)
+                    cornerRadius = dp(4).toFloat()
+                }
+                badge.text = kind.label
+                badge.textSize = kind.textSp
+            }
+
             val s = sessionRepo.session(item.fp)
             val cur = (s.page + 1).coerceAtLeast(1)
             val pageText =
                 if (item.pages > 0) "$cur / ${item.pages}" else "第 ${cur} 页"
             val sizeText = recents.fileSizeBytes(item)?.let { formatFileSize(it) }
                 ?: "大小未知"
+            // 有页概念才显示「第 N 页 / N / M」；图片、Office、压缩包
+            // 用「大小 · 类型」，不编造不存在的页码。
             card.findViewById<TextView>(R.id.cardProgress).text =
-                "$pageText · $sizeText"
+                if (kind.hasPages && item.pages > 0) "$pageText · $sizeText"
+                else "$sizeText · ${kind.tag}"
             card.findViewById<View>(R.id.cardInkDot).visibility =
                 if (InkStore.hasAnyInk(this, item.fp)) View.VISIBLE else View.GONE
 
             // 点开 = 打开这份 PDF，并按内容指纹恢复页码 / 缩放 / 工具 / 模式 / 平移
             card.setOnClickListener {
-                if (openUri(u)) {
-                    prefs().edit().putString("uri", item.uri).apply()
-                    recents.touch(item.fp, u, repo?.count ?: item.pages)
-                } else flash("!")
+                if (!openAny(u)) flash("!")
             }
             card.setOnLongClickListener {
                 showShelfActions(item) { renderHomeShelf() }
@@ -1397,11 +1420,61 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
     )
 
+    /**
+     * v28：任意文件统一入口。PDF / 图片 / 纯文本内嵌，复用现有翻页、缩放、
+     * 分块、批注、导出管线；Office / 压缩包 / 其它转交系统能处理的 App，
+     * 但照样进浏览记录、照样按内容指纹去重排最前。
+     */
+    private fun openAny(uri: Uri): Boolean {
+        val name = recents.displayName(uri)
+        val mime = recents.mimeOf(uri)
+        val kind = FileType.from(name, mime)
+        if (!kind.embedded) return openExternal(uri, name, kind, mime)
+        return openUri(uri, kind) { fp, src ->
+            recents.add(uri, name, fp, src.count, kind, mime)
+            prefs().edit().putString("uri", uri.toString()).apply()
+        }
+    }
+
+    /** 非内嵌类型：交给系统 App，回来仍是一条完整浏览记录，不写脏数据。 */
+    private fun openExternal(
+        uri: Uri, name: String, kind: FileKind, mime: String
+    ): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime.ifBlank { kind.mime })
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+        }
+        return try {
+            startActivity(intent)
+            workScope.launch(Dispatchers.IO) {
+                val fp = InkStore.fingerprint(this@MainActivity, uri)
+                withContext(Dispatchers.Main) {
+                    if (isFinishing || isDestroyed) return@withContext
+                    recents.add(uri, name, fp, 0, kind, mime)
+                    renderHomeShelf()
+                }
+            }
+            true
+        } catch (e: Exception) {
+            flash("!")
+            false
+        }
+    }
+
+    /** 按类型造页源；外部类型不会走到这里。 */
+    private fun createPageSource(uri: Uri, kind: FileKind): PageSource = when (kind) {
+        FileKind.IMAGE -> ImagePageSource(this, uri)
+        FileKind.TEXT -> TextPageSource(this, uri)
+        else -> PdfRepo(this, uri)
+    }
+
     private fun openUri(
         uri: Uri,
-        onOpened: ((String, PdfRepo) -> Unit)? = null
+        kind: FileKind = FileKind.PDF,
+        onOpened: ((String, PageSource) -> Unit)? = null
     ): Boolean {
-        val r = try { PdfRepo(this, uri) } catch (e: Exception) {
+        val r = try { createPageSource(uri, kind) } catch (e: Exception) {
             showHome(); return false
         }
         if (r.count <= 0) { r.close(); showHome(); return false }
@@ -1421,7 +1494,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         pager.visibility = View.INVISIBLE
         emptyState.visibility = View.GONE
 
-        // 指纹读取会扫描 PDF 的头部、中部和尾部，放到 IO 线程，避免大文件卡住首屏。
+        // 指纹按文件字节（头/中/尾）算，任意格式一致；放 IO 避免大文件卡住首屏。
         workScope.launch(Dispatchers.IO) {
             inkStore.flush()
             val fp = InkStore.fingerprint(this@MainActivity, uri)
@@ -1435,7 +1508,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         return true
     }
 
-    private fun finishOpenUri(r: PdfRepo, fp: String) {
+    private fun finishOpenUri(r: PageSource, fp: String) {
         openingDocument = false
         // v27：首次打开（含冷启动恢复、SAF 新选、从首页点记录）先同步方向，
         // 否则 UiState 的 landscape 初值会让 currentFitMode() 误判成横屏。
@@ -1877,10 +1950,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 setPadding(dp(8), dp(10), dp(8), dp(10))
                 setOnClickListener {
                     val u = Uri.parse(item.uri)
-                    if (openUri(u)) {
-                        prefs().edit().putString("uri", item.uri).apply()
-                        recents.touch(item.fp, u, repo?.count ?: item.pages)
-                    } else flash("!")
+                    if (!openAny(u)) flash("!")
                     dialog.dismiss()
                 }
                 setOnLongClickListener {
@@ -1958,7 +2028,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /** 双页并排模式下，单页导出也给出两页，和屏幕上看到的一致。 */
-    private fun composeTwoPages(r: PdfRepo, p: Int, w: Int, h: Int): Bitmap {
+    private fun composeTwoPages(r: PageSource, p: Int, w: Int, h: Int): Bitmap {
         val a = PageComposer.compose(r, inkStore, p, w, h, state.tint,
             state.brightness, state.visibleLayers, false, state.pageRotation)
         val b = PageComposer.compose(r, inkStore, p + 1, w, h, state.tint,

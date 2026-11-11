@@ -11,12 +11,15 @@ import org.json.JSONObject
  *
  * v9：标题改用系统 DISPLAY_NAME（和文件管理器同源），保留 .pdf、不截断；
  * custom 标记手动改过名，重新导入 / 点开同一份时不再把用户命名覆盖掉。
+ * v28：加 kind / mime 支持任意文件类型；老记录按文件名后缀自动回填类型，
+ * 不丢记录、也不需要用户重新导入一次。
  */
 class Recents(ctx: Context) {
     data class Item(
         val uri: String, val name: String, val time: Long, val fp: String,
         val pages: Int = 0, val custom: Boolean = false,
-        val sizeBytes: Long = -1L
+        val sizeBytes: Long = -1L,
+        val kind: String = "", val mime: String = ""
     )
 
     private val app = ctx.applicationContext
@@ -90,7 +93,10 @@ class Recents(ctx: Context) {
      * 重新导入 / 打开一份卷子：按指纹去重并排最前。
      * 若这条记录曾被手动改名，保留用户命名，不用系统名覆盖。
      */
-    fun add(uri: Uri, name: String, fp: String, pages: Int = 0) {
+    fun add(
+        uri: Uri, name: String, fp: String, pages: Int = 0,
+        kind: FileKind = FileKind.PDF, mime: String = ""
+    ) {
         val key = fp.ifEmpty { uri.toString().hashCode().toUInt().toString(16) }
         val old = all()
         val existing = old.find { it.fp == key }
@@ -98,9 +104,15 @@ class Recents(ctx: Context) {
         val list = old.filter { it.fp != key && it.uri != uri.toString() }
             .toMutableList()
         list.add(0, Item(uri.toString(), finalName, System.currentTimeMillis(),
-            key, pages, existing?.custom == true, readSizeBytes(uri) ?: -1L))
+            key, pages, existing?.custom == true, readSizeBytes(uri) ?: -1L,
+            FileType.key(kind), mime))
         save(list.take(12))
     }
+
+    /** v28：首页/导航面板统一入口，任意类型都走这里，类型由文件名+MIME 判定。 */
+    fun mimeOf(uri: Uri): String = try {
+        app.contentResolver.getType(uri) ?: ""
+    } catch (e: Exception) { "" }
 
     /** 点开已有记录：只更新 uri / 时间 / 页数并置顶，名字与 custom 原样保留。 */
     fun touch(fp: String, uri: Uri, pages: Int = 0) {
@@ -130,9 +142,14 @@ class Recents(ctx: Context) {
             val fp = o.optString("f", "").ifEmpty {
                 u.hashCode().toUInt().toString(16)
             }
-            Item(u, o.optString("n"), o.optLong("t"), fp,
+            val name = o.optString("n")
+            // v28 老记录没有 k 字段：按文件名后缀回填，不丢记录。
+            val k = o.optString("k", "").ifEmpty {
+                FileType.key(FileType.from(name, null))
+            }
+            Item(u, name, o.optLong("t"), fp,
                 o.optInt("g", 0), o.optBoolean("c", false),
-                o.optLong("s", -1L))
+                o.optLong("s", -1L), k, o.optString("m", ""))
         }
     } catch (e: Exception) { emptyList() }
 
@@ -152,7 +169,8 @@ class Recents(ctx: Context) {
                 .put("u", it.uri).put("n", it.name)
                 .put("t", it.time).put("f", it.fp)
                 .put("g", it.pages).put("c", it.custom)
-                .put("s", it.sizeBytes))
+                .put("s", it.sizeBytes)
+                .put("k", it.kind).put("m", it.mime))
         }
         p.edit().putString("list", a.toString()).apply()
     }

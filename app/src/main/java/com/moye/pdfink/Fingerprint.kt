@@ -7,7 +7,8 @@ import java.security.MessageDigest
 /**
  * 与 Provider 无关的内容指纹：长度 + 头 64K + 中 64K + 尾 64K。
  * 只顺序读流、不依赖 AssetFileDescriptor 或可 seek 的 channel，
- * 因此「同一份 PDF 从文件管理器 / 网盘 / 微信打开」结果一致。
+ * 因此「同一份文件从文件管理器 / 网盘 / 微信打开」结果一致；
+ * 图片、文本、Office 文档同样按字节算，不依赖 PDF 结构。
  */
 object Fingerprint {
     private const val BLK = 65536

@@ -8,7 +8,7 @@ import java.io.OutputStream
 object PdfExporter {
 
     fun export(
-        repo: PdfRepo,
+        repo: PageSource,
         store: InkStore,
         pages: List<Int>,
         out: OutputStream,

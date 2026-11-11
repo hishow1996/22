@@ -1107,3 +1107,72 @@ FILL 分支根本不进。
 + `verify.sh` 补 2 条（共 78）+ README。真机荣耀 10 验：清数据首次安装、
 旧版升级、冷启动恢复、SAF 新选、从记录点开，五种首次打开都直接铺满；
 手动切「适应屏幕」后重开仍尊重用户选择。
+
+## 任意文档可用 · 浏览记录格式色徽标 v28
+
+**用户口径**：所有文档都可以用；浏览记录显示效果和 PDF 一样；左侧 logo
+参考主流软件的做法。
+
+**参照对象**：微信 8.0.78 起的文件图标、WPS / Microsoft Office /
+百度网盘、Google Drive 都是同一套约定 —— **彩色圆角方块 + 白色粗体缩写**，
+PDF 红、Word 蓝、Excel 绿、PPT 橙；Drive 也是「每个文件左侧一个彩色小方块」。
+另一套是 Drive 新版「白纸轮廓 + 单色字母」，扫读更慢且与现有红块冲突，未采用。
+
+**诊断**：代码里三处写死 —— `item_home_card.xml` 的 `pdf_badge_bg` 红底 +
+`text="PDF"`；`Recents.Item` 无类型字段；`openUri()` 硬编码
+`PdfRepo(this, uri)`，非 PDF 抛异常直接回首页。文件选择器
+`OpenDocument()` 其实没限类型，入口能选任意文件，坏在渲染层。
+副行 `「2 / 4 · 大小」` 含页码，对图片 / 压缩包不成立。
+好消息：`Fingerprint.from` 本来就是通用字节流（长度 + 头/中/尾 64K），
+`InkStore.fingerprint` 走 `openInputStream`，任意格式都能算，无需改算法。
+
+**P0 格式色徽标**：新增 `FileKind` / `FileType`（纯 JVM）。34dp 圆角方块、
+4dp 圆角、白粗体、`scaleX 0.84`、字距 -0.03 全部沿用；运行时按类型换底色和字。
+- PDF `#D7463B` + 16sp「PDF」**显式仍用 `pdf_badge_bg.xml`，逐像素不变**
+- W `#2B579A` / X `#217346` / P `#D24726` 单字母 16sp
+- IMG 紫 `#7B61D9` / TXT 灰 `#6B7280` / ZIP 黄 `#E0A22E` 12sp
+- 其它中性灰 `FILE` 10sp
+- 卡片版式、完整文件名（含后缀不截断）、蓝点、点击续读、长按菜单零改动
+
+**P1 类型识别与记录**：`Recents.Item` 加 `kind` / `mime`；写入时取
+`ContentResolver.getType(uri)`，为空按 `DISPLAY_NAME` 后缀兜底。
+`all()` 对无 `k` 字段的老记录按文件名回填类型 —— **不丢记录、不用重导入**。
+`custom` 手动改名仍不被覆盖。指纹按文件字节算，不会串记录 / 串笔迹目录。
+
+**P2 打开链路（范围 A+B）**：抽 `PageSource` 接口（count / ratio /
+renderTile / render / thumb / cacheId），`PdfRepo` 改为实现它；
+`PagesAdapter` / `TiledPageView` / `OverviewAdapter` / `PageComposer` /
+`PdfExporter` / `MainActivity` 全部依赖接口而非具体类。
+
+- **PDF**：原管线一字不动
+- **图片**：`ImagePageSource` 用 `BitmapRegionDecoder` 按可见块解码，
+  不「整页缩成大图再放大」；少数不支持区域解码的格式回退到受限整图
+- **纯文本**：`TextPageSource` 按行分页，`Canvas.drawText` 直接画到块上，
+  放大是矢量重绘而非位图插值，4× 仍锐利
+- **旋转**：`RasterRotation.inverse()` 把旋转后画布的块反算回源画布的
+  轴对齐矩形，渲染后转回来，输出尺寸仍精确 tw×th；不需要整页大位图
+- **Office / EPUB / 压缩包 / 其它**：`ACTION_VIEW` 转交系统 App，
+  `FLAG_GRANT_READ_URI_PERMISSION`，回来照样 `recents.add` 记一条、排最前；
+  冷启动恢复对外部类型留在书架，避免一启动就跳到别的 App
+- **导出 / 缩略图 / 批注备份**：因接口统一，内嵌类型照样可用（可把图片、
+  文本连同批注烘成 PDF）；转交类型不进文档态，也就不存在「导出空壳」
+- **副行按类型**：有页概念（PDF / 文本）→ `2 / 4 · 11.32 MB`；
+  图片 / Office / 压缩包 → `11.32 MB · IMG`，不编造页码、不加说明性灰字
+
+**已知限制**
+1. Office / EPUB 仅转交系统，**不在墨页里批注**；端上还原排版需引重库，
+   荣耀 10 上体积与内存都吃紧，按推荐范围没做。
+2. 图片放大受源文件分辨率限制（位图不能凭空变矢量）；未放大时按 1:1
+   区域解码，清晰。纯文本放大是矢量，不受此限。
+3. 文本按固定字宽折行，中英混排的断行不如系统文本排版精细。
+4. 外部类型没有「页码 / 缩放 / 平移」会话，续读定位不适用。
+
+**验收**：`FileTypeTest`（8 条：映射、色值、回填、分页、旋转逆映射）
++ 静态断言（PDF 徽标资源与 16sp 未改、接口覆盖、老记录回填、外部转交、
+无脏记录）+ `verify.sh` 补 4 条（共 82）+ README。真机荣耀 10 验混排
+6 种类型一眼可分、Word 能转交并回记、图片 / 文本内嵌能翻页批注缩放、
+老记录不丢、PDF 卡片与改造前叠图一致。
+
+**边界**：v27 默认铺满、v26 竖屏上下滑、v23 返回栈、v22 首页圆盘、
+v21 放大镜短闪、v20 ⇄/★、首页两态、红底 PDF 徽标、零说明性小字
+全部原样保留。

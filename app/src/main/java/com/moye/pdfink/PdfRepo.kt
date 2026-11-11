@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /** 系统 PdfRenderer 封装：串行访问 + raw 页缓存 + 滤镜与旋转输出。 */
-class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
+class PdfRepo(private val ctx: Context, uri: Uri) : PageSource {
 
     private val pfd: ParcelFileDescriptor =
         ctx.contentResolver.openFileDescriptor(uri, "r")
@@ -26,14 +26,14 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     private var tileRenderPage: PdfRenderer.Page? = null
     private var tileRenderPageIndex = -1
     private var tileRenderPageUses = 0
-    val cacheId: String = "doc-${nextId.incrementAndGet()}"
+    override val cacheId: String = "doc-${nextId.incrementAndGet()}"
 
     companion object {
         private const val MAX_TILE_PAGE_REUSES = 4
         private val nextId = AtomicLong()
     }
 
-    val count: Int get() = renderer.pageCount
+    override val count: Int get() = renderer.pageCount
 
     private fun closeTileRenderPageLocked() {
         val opened = tileRenderPage
@@ -60,7 +60,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         return opened
     }
 
-    fun ratio(page: Int): Float = synchronized(renderer) {
+    override fun ratio(page: Int): Float = synchronized(renderer) {
         ratios[page] ?: run {
             closeTileRenderPageLocked()
             val p = renderer.openPage(page)
@@ -75,13 +75,13 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     /** 缓存命中版本只读内存，不打开 PdfRenderer 页面。 */
-    fun cachedRatioWithRotation(page: Int, rotation: Int): Float? =
+    override fun cachedRatioWithRotation(page: Int, rotation: Int): Float? =
         ratios[page]?.let {
             if (PdfTileTransform.normalizeRotation(rotation) in setOf(90, 270)) 1f / it else it
         }
 
     /** 90 / 270 度时页面宽高互换，容器比例要取倒数。 */
-    fun ratioWithRotation(page: Int, rotation: Int): Float {
+    override fun ratioWithRotation(page: Int, rotation: Int): Float {
         val r = ratio(page)
         return if (PdfTileTransform.normalizeRotation(rotation) in setOf(90, 270)) 1f / r else r
     }
@@ -129,7 +129,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
      * PdfRenderer 按 bitmap 边界裁剪，所以只分配 tw×th 的位图，
      * 4× 放大时可见窗口仍是屏幕大小，块数不随倍率增长。
      */
-    fun renderTile(
+    override fun renderTile(
         page: Int, lw: Int, lh: Int, left: Int, top: Int,
         tw: Int, th: Int, tint: Int, brightness: Float,
         rotation: Int = 0
@@ -166,7 +166,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         }
     }
 
-    fun render(
+    override fun render(
         page: Int, w: Int, h: Int, tint: Int, brightness: Float,
         rotation: Int = 0
     ): Bitmap {
@@ -187,12 +187,12 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     }
 
     /** 只填缓存，结果丢弃，用于相邻页预渲染。 */
-    fun prefetch(page: Int, w: Int, h: Int) {
+    override fun prefetch(page: Int, w: Int, h: Int) {
         if (page < 0 || page >= count) return
         raw(page, w, h)
     }
 
-    fun thumb(page: Int, w: Int): Bitmap {
+    override fun thumb(page: Int, w: Int): Bitmap {
         val h = (w / ratio(page)).toInt().coerceAtLeast(1)
         return render(page, w, h, PageFilter.WHITE, 0f)
     }
