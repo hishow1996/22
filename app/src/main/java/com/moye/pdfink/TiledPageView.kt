@@ -170,9 +170,13 @@ class TiledPageView @JvmOverloads constructor(
         }
 
         if (sameContent && previewGrid.isNotEmpty() && !sameSize) {
-            transitionPreviewGrid = previewGrid
-            transitionBaseW = baseW
-            transitionBaseH = baseH
+            // Keep the oldest usable preview until the current-size grid has filled in;
+            // rapid hide/show toggles must not replace a populated fallback with an empty grid.
+            if (transitionPreviewGrid.isEmpty()) {
+                transitionPreviewGrid = previewGrid
+                transitionBaseW = baseW
+                transitionBaseH = baseH
+            }
         } else if (!sameContent) {
             transitionPreviewGrid = emptyList()
             transitionBaseW = 0
