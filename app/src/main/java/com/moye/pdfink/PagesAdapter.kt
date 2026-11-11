@@ -2,6 +2,7 @@ package com.moye.pdfink
 
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -149,12 +150,22 @@ class PagesAdapter(
         h.secondInk.viewport = h.zoom.secondViewport
         h.draftInk.viewport = h.zoom.draftViewport
 
-        h.pageContainer.layoutParams = params()
+        // v29：竖屏 FILL / WIDTH 顶部对齐。spreadRoot gravity=center 会把
+        // 页面垂直居中，只要页高 < 可用高就上下各留一大片米白；隐藏栏后
+        // 可用高变大而页面基准不变，留白反而更宽。横屏三模式不动。
+        val alignTop = !state.landscape && fitMode != PageContainer.FIT
+        h.spreadRoot.gravity =
+            if (alignTop) Gravity.START or Gravity.TOP else Gravity.CENTER
+        h.pageContainer.layoutParams = params().apply {
+            if (alignTop) gravity = Gravity.TOP
+        }
         h.secondContainer.layoutParams = params().apply {
             marginStart = (10 * h.itemView.resources.displayMetrics.density).toInt()
+            if (alignTop) gravity = Gravity.TOP
         }
         h.draftContainer.layoutParams = params().apply {
             marginStart = (10 * h.itemView.resources.displayMetrics.density).toInt()
+            if (alignTop) gravity = Gravity.TOP
         }
         h.pageContainer.fitMode = fitMode
         h.secondContainer.fitMode = PageContainer.FIT
@@ -301,6 +312,20 @@ class PagesAdapter(
      * 不清空全局 tile cache；尺寸变化只生成新 key，旧低清预览可暂时托底，
      * 尺寸恢复时也能复用仍在缓存中的图块。
      */
+    /**
+     * v29：栏显隐 / insets / 分屏后强制页面重新测量。
+     * 只调 refreshHostBounds 不够 —— fitMode 值没变时 PageContainer 的
+     * setter 不会 requestLayout，FILL 页高会停在旧的可用高上。
+     */
+    fun relayoutForChrome() {
+        for (h in holders.values.toList()) {
+            h.pageContainer.requestLayout()
+            h.secondContainer.requestLayout()
+            h.draftContainer.requestLayout()
+        }
+        refreshHostBounds()
+    }
+
     fun refreshHostBounds() {
         val anchor = holders.values.firstOrNull() ?: return
         if (hostBoundsRefreshPending) return

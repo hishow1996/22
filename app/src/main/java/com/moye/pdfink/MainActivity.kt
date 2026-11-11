@@ -444,6 +444,20 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 .putBoolean("modeChosen", false)
                 .apply()
         }
+        // v29：老配置里「点过适应屏幕 / 适应宽度」会留下 fillScreen=false +
+        // modeChosen=true，升级后仍走 WIDTH，页面被居中 → 大片留白。
+        // 一次性强制回默认铺满；只迁一次，之后用户主动选的模式照常记住。
+        if (!p.getBoolean("fillV29Migrated", false)) {
+            fillScreen = true
+            state.displayMode = DisplayMode.WIDTH
+            modeChosen = false
+            p.edit()
+                .putBoolean("fillV29Migrated", true)
+                .putBoolean("fillScreen", true)
+                .putInt("displayMode", DisplayMode.WIDTH)
+                .putBoolean("modeChosen", false)
+                .apply()
+        }
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
         state.edgeFlip = p.getBoolean("edge", true)
@@ -468,6 +482,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("modeChosen", modeChosen)
             putBoolean("fillScreen", fillScreen)
             putBoolean("fillMigrated", true)
+            putBoolean("fillV29Migrated", true)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
@@ -873,25 +888,34 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      */
     private fun applyChrome() {
         val portrait = !state.landscape
-        // systemBars 在部分 ROM 上已包含刘海高度，取 max 避免补两次
-        val cutTop = maxOf(sysTop, safeT)
-        val cutBottom = maxOf(sysBottom, safeB)
-        val baseTop = if (portrait) dp(50) else dp(54)
-        val baseBottom = if (portrait) dp(48) else dp(52)
-        // P0：栏隐藏后必须把 padding 一起归零。旧版一次性写死 54/52dp，
-        // 栏 GONE 了那 140dp 还占着，就变成截图里的上下大片空白。
-        val barTop = if (barsHidden) 0 else baseTop + cutTop + dp(6)
-        val barBottom = if (barsHidden) 0 else baseBottom + cutBottom + dp(4)
+        // v29：栏自身几何的唯一出口。状态栏 / 导航栏已彻底隐藏、竖屏也不
+        // 延伸进刘海区，因此竖屏 cutTop/cutBottom 一律 0 —— 旧版把同一个
+        // safeInsetTop 同时算进「顶栏高度 + 顶栏顶部 padding + 阅读区」三处，
+        // 屏幕上缘就多出一条白带、内容区又被压矮（截图里那片空白）。
+        // 阅读区矩形仍由 PdfViewportGeometry 用 barTop/barBottom 唯一推算。
+        val cm = ChromeLayout.metrics(
+            portrait = portrait, barsHidden = barsHidden,
+            baseTop = if (portrait) dp(50) else dp(54),
+            baseBottom = if (portrait) dp(48) else dp(52),
+            gapTop = dp(6), gapBottom = dp(4),
+            sysTop = sysTop, sysBottom = sysBottom,
+            safeL = safeL, safeT = safeT, safeR = safeR, safeB = safeB
+        )
+        val barTop = cm.barTop
+        val barBottom = cm.barBottom
+        val cutBottom = cm.cutBottom               // v11 悬浮按钮沿用
+        val homeCutTop = maxOf(sysTop, safeT)     // 首页 header 仍避让刘海
 
         val lpTop = topBar.layoutParams as FrameLayout.LayoutParams
         lpTop.height = barTop
         topBar.layoutParams = lpTop
-        topBar.setPadding(safeL + dp(8), cutTop + dp(6), safeR + dp(8), dp(6))
+        topBar.setPadding(safeL + dp(8), cm.topPaddingTop, safeR + dp(8), dp(6))
 
         val lpBottom = bottomBar.layoutParams as FrameLayout.LayoutParams
         lpBottom.height = barBottom
         bottomBar.layoutParams = lpBottom
-        bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8), cutBottom + dp(4))
+        bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8),
+            cm.bottomPaddingBottom)
 
         // 将阅读器本身限制在真实可用矩形内，而不是把空白留在 ViewPager2
         // 的内部 padding 中。ZoomHost、PageContainer 与分块渲染因此共享同一视口。
@@ -921,11 +945,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTempEraser()
         emptyState.setPadding(safeL, 0, safeR, safeB)
         val headerLp = homeHeader.layoutParams as FrameLayout.LayoutParams
-        headerLp.topMargin = cutTop + dp(4)
+        headerLp.topMargin = homeCutTop + dp(4)
         homeHeader.layoutParams = headerLp
         if (homeHeader.visibility == View.VISIBLE) {
             val stageLp = homeStage.layoutParams as LinearLayout.LayoutParams
-            stageLp.height = cutTop + dp(56)
+            stageLp.height = homeCutTop + dp(56)
             stageLp.weight = 0f
             homeStage.layoutParams = stageLp
         }
@@ -1020,7 +1044,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTools()
         // 栏显隐 / insets / 旋转改了宿主视口，页面几何必须跟着重算，
         // 避免平移边界与分块视口继续使用旧尺寸。
-        if (inDoc) adapter?.refreshHostBounds()
+        if (inDoc) adapter?.relayoutForChrome()
     }
 
     /** 竖屏浮层里的调色 / 粗细 / 笔刷槽，功能与主条完全一致。 */
@@ -1201,8 +1225,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // 工具栏显隐会改变视口高度；先保存当前位置，再用归一化状态适配新尺寸。
         saveSessionNow()
         barsHidden = hide
-        // applyChrome updates the actual reader bounds and refreshes only affected page geometry.
-        // Toolbar visibility is not a document/render change: keep tile caches and holders.
+        // v29：栏显隐会把可用高从「屏高-两栏」变成「整屏」，FILL 页面必须
+        // 按新尺寸重测 + 重渲染，否则纸页还是旧大小、留白反而更宽。
+        adapter?.invalidateRenderCache()
         applyChrome()
     }
 
@@ -1214,15 +1239,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     /** 把当前显示模式推给 adapter 并重渲染。 */
     /** 竖屏默认完整显示页面；横屏 FIT / WIDTH / DOUBLE 不受 fillScreen 影响。 */
-    private fun currentFitMode(): Int {
-        val mode = state.effectiveMode
-        return when {
-            !state.landscape && fillScreen && mode == DisplayMode.WIDTH ->
-                PageContainer.FILL
-            mode == DisplayMode.WIDTH -> PageContainer.WIDTH
-            else -> PageContainer.FIT
-        }
-    }
+    /**
+     * v29：竖屏三态互斥且唯一，不再让「会话残留 FIT / modeChosen」把默认
+     * 悄悄拉回 WIDTH / FIT 而看起来三态都一样。横屏三模式一概不动。
+     *  - 铺满屏幕 FILL  ：页高 = 可用高，四边零留白（默认）
+     *  - 适应宽度 WIDTH：页宽 = 可用宽，顶部对齐，上下超出可平移
+     *  - 适应屏幕 FIT  ：整页 contain 居中（唯一允许留白，用户主动选）
+     */
+    private fun currentFitMode(): Int = FitModeResolver.resolve(
+        portrait = !state.landscape,
+        fillScreen = fillScreen,
+        displayModeIsFit = state.displayMode == DisplayMode.FIT,
+        landscapeModeIsWidth = state.effectiveMode == DisplayMode.WIDTH
+    )
 
     private fun setPortraitMode(fit: Boolean, fill: Boolean) {
         fillScreen = fill

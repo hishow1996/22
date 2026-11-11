@@ -1176,3 +1176,82 @@ renderTile / render / thumb / cacheId），`PdfRepo` 改为实现它；
 **边界**：v27 默认铺满、v26 竖屏上下滑、v23 返回栈、v22 首页圆盘、
 v21 放大镜短闪、v20 ⇄/★、首页两态、红底 PDF 徽标、零说明性小字
 全部原样保留。
+
+## 竖屏栏间铺满 · ChromeLayout 统一占位 v29
+
+**用户口径**：有栏时文件铺满功能栏之间的区域；隐藏栏后铺满整个屏幕；
+点「适应屏幕 / 适应宽度」也一样留白，要优化。
+
+**实测（1080×2340 截图中央列采样）**：顶栏白 0–300px、米白 300–500px、
+纸页 500–1980px（≈1480px）、米白 1980–2170px、底栏 2170–2340px。
+栏间可用高 ≈1930px，纸页只占 77% —— 这是 **WIDTH 模式**按宽度铺满后的
+页高，说明默认 FILL 根本没生效，而不是「铺满了还留白」。
+
+**三条根因（代码事实）**
+
+1. **假留白**：`setupInsets()` 已把 `sysTop/sysBottom` 硬置 0（状态栏彻底隐藏），
+   但 `applyChrome()` 仍算 `cutTop = maxOf(sysTop, safeT)`，结果全等于刘海
+   `safeInsetTop`；同一个值又进了 **顶栏高度 + 顶栏顶部 padding +
+   `pager` paddingTop** 三处，屏幕上缘多出一条白带、内容区被压矮。
+2. **页面居中**：`spreadRoot gravity=center`、`PageContainer center_vertical`
+   三态共用；只要页高 < 可用高就垂直居中 → 上下米白。`toggleBars()` 只改
+   `pager` padding、不改页面基准尺寸，隐藏栏后留白反而更宽。
+3. **默认没进 FILL**：`currentFitMode()` 要求 `!landscape && fillScreen &&
+   effectiveMode==WIDTH`；老配置里点过适应屏幕 / 适应宽度会留下
+   `fillScreen=false + modeChosen=true`，或会话残留 FIT，于是退回 FIT/WIDTH，
+   三态看起来一样。另外 `fillScale()` 把 cover 钳在 1.8x，宽幅页 / 大可用高
+   时页高 < 可用高，也会留白。
+
+**P0 去掉假留白**：新增纯 JVM `ChromeLayout.metrics()` 作为文档态栏占位
+唯一出口。竖屏 `cutTop/cutBottom=0`（状态栏/导航栏已隐藏、不延伸进刘海区），
+横屏保留 `safeL/safeR` 与 `cutBottom` 避让旋转后的刘海。`topBar` 高度回到
+`50dp + 6dp`，图标在 38dp 内垂直居中；`pager padding` = 栏高，隐藏栏时归零。
+首页 `homeHeader` / `homeStage` 仍保留原刘海避让，v22 不回归。
+
+**P1 让铺满真铺满**
+- `FitModeResolver`（纯 JVM）显式三态：竖屏 `fillScreen=true → FILL`；
+  否则 FIT / WIDTH；横屏三模式一概不动。`currentFitMode()` 委托它。
+- `PageContainer.fillScaleExact()` 严格 cover：`s = max(1, availH·ratio/availW)`
+  且只受 8x 防御上限，**不再被 1.8x 钳制**。A4 竖页 → `h = 可用高`（有栏
+  1935px / 隐藏栏 2340px），`w` 按比例横向略超出可平移；细长页 → `w = 可用宽`、
+  纵向超出可拖；宽幅页 → 纵向严格铺满。任何比例都四边零留白。
+  v19 的 `fillScale()` 与 `FillScreenTest` 原样保留。
+- 竖屏 FILL / WIDTH 把 `spreadRoot` 与三个 `PageContainer` 改成 **顶部对齐**，
+  不再居中；FIT 仍居中（用户主动选的整页 contain，唯一允许留白）。横屏不动。
+- `loadPrefs()` 加 `fillV29Migrated` 一次性标记：老配置的
+  `fillScreen=false / modeChosen=true` 强制回默认铺满，只迁一次，之后用户
+  主动选的模式照常记住。**没有这一步，升级后仍是 WIDTH、留白依旧。**
+- `PagesAdapter.relayoutForChrome()`：栏显隐后对三个容器 `requestLayout()`
+  再 `refreshHostBounds()`。只调后者不够 —— fitMode 值没变时 setter 不会
+  触发重新测量，FILL 页高会停在旧可用高。`toggleBars()` 另补缓存失效。
+
+**P2 配套**：`shapeBar` / `selectionBar` / 悬浮橡皮 / 左下呼出按钮统一用
+`ChromeMetrics`；分块按新尺寸重渲染（字仍 1:1 锐利）、笔迹归一化落点、
+会话位置不回弹；v28 格式色徽标、v27 默认铺满、v26 竖屏上下滑、v23 侧滑
+返回、首页两态、红底 PDF 徽标、5 档粗细全部原样。零文字、零动效。
+
+**三态口径（内容区 = 栏间 / 隐藏栏时 = 整屏）**
+- 铺满屏幕 FILL：页高 = 可用高，上下零留白，左右超出双指横拖 ← **默认**
+- 适应宽度 WIDTH：页宽 = 可用宽，顶部对齐，上下超出双指拖
+- 适应屏幕 FIT：整页 contain 居中（按推荐保留，唯一允许留白）
+
+**已知限制**：FILL 严格 cover 会让宽幅页面横向裁切较多，想看整页请切
+「适应屏幕」；A4 讲义类竖版文档是主场景，横向只裁约 13%/26%。
+
+**与并行提交的关系**：同步时发现仓库有 13 个并行提交（含「让 PDF 阅读区域
+精确占用功能栏之间的空间」「移除内部冗余视口 padding」「修复完整页适配与
+缩放坐标错位」「为双页与混合尺寸页面拆分独立视口」等），改的正好是本轮也在
+改的 `MainActivity` / `PageContainer` / `PagesAdapter` / `ZoomHost` /
+`activity_main.xml`。已先把 13 个文件同步到本地，再在新版本上重新合并 v29
+补丁，逐字节比对确认未修改的 10 个文件与远端完全一致、并行改动零回退。
+并行提交把 `FILL` 定义成「contain、允许自然留白」并新增 `fitPageSize()`；
+本轮按用户口径把 **FILL 单独改回严格 cover**，`fitPageSize` 与
+`PdfViewportGeometry.contentInsets()` 全部保留给 FIT / 阅读区矩形，
+两套几何并存、互不覆盖。
+
+**验收**：`ChromeLayoutTest`（10 条：栏占位、隐藏栏归零、横屏刘海、
+严格 cover 四类页面、无效输入、三态判定）+ 静态断言（唯一 insets 出口、
+fillV29Migrated、FILL 顶部对齐、relayoutForChrome）+ `verify.sh` 补 4 条
+（共 86）+ README + 三格对照预览。真机荣耀 10 叠图量「纸顶=栏底、
+纸底=栏顶」与「隐藏栏纸顶=0、纸底=屏底」，再验三模式切换 / 旋转 /
+笔迹落点 / 分屏。

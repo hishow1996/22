@@ -90,3 +90,7 @@ echo "  79. v28 Format color badges: PDF 红/16sp 原样，W/X/P/IMG/TXT/ZIP/FIL
 echo "  80. Recents 老记录按文件名回填 kind，不丢记录；custom 命名不被覆盖"
 echo "  81. 任意文件可打开：图片/文本内嵌复用分块批注，Office/压缩包转交系统并回记"
 echo "  82. PageSource 接口全覆盖；旋转逆映射输出仍 tw×th；副行不编造页码"
+echo "  83. v29 ChromeLayout：竖屏 cutTop/cutBottom=0，顶栏不再被刘海撑出白带"
+echo "  84. FILL 严格 cover：页高=可用高（有栏=栏间 / 隐藏栏=整屏），四边零留白"
+echo "  85. 竖屏 FILL/WIDTH 顶部对齐；currentFitMode 三态互斥；v29 老配置一次性回默认铺满"
+echo "  86. 栏显隐强制 requestLayout + 重渲染；横屏三模式 / 首页 header / 悬浮按钮不回归"
