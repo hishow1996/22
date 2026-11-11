@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 备份批注（导出）：文件夹连通不再断成两截；内外框反向挖空；
+     箭头改为朝上，完全落在挖空区内部，既不再被顶盖吞掉，
+     也与「恢复备份」的向下箭头一眼区分。
+     只用直线与 nonZero，不用圆弧命令与填充类型属性，兼容 EMUI 8.1。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M4,5H10L12,7H20V10H4V5Z" />
-    <path android:fillColor="#FF000000" android:pathData="M4,12H20V20H4V12Z M6,14V18H18V14H6Z" />
-    <path android:fillColor="#FF000000" android:pathData="M11,2H13V9H15L12,12L9,9H11V2Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M4,5H10L12,7H20V20H4V5Z M6,9V18H18V9H6Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M11,17.2H13V13.6H15.6L12,9.8L8.4,13.6H11V17.2Z" />
 </vector>
