@@ -81,6 +81,10 @@ class ZoomHost @JvmOverloads constructor(
     private var lastSingleX = 0f
     private var lastSingleY = 0f
     private var singlePanning = false
+    // v26：竖屏 pager 为 VERTICAL 时，横向单指滑补一次离散翻页；
+    // DOWN 后首次 MOVE 即切 0.5x 预览网格，不等 16dp 判定，起步即跟手。
+    private var horizontalFlipDone = false
+    private var gestureDeferred = false
     private var transformFramePosted = false
     private var transformDirty = false
     private val transformFrame = Runnable {
@@ -139,13 +143,16 @@ class ZoomHost @JvmOverloads constructor(
         }
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             // 做题模式：写字时禁止 ViewPager2 抢事件。
-            // 浏览模式把横向拦截权还给它，单指左右翻页才能生效。
+            // 浏览模式把拦截权还给它：竖屏 VERTICAL 才能拦到纵向 MOVE
+            // 做跨页滚动，横向则不被拦截、由下面补一次离散翻页。
             parent?.requestDisallowInterceptTouchEvent(!browseMode)
             singleStartX = ev.x
             singleStartY = ev.y
             lastSingleX = ev.x
             lastSingleY = ev.y
             singlePanning = false
+            horizontalFlipDone = false
+            gestureDeferred = false
         }
         val multi = ev.pointerCount >= 2
         if (multi && !zooming) {
@@ -181,26 +188,48 @@ class ZoomHost @JvmOverloads constructor(
             // 关键：浏览模式必须自己消费 DOWN。否则 InkView 已 return false，
             // 整棵树无人消费 DOWN，系统会停止派发后续 MOVE/POINTER_DOWN/UP，
             // 双指缩放、上下平移、横滑翻页会「一起失效」。
+            // v26：竖屏 pager 为 VERTICAL 时会自行拦截纵向 MOVE，本 View 收到
+            // ACTION_CANCEL 后走 UP 分支收尾，跨页滚动交给系统 RecyclerView。
             when (ev.actionMasked) {
                 MotionEvent.ACTION_MOVE -> {
                     val dx = ev.x - lastSingleX
                     val dy = ev.y - lastSingleY
                     val dxAbs = abs(ev.x - singleStartX)
                     val dyAbs = abs(ev.y - singleStartY)
+                    // 竖屏 FILL 下 panLimitY≈0，纵向交给 pager；只有页面自身
+                    // 纵向超出（横屏 WIDTH）或放大后才在这里做页内平移。
                     val canPan = panLimitY() > 0.5f
                     val zoomed = scale > 1.01f
+
+                    // v26 ② 预览全程跟手：DOWN 后第一次 MOVE 就切 0.5x
+                    // 预览网格，不再等 16dp 判定；起步即跟手，抬手再补高清。
+                    if (!gestureDeferred) {
+                        gestureDeferred = true
+                        onViewportGestureChanged?.invoke(true)
+                    }
+
                     if (!singlePanning && (
                             GestureArbiter.isVerticalPan(dxAbs, dyAbs, dp16, canPan) ||
                             GestureArbiter.isZoomedPan(dxAbs, dyAbs, dp16, zoomed))) {
                         singlePanning = true
-                        onViewportGestureChanged?.invoke(true)
                         // 放大后横向翻页已禁用，锁住父级避免 ViewPager2 抢
                         parent?.requestDisallowInterceptTouchEvent(true)
-                    }
-                    if (singlePanning) {
+                        // v26 ① 死区补偿：判定阈值内累积的位移一次性补回，
+                        // 否则起步那 16dp 白丢，连续 ty/tx 就不是 1:1 跟手。
+                        ty += ev.y - singleStartY
+                        if (zoomed) tx += ev.x - singleStartX
+                        scheduleTransform()
+                    } else if (singlePanning) {
                         ty += dy
                         if (zoomed) tx += dx   // 放大后横向拖动 = 平移，不是翻页
                         scheduleTransform()
+                    } else if (!horizontalFlipDone &&
+                            GestureArbiter.isHorizontalFlip(dxAbs, dyAbs, dp16, !zoomed)) {
+                        // v26：竖屏 VERTICAL 后横向不再触发 pager 滚动，
+                        // 补一次离散翻页保住「左右滑翻页」。纵向不被抢，
+                        // 系统侧滑返回仍走已让出的屏幕边缘。
+                        horizontalFlipDone = true
+                        onFlip?.invoke(if (ev.x - singleStartX > 0f) -1 else 1)
                     }
                     lastSingleX = ev.x
                     lastSingleY = ev.y
@@ -212,7 +241,11 @@ class ZoomHost @JvmOverloads constructor(
                         parent?.requestDisallowInterceptTouchEvent(false)
                         onViewportGestureChanged?.invoke(false)
                         onViewportSettled?.invoke()
+                    } else if (gestureDeferred) {
+                        // CANCEL：纵向被 pager 接走 / 单纯抬手，都要补回高清。
+                        onViewportGestureChanged?.invoke(false)
                     }
+                    gestureDeferred = false
                 }
             }
             return true

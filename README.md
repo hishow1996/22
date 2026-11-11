@@ -1013,3 +1013,55 @@ bbox 全在内框内、箭头朝上、无 `A` 圆弧、两处引用未改、path
 **边界**：v24 两个浮层图标、v23 返回栈、v22 首页 88dp 圆盘、v21 放大镜短闪、
 v20 ⇄/★、v19 竖屏铺满、v18 ⇄、v12 去圆底、首页两态、红底 PDF 徽标、
 米白+蓝线图标、5 档粗细全部原样保留。
+
+## 竖屏上下滑浏览 v26
+
+**诊断**：不是手势被抢，是竖屏根本没有「可上下移动的内容」。v19 的 FILL
+智能铺满把页面高度精确对齐到一屏 → `panExtraY≈0` → `panLimitY()=0`，
+于是 v16 那条单指纵向平移的开关 `canPan = panLimitY() > 0.5f` 恒 false，
+上下 MOVE 只更新 `lastSingleY`；双指同向拖动的 `ty += dy` 也被 0 边界钳回。
+横向 `panLimitX()>0` 归 ViewPager2，所以只剩左右翻页。
+
+**P0 竖屏上下滑**：`applyPagerOrientation()` 把竖屏 ViewPager2 切到
+`ORIENTATION_VERTICAL`，横屏保持 `HORIZONTAL`。跨页纵向滚动由系统
+RecyclerView 原生接管，页面本身仍一屏完整、不被上下裁切，v19 铺满保住。
+
+- 竖屏 1×：**上下滑 = 连续跟手浏览**（当前页推走、相邻页接上）
+- **左右滑翻页保留**：VERTICAL 后横向不再触发 pager 滚动，由
+  `GestureArbiter.isHorizontalFlip` 补一次离散翻页（`horizontalFlipDone`
+  防重复）；1.2 倍方向比避免手写斜划误翻
+- 放大态：`updatePagerInput()` 关掉 `isUserInputEnabled`，纵向自动回到
+  ZoomHost 的页内平移；横屏 WIDTH 的 `panLimitY>0` 分支完全不回归
+- 做题态：InkView 消费 DOWN，单指写字不受影响
+- 切方向时保存并恢复 `currentItem`，不做平滑滚动避免闪帧
+
+**P1 流畅度 / 跟手度（6 处）**
+
+1. **死区补偿**：`singlePanning` 判定成立时把阈值内累积的位移一次性补回
+   `ty/tx`，起步不再白丢 16dp，连续平移 1:1 跟手
+2. **预览全程跟手**：DOWN 后第一次 MOVE 即置 `deferHighResolution=true`
+   （原来要等 16dp 判定），0.5× 预览网格从第一帧就托底
+3. **帧对齐**：沿用并行提交在 ZoomHost 层落地的
+   `scheduleTransform()` / `flushTransform()`（`postOnAnimation` 合帧），
+   本轮新增的死区补偿与页内平移一律走同一入口，一帧只重算一次 viewport
+4. **惯性 fling**：由 VERTICAL ViewPager2 的 RecyclerView 原生提供
+5. **边界回弹**：原生 EdgeEffect，竖向时着品牌蓝 `#2F6FED`（内部
+   RecyclerView 拿不到则静默跳过），首/末页不硬停
+6. **方向预取**：`offscreenPageLimit=1` 按滚动方向预取前后各一页首屏，
+   配合 0.5× 预览网格，快甩不出白块
+
+**P2 配套**：页码、进度条、书签、会话归一化位置、缩略图、导出按逻辑页
+不变；横屏 v14 的 WIDTH / 双页并排一概不动；v23 侧滑返回让出的屏幕边缘
+仍归系统手势；零文字、首页与桌面图标不动。
+
+**已知边界**：竖屏横向翻页沿用页切换动画（VERTICAL 下表现为相邻页纵向
+滑入），功能保留但方向与手势不同；屏幕最外侧 14dp 边缘热区仍优先给
+翻页/系统手势，在极边缘起手的上下滑可能被热区先接走。
+
+**验收**：`VerticalScrollTest`（5 条纯函数仲裁）+ 静态断言
+（orientation 接线、死区补偿、首次 MOVE defer、帧对齐、横向翻页防重复、
+放大态关闭 pager 输入）+ `verify.sh` 补 4 条（共 76）。真机荣耀 10 验
+慢拖跟手、快甩惯性、连续甩接下一页、边界回弹、左右滑仍翻页、做题不误触。
+
+**边界**：v25 图标修复、v23 返回栈、v22 圆盘、v21 放大镜短闪、v20 ⇄/★、
+v19 铺满、v16 默认浏览与手势链全部原样保留。

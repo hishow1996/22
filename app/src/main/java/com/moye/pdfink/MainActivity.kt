@@ -364,6 +364,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         applyOrientationLayout()
         updatePagerInput()
 
+        // v26 ⑥ 方向预取：竖屏 VERTICAL 时按滚动方向预取前后各一页首屏，
+        // 配合 TiledPageView 的 0.5x 预览网格，快甩也不出白块。
         pager.offscreenPageLimit = 1
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -796,8 +798,45 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun applyOrientationLayout() {
         state.landscape = resources.configuration.orientation !=
             Configuration.ORIENTATION_PORTRAIT
+        applyPagerOrientation()
         applyChrome()
         hideSystemBars()
+    }
+
+    /**
+     * v26 P0：竖屏把 ViewPager2 切到 VERTICAL，让系统原生接管上下滑 ——
+     * 跟手拖拽、fling 惯性、EdgeEffect 边界回弹、前后各一页 offscreen 预取
+     * 全部由 RecyclerView 提供，不重复造轮子。横屏保持 HORIZONTAL，
+     * v14 的 WIDTH / 双页并排一概不回归。
+     *
+     * 放大态由 updatePagerInput() 关掉 isUserInputEnabled，纵向手势自动回到
+     * ZoomHost 的页内平移；做题态由 InkView 消费 DOWN。两条路径互斥。
+     */
+    private fun applyPagerOrientation() {
+        val want = if (state.landscape) ViewPager2.ORIENTATION_HORIZONTAL
+        else ViewPager2.ORIENTATION_VERTICAL
+        if (pager.orientation == want) return
+        val keep = pager.currentItem
+        pager.orientation = want
+        // 换 LayoutManager 后位置可能归零，显式恢复；不做平滑滚动避免闪一帧。
+        if (pager.currentItem != keep) pager.setCurrentItem(keep, false)
+        // v26 ⑤ 边界回弹用品牌蓝；内部 RecyclerView 拿不到时静默跳过。
+        // post 到布局后，避开 adapter 尚未挂载的冷启动首帧。
+        pager.post {
+            try {
+                val rv = pager.getChildAt(0)
+                        as? androidx.recyclerview.widget.RecyclerView ?: return@post
+                rv.edgeEffectFactory =
+                    object : androidx.recyclerview.widget.RecyclerView.EdgeEffectFactory() {
+                        override fun createEdgeEffect(
+                            view: View, direction: Int
+                        ): android.widget.EdgeEffect =
+                            android.widget.EdgeEffect(view.context).apply {
+                                color = 0xFF2F6FED.toInt()
+                            }
+                    }
+            } catch (_: Throwable) { }
+        }
     }
 
     /**
@@ -1082,7 +1121,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun updatePagerInput(pos: Int = pager.currentItem) {
         // currentZoom 是全局值、切页不重置；按当前页真实倍率判断，
-        // 否则放大后翻到下一页仍会误禁横向翻页。
+        // 否则放大后翻到下一页仍会误禁翻页。
+        // v26：竖屏 VERTICAL 下放大态同样要关掉 pager 的纵向滚动，
+        // 否则页内平移会被 pager 抢走；1x 时上下滑翻页与横向滑翻页都可用。
         val z = adapter?.zoomOf(pos) ?: 1f
         pager.isUserInputEnabled = state.browse && z <= 1.01f
         refreshZoomReset(pos)
