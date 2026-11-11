@@ -310,7 +310,8 @@ class PagesAdapter(
 
                 if (primaryChanged || hostChanged) {
                     // 先保留归一化阅读位置，再按新边界还原，防止栏显隐改变阅读锚点。
-                    val savedViewport = h.zoom.pageViewportState()
+                    val savedViewport = pageViewportProvider?.invoke(h.boundLogical)
+                        ?: h.zoom.pageViewportState()
                     h.zoom.baseContentW = w
                     h.zoom.baseContentH = ht
                     h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
