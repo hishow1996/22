@@ -1,26 +1,67 @@
 package com.moye.pdfink
 
+/** A page's layout rectangle expressed in its ZoomHost coordinates. */
+data class PageFrame(
+    val left: Float,
+    val top: Float,
+    val width: Int,
+    val height: Int
+) {
+    val right: Float get() = left + width.coerceAtLeast(0)
+    val bottom: Float get() = top + height.coerceAtLeast(0)
+}
+
+/** Geometry computed independently for one page, from the shared spread gesture. */
+data class PageViewportMapping(
+    val logicalWidth: Int,
+    val logicalHeight: Int,
+    val originX: Float,
+    val originY: Float,
+    val visibleLeft: Float,
+    val visibleTop: Float,
+    val visibleWidth: Int,
+    val visibleHeight: Int
+)
+
 /**
- * 一页一套，绝不共享：ViewPager2 同时存在多个 ZoomHost，
- * 用单例会让相邻页的放大倍数 / 平移量互相串。
- *
- * 全部由 ZoomHost.applyTransform() 统一计算：它同时知道宿主视口尺寸
- * (width/height) 与页面基准尺寸 (baseContentW/H)，子 View 只需照抄，
- * 不再各自推算 —— 否则横屏 WIDTH 下页面比宿主高，TiledPageView 会按
- * 自身高度取可见块，只画到前几行、下半页永远看不到。
+ * One page / spread's drawing transform.
+ * The actual zoom and pan are shared by a spread, but each page owns a distinct instance.
  */
 class Viewport {
-    @Volatile var scale = 1f      // 真实倍率（连续）
-    @Volatile var bucket = 1f     // bucket 是栅格清晰度倍率；scale 是实际显示倍率，二者独立。
-    @Volatile var lw = 0          // 逻辑画布宽 = baseW * bucket
-    @Volatile var lh = 0          // 逻辑画布高 = baseH * bucket
-    @Volatile var originX = 0f    // 绘制原点：子 View 局部 (0,0) 对应的逻辑 X
-    @Volatile var originY = 0f    // 绘制原点：子 View 局部 (0,0) 对应的逻辑 Y
-    @Volatile var visLeft = 0f    // 可见逻辑窗左上角（= -逻辑画布在宿主中的偏移）
+    @Volatile var scale = 1f
+    @Volatile var bucket = 1f
+    @Volatile var lw = 0
+    @Volatile var lh = 0
+    @Volatile var originX = 0f
+    @Volatile var originY = 0f
+    @Volatile var visLeft = 0f
     @Volatile var visTop = 0f
-    @Volatile var visW = 0        // 可见窗口宽（宿主视口）
-    @Volatile var visH = 0        // 可见窗口高（宿主视口）
-    // origin 用于 canvas.translate，visLeft/visTop 用于挑要渲染的块。
-    // 两者不相等：页面基准框在宿主里居中时 oy=(hostH-bh)/2，
-    // 横屏 WIDTH「回页顶」下差 364px，混用会把可见窗算到页面外。
+    @Volatile var visW = 0
+    @Volatile var visH = 0
+}
+
+/** Allowed horizontal or vertical translation after applying the shared zoom. */
+data class TranslationRange(
+    val minimum: Float = 0f,
+    val maximum: Float = 0f
+) {
+    val hasMovement: Boolean get() = maximum - minimum > 0.5f
+    val maxAbs: Float get() = maxOf(kotlin.math.abs(minimum), kotlin.math.abs(maximum))
+
+    fun clamp(value: Float): Float = value.coerceIn(minimum, maximum)
+
+    /** Keep normalized -1..1 session values; zero means centered in the allowed range. */
+    fun fraction(offset: Float): Float {
+        if (!hasMovement) return 0f
+        val center = (minimum + maximum) * 0.5f
+        val half = (maximum - minimum) * 0.5f
+        return ((clamp(offset) - center) / half).coerceIn(-1f, 1f)
+    }
+
+    fun offset(fraction: Float): Float {
+        if (!hasMovement) return 0f
+        val center = (minimum + maximum) * 0.5f
+        val half = (maximum - minimum) * 0.5f
+        return center + half * fraction.coerceIn(-1f, 1f)
+    }
 }

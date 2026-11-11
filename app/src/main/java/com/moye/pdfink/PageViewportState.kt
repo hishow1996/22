@@ -1,5 +1,8 @@
 package com.moye.pdfink
 
+import kotlin.math.ceil
+import kotlin.math.roundToInt
+
 /**
  * 每页的缩放与滚动状态。panX / panY 是当前可移动范围的归一化比例，
  * 不保存像素值；没有滚动范围的模式下也保留最近位置，切回适宽时可恢复。
@@ -42,6 +45,69 @@ object ZoomTransform {
 
     fun renderToDisplayFactor(scale: Float, bucket: Float): Float =
         if (bucket <= 0f) 1f else scale / bucket
+
+    /**
+     * Calculate tile and ink coordinates for one child page.
+     * Scale is anchored at the ZoomHost center, so differently-sized pages
+     * in one spread follow the same gesture without sharing local dimensions.
+     */
+    fun pageViewportMapping(
+        hostWidth: Int,
+        hostHeight: Int,
+        frame: PageFrame,
+        scale: Float,
+        bucket: Float,
+        translationX: Float,
+        translationY: Float
+    ): PageViewportMapping {
+        val safeScale = scale.takeIf { it.isFinite() && it > 0f } ?: 1f
+        val safeBucket = bucket.takeIf { it.isFinite() && it > 0f } ?: 1f
+        val hostW = hostWidth.coerceAtLeast(1)
+        val hostH = hostHeight.coerceAtLeast(1)
+        val displayFactor = safeScale / safeBucket
+
+        val displayedLeft = hostW * 0.5f +
+            (frame.left - hostW * 0.5f) * safeScale + translationX
+        val displayedTop = hostH * 0.5f +
+            (frame.top - hostH * 0.5f) * safeScale + translationY
+
+        return PageViewportMapping(
+            logicalWidth = (frame.width.coerceAtLeast(1) * safeBucket)
+                .roundToInt().coerceAtLeast(1),
+            logicalHeight = (frame.height.coerceAtLeast(1) * safeBucket)
+                .roundToInt().coerceAtLeast(1),
+            originX = ZoomTransform.canvasTranslationOffset(frame.left, displayedLeft),
+            originY = ZoomTransform.canvasTranslationOffset(frame.top, displayedTop),
+            visibleLeft = -displayedLeft / displayFactor,
+            visibleTop = -displayedTop / displayFactor,
+            visibleWidth = ceil(hostW / displayFactor).toInt().coerceAtLeast(1),
+            visibleHeight = ceil(hostH / displayFactor).toInt().coerceAtLeast(1)
+        )
+    }
+
+    /** Translation range for one page or a combined two-page / question-draft spread. */
+    fun translationRange(
+        viewportSize: Int,
+        contentStart: Float,
+        contentEnd: Float,
+        scale: Float
+    ): TranslationRange {
+        val size = viewportSize.coerceAtLeast(0)
+        if (size <= 0 || !contentStart.isFinite() || !contentEnd.isFinite() ||
+            contentEnd <= contentStart
+        ) return TranslationRange()
+
+        val safeScale = scale.takeIf { it.isFinite() && it > 0f } ?: 1f
+        val center = size * 0.5f
+        val displayedStart = center + (contentStart - center) * safeScale
+        val displayedEnd = center + (contentEnd - center) * safeScale
+        if (displayedEnd - displayedStart <= size) return TranslationRange()
+
+        return TranslationRange(
+            minimum = size - displayedEnd,
+            maximum = -displayedStart
+        )
+    }
 
     /** Canvas 的 translate 在 scale 前执行，故平移量保留屏幕像素单位。 */
     fun canvasTranslationOffset(baseOrigin: Float, visibleOrigin: Float): Float =

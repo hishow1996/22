@@ -105,4 +105,62 @@ class ZoomTransformTest {
         }
     }
 
+    @Test
+    fun twoPagesWithDifferentSizesKeepIndependentTileAndInkFrames() {
+        val hostW = 1200
+        val hostH = 800
+        val left = PageFrame(20f, 90f, 520, 620)
+        val right = PageFrame(560f, 170f, 620, 460)
+        val scale = 1.65f
+        val bucket = 1.5f
+        val tx = 54f
+        val ty = -32f
+
+        val first = ZoomTransform.pageViewportMapping(
+            hostW, hostH, left, scale, bucket, tx, ty
+        )
+        val second = ZoomTransform.pageViewportMapping(
+            hostW, hostH, right, scale, bucket, tx, ty
+        )
+
+        assertEquals(780, first.logicalWidth)
+        assertEquals(930, second.logicalWidth)
+        assertEquals(930, first.logicalHeight)
+        assertEquals(690, second.logicalHeight)
+        assertTrue(first.originX != second.originX)
+        assertTrue(first.originY != second.originY)
+        assertTrue(first.visibleLeft != second.visibleLeft)
+        assertEquals(first.visibleWidth, second.visibleWidth)
+        assertEquals(first.visibleHeight, second.visibleHeight)
+    }
+
+    @Test
+    fun sharedSpreadPanBoundsIncludeBothDifferentlySizedPages() {
+        val first = PageFrame(20f, 110f, 520, 580)
+        val second = PageFrame(560f, 170f, 620, 460)
+        val range = ZoomTransform.translationRange(
+            1200, minOf(first.left, second.left), maxOf(first.right, second.right), 1.65f
+        )
+
+        assertTrue(range.hasMovement)
+        assertTrue(range.minimum < 0f)
+        assertTrue(range.maximum > 0f)
+        assertEquals(0f, range.clamp(0f), 0.0001f)
+        assertEquals(1f, range.fraction(range.maximum), 0.0001f)
+        assertEquals(range.maximum, range.offset(1f), 0.0001f)
+    }
+
+    @Test
+    fun smallerContentDoesNotAcquireFalsePanRange() {
+        val range = ZoomTransform.translationRange(
+            viewportSize = 1200,
+            contentStart = 200f,
+            contentEnd = 1000f,
+            scale = 1f
+        )
+        assertEquals(false, range.hasMovement)
+        assertEquals(0f, range.minimum, 0.0001f)
+        assertEquals(0f, range.maximum, 0.0001f)
+    }
+
 }

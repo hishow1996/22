@@ -14,9 +14,8 @@ import kotlin.math.hypot
  * 在 dispatch 层截获多指事件，因此不受子 View 的 disallowIntercept 影响。
  * 变换施加在 content 上，ViewGroup 会把触摸坐标逆变换给 InkView，笔迹自动跟随。
  *
- * v7：WIDTH 模式下页面比容器高，panExtraY > 0，scale=1 时也允许上下平移；
- * 抬手不再把 tx/ty 清零，改由 applyTransform 按边界钳制。单指仍照常写字，
- * 平移靠双指同向拖动（spreadDelta 小，只走 tx/ty 分支），零新手势、零冲突。
+ * WIDTH 模式下页面比容器高，仍允许 1× 上下平移；
+ * 平移范围根据当前显示页面组合的真实边界计算。
  */
 class ZoomHost @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -30,12 +29,10 @@ class ZoomHost @JvmOverloads constructor(
     /** 缩放 / 浏览拖动期间暂停高清图块补渲染，结束后再恢复。 */
     var onViewportGestureChanged: ((Boolean) -> Unit)? = null
 
-    /** 页面超出容器的像素（未缩放时），由 PagesAdapter 在 layout 后写入。 */
-    @Volatile var panExtraX = 0f
-    @Volatile var panExtraY = 0f
-
-    /** 每页独有：题目底图与笔迹层读同一组 scale / pan，放大后像素级对齐。 */
+    /** 主页面底图与笔迹层共用；右页、草稿页各自维护页面局部几何。 */
     val viewport = Viewport()
+    val secondViewport = Viewport()
+    val draftViewport = Viewport()
     /** 变换数值变了就通知各层 invalidate。 */
     var onViewportChanged: (() -> Unit)? = null
     /** 倍率偏离 1× 时通知 InkView 切换矢量重绘模式。 */
@@ -47,6 +44,9 @@ class ZoomHost @JvmOverloads constructor(
     var baseContentH = 0
 
     private var content: View? = null
+    private var primaryPage: View? = null
+    private var secondaryPage: View? = null
+    private var draftPage: View? = null
     private var scale = 1f
     private var lastNotifiedScale = Float.NaN
     private var tx = 0f
@@ -117,6 +117,9 @@ class ZoomHost @JvmOverloads constructor(
     override fun onFinishInflate() {
         super.onFinishInflate()
         content = findViewById(R.id.spreadRoot)
+        primaryPage = findViewById(R.id.pageContainer)
+        secondaryPage = findViewById(R.id.secondContainer)
+        draftPage = findViewById(R.id.draftContainer)
         val d = resources.displayMetrics.density
         dp70 = 70f * d
         dp16 = 16f * d
@@ -321,59 +324,103 @@ class ZoomHost @JvmOverloads constructor(
         }
     }
 
-    /**
-     * 把 scale / tx / ty 换算成「逻辑画布 + 可见原点」，一次性写进 viewport。
-     * 子 View 只照抄这组数，不各自推算；否则横屏 WIDTH 下页面比宿主高，
-     * TiledPageView 按自身高度取块就会只画顶部几行。
-     */
-    private fun syncViewport(tx0: Float, ty0: Float) {
-        val actualScale = scale.coerceIn(ZoomTransform.MIN_SCALE, 4f)
-        val renderScale = TiledPageView.bucket(actualScale)
-        val bw = baseContentW.coerceAtLeast(1)
-        val bh = baseContentH.coerceAtLeast(1)
-        val lw = (bw * renderScale).toInt().coerceAtLeast(1)
-        val lh = (bh * renderScale).toInt().coerceAtLeast(1)
-        // 实际显示几何只由连续倍率控制；renderScale 只决定 PDF 的采样清晰度。
-        val displayW = bw * actualScale
-        val displayH = bh * actualScale
-        val lx = (width - displayW) * 0.5f + tx0
-        val ly = (height - displayH) * 0.5f + ty0
-        // 页面基准框在宿主中居中（gravity=center），子 View 局部 (0,0) 落在这里。
-        val ox = (width - bw) * 0.5f
-        val oy = (height - bh) * 0.5f
-        val renderPerDisplay = ZoomTransform.displayToRender(1f, actualScale, renderScale)
-        viewport.scale = actualScale
-        viewport.bucket = renderScale
-        viewport.lw = lw
-        viewport.lh = lh
-        // Canvas 先 translate 再 scale：平移量保持屏幕像素，不乘图块倍率。
-        // 可见窗口 left/top 另按 renderPerDisplay 换算到图块坐标系。
-        viewport.originX = ZoomTransform.canvasTranslationOffset(ox, lx)
-        viewport.originY = ZoomTransform.canvasTranslationOffset(oy, ly)
-        // 分块索引用栅格坐标，所以将屏幕窗口换算到 renderScale 坐标空间。
-        viewport.visLeft = -lx * renderPerDisplay
-        viewport.visTop = -ly * renderPerDisplay
-        viewport.visW = (width * renderPerDisplay).toInt().coerceAtLeast(1)
-        viewport.visH = (height * renderPerDisplay).toInt().coerceAtLeast(1)
+    /** Return a visible child's measured frame in ZoomHost coordinates. */
+    fun pageFrameFor(view: View?): PageFrame? {
+        if (view == null || view.visibility != View.VISIBLE ||
+            view.width <= 0 || view.height <= 0
+        ) return null
+        val root = content ?: return null
+        return PageFrame(
+            root.left + root.translationX + view.left + view.translationX,
+            root.top + root.translationY + view.top + view.translationY,
+            view.width,
+            view.height
+        )
     }
 
-    private fun visualScale(): Float = scale
+    /** Bounding rectangle of all visible page surfaces in the current spread. */
+    private fun contentBounds(): android.graphics.RectF? {
+        val frames = listOfNotNull(
+            pageFrameFor(primaryPage),
+            pageFrameFor(secondaryPage),
+            pageFrameFor(draftPage)
+        )
+        if (frames.isNotEmpty()) {
+            return android.graphics.RectF(
+                frames.minOf { it.left },
+                frames.minOf { it.top },
+                frames.maxOf { it.right },
+                frames.maxOf { it.bottom }
+            )
+        }
+        if (baseContentW <= 0 || baseContentH <= 0) return null
+        val left = (width - baseContentW) * 0.5f
+        val top = (height - baseContentH) * 0.5f
+        return android.graphics.RectF(
+            left, top, left + baseContentW, top + baseContentH
+        )
+    }
 
-    private fun panLimitX(): Float =
-        ZoomTransform.panLimit(baseContentW, visualScale(), width)
+    private fun translationRangeX(): TranslationRange {
+        val bounds = contentBounds() ?: return TranslationRange()
+        return ZoomTransform.translationRange(width, bounds.left, bounds.right, scale)
+    }
 
-    private fun panLimitY(): Float =
-        ZoomTransform.panLimit(baseContentH, visualScale(), height)
+    private fun translationRangeY(): TranslationRange {
+        val bounds = contentBounds() ?: return TranslationRange()
+        return ZoomTransform.translationRange(height, bounds.top, bounds.bottom, scale)
+    }
+
+    private fun panLimitX(): Float = translationRangeX().maxAbs
+    private fun panLimitY(): Float = translationRangeY().maxAbs
+
+    private fun updatePageViewport(target: Viewport, view: View?, tx0: Float, ty0: Float) {
+        val frame = pageFrameFor(view)
+        if (frame == null || width <= 0 || height <= 0) {
+            target.scale = scale
+            target.bucket = TiledPageView.bucket(scale)
+            target.lw = 0
+            target.lh = 0
+            target.originX = 0f
+            target.originY = 0f
+            target.visLeft = 0f
+            target.visTop = 0f
+            target.visW = 0
+            target.visH = 0
+            return
+        }
+
+        val renderScale = TiledPageView.bucket(scale)
+        val mapping = ZoomTransform.pageViewportMapping(
+            width, height, frame, scale, renderScale, tx0, ty0
+        )
+        target.scale = scale
+        target.bucket = renderScale
+        target.lw = mapping.logicalWidth
+        target.lh = mapping.logicalHeight
+        target.originX = mapping.originX
+        target.originY = mapping.originY
+        target.visLeft = mapping.visibleLeft
+        target.visTop = mapping.visibleTop
+        target.visW = mapping.visibleWidth
+        target.visH = mapping.visibleHeight
+    }
+
+    private fun syncViewport(tx0: Float, ty0: Float) {
+        updatePageViewport(viewport, primaryPage, tx0, ty0)
+        updatePageViewport(secondViewport, secondaryPage, tx0, ty0)
+        updatePageViewport(draftViewport, draftPage, tx0, ty0)
+    }
 
     private fun applyTransform() {
         val v = content ?: return
-        // 内容超出量随 scale 放大；scale=1 且 panExtra=0 时上限为 0，等价原行为
-        val limX = panLimitX()
-        val limY = panLimitY()
-        tx = tx.coerceIn(-limX, limX)
-        ty = ty.coerceIn(-limY, limY)
-        if (limX > 0f) rememberedPanX = ZoomTransform.fraction(tx, limX)
-        if (limY > 0f) rememberedPanY = ZoomTransform.fraction(ty, limY)
+        // 以当前可见页面组合的整体边界限位，双页时不再只参考左页尺寸。
+        val rangeX = translationRangeX()
+        val rangeY = translationRangeY()
+        tx = rangeX.clamp(tx)
+        ty = rangeY.clamp(ty)
+        if (rangeX.hasMovement) rememberedPanX = rangeX.fraction(tx)
+        if (rangeY.hasMovement) rememberedPanY = rangeY.fraction(ty)
         syncViewport(tx, ty)
         if (legacyViewScale) {
             // 保留旧式变换兼容入口；常规 PDF 页面已统一走自绘 viewport。
@@ -405,17 +452,20 @@ class ZoomHost @JvmOverloads constructor(
     }
 
     /**
-     * toTop：WIDTH 模式下「1:1 并回页顶」。内容比容器高时 gravity 居中，
-     * ty = panExtraY/2（正值向下）正好把页面顶边推到容器顶边。
+     * toTop：WIDTH 模式下「1:1 并回页顶」。按当前页面组合的有效边界
+     * 将内容顶边对齐到阅读视口顶端。
      */
     fun reset(silent: Boolean = false, toTop: Boolean = false) {
         flushTransform()
         pendingResizeViewportState = null
         scale = 1f
         tx = 0f
-        ty = if (toTop) panExtraY.coerceAtLeast(0f) * 0.5f else 0f
+        val initialYRange = translationRangeY()
+        ty = if (toTop && initialYRange.hasMovement) initialYRange.maximum else 0f
         rememberedPanX = 0f
-        rememberedPanY = if (toTop && panLimitY() > 0f) 1f else 0f
+        rememberedPanY = if (toTop && initialYRange.hasMovement) {
+            initialYRange.fraction(ty)
+        } else 0f
         val v = content
         if (v != null) {
             v.scaleX = 1f
@@ -441,7 +491,7 @@ class ZoomHost @JvmOverloads constructor(
     fun toggleSmartZoom(focusX: Float, focusY: Float) {
         flushTransform()
         if (kotlin.math.abs(scale - 1f) > 0.05f) {
-            reset(silent = false, toTop = panExtraY > 0f)
+            reset(silent = false, toTop = translationRangeY().hasMovement)
         } else {
             zoomTo(1.65f, focusX, focusY)
         }
@@ -473,8 +523,8 @@ class ZoomHost @JvmOverloads constructor(
         scale = state.zoom
         rememberedPanX = state.panX
         rememberedPanY = state.panY
-        tx = ZoomTransform.offset(panLimitX(), rememberedPanX)
-        ty = ZoomTransform.offset(panLimitY(), rememberedPanY)
+        tx = translationRangeX().offset(rememberedPanX)
+        ty = translationRangeY().offset(rememberedPanY)
         applyTransform()
         notifyScaleIfNeeded(force = true)
         onViewportSettled?.invoke()
@@ -492,6 +542,17 @@ class ZoomHost @JvmOverloads constructor(
         onViewportSettled?.invoke()
     }
 
-    /** panExtra 由外部写入后，按新边界重新钳一次，避免露出空白。 */
-    fun refreshPanBounds() { flushTransform(); applyTransform() }
+    /**
+     * Child frames can change independently (for example, only the right page
+     * receives its real cached ratio). Restore normalized pan against new bounds.
+     */
+    fun refreshPageGeometry() {
+        flushTransform()
+        tx = translationRangeX().offset(rememberedPanX)
+        ty = translationRangeY().offset(rememberedPanY)
+        applyTransform()
+        onViewportSettled?.invoke()
+    }
+
+    fun refreshPanBounds() { refreshPageGeometry() }
 }

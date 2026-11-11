@@ -67,10 +67,9 @@ class PagesAdapter(
         var boundLogical = -1
         var lastHostW = -1
         var lastHostH = -1
-        var lastPrimaryW = -1
-        var lastPrimaryH = -1
-        var lastSecondW = -1
-        var lastSecondH = -1
+        var lastPrimaryFrame: PageFrame? = null
+        var lastSecondFrame: PageFrame? = null
+        var lastDraftFrame: PageFrame? = null
     }
 
     /** 双页模式下每个 item 是一组两页，itemCount 减半。 */
@@ -90,10 +89,9 @@ class PagesAdapter(
         h.boundPage = position
         h.lastHostW = -1
         h.lastHostH = -1
-        h.lastPrimaryW = -1
-        h.lastPrimaryH = -1
-        h.lastSecondW = -1
-        h.lastSecondH = -1
+        h.lastPrimaryFrame = null
+        h.lastSecondFrame = null
+        h.lastDraftFrame = null
         // 双页模式：一个 item 承载 p0 与 p0+1 两个逻辑页，键不重叠
         val p0 = DisplayMode.logical(
             if (doublePage) DisplayMode.DOUBLE else DisplayMode.FIT, true, position)
@@ -145,12 +143,11 @@ class PagesAdapter(
             h.secondInk.hiResMode = hi
             h.draftInk.hiResMode = hi
         }
-        val vp = h.zoom.viewport
-        h.image.viewport = vp
-        h.secondImage.viewport = vp
-        h.ink.viewport = vp
-        h.secondInk.viewport = vp
-        h.draftInk.viewport = vp
+        h.image.viewport = h.zoom.viewport
+        h.ink.viewport = h.zoom.viewport
+        h.secondImage.viewport = h.zoom.secondViewport
+        h.secondInk.viewport = h.zoom.secondViewport
+        h.draftInk.viewport = h.zoom.draftViewport
 
         h.pageContainer.layoutParams = params()
         h.secondContainer.layoutParams = params().apply {
@@ -239,9 +236,6 @@ class PagesAdapter(
             h.zoom.baseContentW = w
             h.zoom.baseContentH = ht
 
-            // 按页面与实际阅读视口的尺寸差计算平移余量；完整页适配时余量为 0。
-            h.zoom.panExtraX = (w - h.zoom.width).coerceAtLeast(0).toFloat()
-            h.zoom.panExtraY = (ht - h.zoom.height).coerceAtLeast(0).toFloat()
             val remembered = pageViewportProvider?.invoke(p0)
             when {
                 remembered != null -> h.zoom.setPageViewportState(remembered)
@@ -336,55 +330,58 @@ class PagesAdapter(
                 h.bindingAdapterPosition == RecyclerView.NO_POSITION
             ) continue
 
-            val w = h.pageContainer.width
-            val ht = h.pageContainer.height
+            val primaryFrame = h.zoom.pageFrameFor(h.pageContainer) ?: continue
             val hw = h.zoom.width
             val hh = h.zoom.height
-            if (w <= 0 || ht <= 0 || hw <= 0 || hh <= 0) continue
+            if (hw <= 0 || hh <= 0) continue
 
-            val secondVisible = h.secondContainer.visibility == View.VISIBLE
-            val secondW = if (secondVisible) h.secondContainer.width else 0
-            val secondH = if (secondVisible) h.secondContainer.height else 0
-            val primaryChanged = w != h.lastPrimaryW || ht != h.lastPrimaryH
-            val secondChanged = secondVisible &&
-                (secondW != h.lastSecondW || secondH != h.lastSecondH)
+            val secondFrame = h.zoom.pageFrameFor(h.secondContainer)
+            val draftFrame = h.zoom.pageFrameFor(h.draftContainer)
             val hostChanged = hw != h.lastHostW || hh != h.lastHostH
+            val primaryChanged = primaryFrame != h.lastPrimaryFrame
+            val secondChanged = secondFrame != h.lastSecondFrame
+            val draftChanged = draftFrame != h.lastDraftFrame
+            if (!primaryChanged && !secondChanged && !draftChanged && !hostChanged) {
+                continue
+            }
 
-            if (!primaryChanged && !secondChanged && !hostChanged) continue
-
-            if (primaryChanged || hostChanged) {
-                // 先保留归一化阅读位置，再按新边界还原，防止栏显隐改变阅读锚点。
-                val savedViewport = h.zoom.takePendingResizeViewportState()
+            val savedViewport = if (primaryChanged || hostChanged) {
+                // 保留归一化阅读位置；页面尺寸或宿主变化后按新边界还原。
+                h.zoom.takePendingResizeViewportState()
                     ?: pageViewportProvider?.invoke(h.boundLogical)
                     ?: h.zoom.pageViewportState()
-                h.zoom.baseContentW = w
-                h.zoom.baseContentH = ht
-                h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
-                h.zoom.panExtraY = (ht - hh).coerceAtLeast(0).toFloat()
-                h.zoom.setPageViewportState(savedViewport)
+            } else null
+
+            if (primaryChanged || hostChanged) {
+                h.zoom.baseContentW = primaryFrame.width
+                h.zoom.baseContentH = primaryFrame.height
             }
 
             if (primaryChanged) {
                 h.image.bindTiled(
-                    repo, h.boundLogical, w, ht, state.tint, state.brightness,
-                    state.pageRotation, h.boundPage == activePosition
-                )
-            }
-
-            if (secondChanged && secondW > 0 && secondH > 0) {
-                h.secondImage.bindTiled(
-                    repo, h.boundLogical + 1, secondW, secondH,
+                    repo, h.boundLogical, primaryFrame.width, primaryFrame.height,
                     state.tint, state.brightness, state.pageRotation,
                     h.boundPage == activePosition
                 )
             }
 
+            if (secondChanged && secondFrame != null) {
+                h.secondImage.bindTiled(
+                    repo, h.boundLogical + 1, secondFrame.width, secondFrame.height,
+                    state.tint, state.brightness, state.pageRotation,
+                    h.boundPage == activePosition
+                )
+            }
+
+            // 右页或草稿页单独改变尺寸时，也更新该页视口与整组平移边界。
+            if (savedViewport != null) h.zoom.setPageViewportState(savedViewport)
+            else h.zoom.refreshPageGeometry()
+
             h.lastHostW = hw
             h.lastHostH = hh
-            h.lastPrimaryW = w
-            h.lastPrimaryH = ht
-            h.lastSecondW = secondW
-            h.lastSecondH = secondH
+            h.lastPrimaryFrame = primaryFrame
+            h.lastSecondFrame = secondFrame
+            h.lastDraftFrame = draftFrame
         }
     }
 
@@ -426,7 +423,7 @@ class PagesAdapter(
     }
 
     fun resetZoom(page: Int) {
-        // v15：所有模式都回 1:1 并回页顶（FIT 下 panExtra=0，等价归零）
+        // v15：所有模式都回 1:1 并回页顶（FIT 下没有额外纵向平移范围）
         holders[page]?.zoom?.reset(toTop = true)
     }
 
