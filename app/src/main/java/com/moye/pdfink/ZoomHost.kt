@@ -81,6 +81,32 @@ class ZoomHost @JvmOverloads constructor(
     private var lastSingleX = 0f
     private var lastSingleY = 0f
     private var singlePanning = false
+    private var transformFramePosted = false
+    private var transformDirty = false
+    private val transformFrame = Runnable {
+        transformFramePosted = false
+        if (transformDirty) {
+            transformDirty = false
+            applyTransform()
+        }
+    }
+
+    private fun scheduleTransform() {
+        transformDirty = true
+        if (!transformFramePosted) {
+            transformFramePosted = true
+            postOnAnimation(transformFrame)
+        }
+    }
+
+    private fun flushTransform() {
+        if (transformFramePosted) removeCallbacks(transformFrame)
+        transformFramePosted = false
+        if (transformDirty) {
+            transformDirty = false
+            applyTransform()
+        }
+    }
 
     override fun onFinishInflate() {
         super.onFinishInflate()
@@ -123,6 +149,7 @@ class ZoomHost @JvmOverloads constructor(
         }
         val multi = ev.pointerCount >= 2
         if (multi && !zooming) {
+            flushTransform()
             onViewportGestureChanged?.invoke(true)
             // 多指开始才临时锁父级：双指横滑翻页不会被 ViewPager2 抢走
             parent?.requestDisallowInterceptTouchEvent(true)
@@ -140,6 +167,7 @@ class ZoomHost @JvmOverloads constructor(
             if (ev.actionMasked == MotionEvent.ACTION_UP ||
                 ev.actionMasked == MotionEvent.ACTION_CANCEL
             ) {
+                flushTransform()
                 zooming = false
                 startDist = 0f
                 parent?.requestDisallowInterceptTouchEvent(!browseMode)
@@ -172,13 +200,14 @@ class ZoomHost @JvmOverloads constructor(
                     if (singlePanning) {
                         ty += dy
                         if (zoomed) tx += dx   // 放大后横向拖动 = 平移，不是翻页
-                        applyTransform()
+                        scheduleTransform()
                     }
                     lastSingleX = ev.x
                     lastSingleY = ev.y
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (singlePanning) {
+                        flushTransform()
                         singlePanning = false
                         parent?.requestDisallowInterceptTouchEvent(false)
                         onViewportGestureChanged?.invoke(false)
@@ -231,7 +260,7 @@ class ZoomHost @JvmOverloads constructor(
                     ty += dy
                     startMidX = mx
                     startMidY = my
-                    applyTransform()
+                    scheduleTransform()
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -331,6 +360,7 @@ class ZoomHost @JvmOverloads constructor(
      * ty = panExtraY/2（正值向下）正好把页面顶边推到容器顶边。
      */
     fun reset(silent: Boolean = false, toTop: Boolean = false) {
+        flushTransform()
         scale = 1f
         tx = 0f
         ty = if (toTop) panExtraY.coerceAtLeast(0f) * 0.5f else 0f
@@ -353,6 +383,7 @@ class ZoomHost @JvmOverloads constructor(
 
     /** FILL 初始靠左：讲义文字多从左边起，比居中少裁掉半行正文。 */
     fun alignStart() {
+        flushTransform()
         tx = panLimitX()
         applyTransform()
         onViewportSettled?.invoke()
@@ -366,6 +397,7 @@ class ZoomHost @JvmOverloads constructor(
      * 双击切换阅读倍率。缩放以双击点为锚点，尽量让目标文字留在原位置。
      */
     fun toggleSmartZoom(focusX: Float, focusY: Float) {
+        flushTransform()
         if (kotlin.math.abs(scale - 1f) > 0.05f) {
             reset(silent = false, toTop = panExtraY > 0f)
         } else {
@@ -393,6 +425,7 @@ class ZoomHost @JvmOverloads constructor(
     ).normalized()
 
     fun setPageViewportState(saved: PageViewportState) {
+        flushTransform()
         val state = saved.normalized()
         scale = state.zoom
         rememberedPanX = state.panX
@@ -406,6 +439,7 @@ class ZoomHost @JvmOverloads constructor(
 
     /** 会话恢复：还原倍率与旧版像素平移量，兼容 v17 及更早版本。 */
     fun setScale(s: Float, px: Float = 0f, py: Float = 0f) {
+        flushTransform()
         scale = s.coerceIn(ZoomTransform.MIN_SCALE, 4f)
         tx = px
         ty = py
@@ -415,5 +449,5 @@ class ZoomHost @JvmOverloads constructor(
     }
 
     /** panExtra 由外部写入后，按新边界重新钳一次，避免露出空白。 */
-    fun refreshPanBounds() { applyTransform() }
+    fun refreshPanBounds() { flushTransform(); applyTransform() }
 }

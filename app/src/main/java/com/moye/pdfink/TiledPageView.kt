@@ -105,7 +105,10 @@ class TiledPageView @JvmOverloads constructor(
         val transitionScaleY: Float,
         val transitionViewportFactorX: Float,
         val transitionViewportFactorY: Float
-    )
+    ) {
+        var lastSortedLeft = Float.NaN
+        var lastSortedTop = Float.NaN
+    }
 
     var viewport: Viewport? = null
 
@@ -276,11 +279,14 @@ class TiledPageView @JvmOverloads constructor(
         previewGrid = next
     }
 
-    private fun updatePriority(
+    private fun isVisible(
+        spec: TileSpec, left: Float, top: Float, width: Int, height: Int
+    ): Boolean = spec.x < left + width && spec.x + spec.width > left &&
+        spec.y < top + height && spec.y + spec.height > top
+
+    private fun updateDistance(
         spec: TileSpec, left: Float, top: Float, width: Int, height: Int
     ) {
-        spec.visible = spec.x < left + width && spec.x + spec.width > left &&
-            spec.y < top + height && spec.y + spec.height > top
         val dx = spec.x + spec.width * 0.5f - (left + width * 0.5f)
         val dy = spec.y + spec.height * 0.5f - (top + height * 0.5f)
         spec.distance = abs(dx) + abs(dy)
@@ -361,33 +367,63 @@ class TiledPageView @JvmOverloads constructor(
         val top = vp.visTop
         val width = vp.visW.coerceAtLeast(1)
         val height = vp.visH.coerceAtLeast(1)
-        plan.specs.forEach { updatePriority(it, left, top, width, height) }
-        plan.specs.sortWith(tileOrder)
+        var visibilityChanged = false
+
+        fun updateVisibility(
+            specs: List<TileSpec>, x: Float, y: Float, w: Int, h: Int
+        ) {
+            for (spec in specs) {
+                val visible = isVisible(spec, x, y, w, h)
+                if (visible != spec.visible) visibilityChanged = true
+                spec.visible = visible
+            }
+        }
 
         val factor = PREVIEW_BUCKET / vp.bucket.coerceAtLeast(PREVIEW_BUCKET)
         val previewLeft = left * factor
         val previewTop = top * factor
         val previewWidth = (width * factor).toInt().coerceAtLeast(1)
         val previewHeight = (height * factor).toInt().coerceAtLeast(1)
-        plan.previewSpecs.forEach {
-            updatePriority(it, previewLeft, previewTop, previewWidth, previewHeight)
-        }
-        plan.previewSpecs.sortWith(tileOrder)
+        val transitionLeft = left * plan.transitionViewportFactorX
+        val transitionTop = top * plan.transitionViewportFactorY
+        val transitionWidth = (width * plan.transitionViewportFactorX)
+            .toInt().coerceAtLeast(1)
+        val transitionHeight = (height * plan.transitionViewportFactorY)
+            .toInt().coerceAtLeast(1)
 
+        updateVisibility(plan.specs, left, top, width, height)
+        updateVisibility(plan.previewSpecs, previewLeft, previewTop, previewWidth, previewHeight)
         if (plan.transitionPreviewSpecs.isNotEmpty()) {
-            val transitionLeft = left * plan.transitionViewportFactorX
-            val transitionTop = top * plan.transitionViewportFactorY
-            val transitionWidth = (width * plan.transitionViewportFactorX)
-                .toInt().coerceAtLeast(1)
-            val transitionHeight = (height * plan.transitionViewportFactorY)
-                .toInt().coerceAtLeast(1)
-            plan.transitionPreviewSpecs.forEach {
-                updatePriority(
-                    it, transitionLeft, transitionTop, transitionWidth, transitionHeight
-                )
-            }
-            plan.transitionPreviewSpecs.sortWith(tileOrder)
+            updateVisibility(
+                plan.transitionPreviewSpecs,
+                transitionLeft, transitionTop, transitionWidth, transitionHeight
+            )
         }
+
+        // 同一图块集合内，小幅移动不必每帧重算距离和排序；只有可见集合变化
+        // 或视口移动达到一段距离时才刷新优先级，减少横屏滑动时的 CPU 开销。
+        val movedEnough = plan.lastSortedLeft.isNaN() ||
+            abs(left - plan.lastSortedLeft) >= TILE_H * 0.2f ||
+            abs(top - plan.lastSortedTop) >= TILE_H * 0.2f
+        if (!visibilityChanged && !movedEnough) return
+
+        fun updateAndSort(
+            specs: MutableList<TileSpec>, x: Float, y: Float, w: Int, h: Int
+        ) {
+            specs.forEach { updateDistance(it, x, y, w, h) }
+            specs.sortWith(tileOrder)
+        }
+
+        updateAndSort(plan.specs, left, top, width, height)
+        updateAndSort(plan.previewSpecs, previewLeft, previewTop, previewWidth, previewHeight)
+        if (plan.transitionPreviewSpecs.isNotEmpty()) {
+            updateAndSort(
+                plan.transitionPreviewSpecs,
+                transitionLeft, transitionTop, transitionWidth, transitionHeight
+            )
+        }
+        plan.lastSortedLeft = left
+        plan.lastSortedTop = top
     }
 
     override fun onDraw(canvas: Canvas) {

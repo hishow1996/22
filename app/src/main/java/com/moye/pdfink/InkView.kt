@@ -63,6 +63,24 @@ class InkView @JvmOverloads constructor(
         var startDist: Float = 1f
     )
 
+    private class FloatBuffer(initialCapacity: Int = 64) {
+        private var values = FloatArray(initialCapacity)
+        var size: Int = 0
+            private set
+
+        fun add(value: Float) {
+            if (size == values.size) values = values.copyOf(values.size * 2)
+            values[size++] = value
+        }
+
+        operator fun get(index: Int): Float = values[index]
+        operator fun set(index: Int, value: Float) { values[index] = value }
+        fun clear() { size = 0 }
+        fun getOrElse(index: Int, defaultValue: () -> Float): Float =
+            if (index in 0 until size) values[index] else defaultValue()
+        fun toFloatArray(): FloatArray = values.copyOf(size)
+    }
+
     private var host: Host? = null
     private var key = ""
     private var loadJob: Job? = null
@@ -79,8 +97,11 @@ class InkView @JvmOverloads constructor(
     private var baseC: Canvas? = null
     private var live: Bitmap? = null
     private var liveC: Canvas? = null
-    /** 预测墨迹只存一段线段，onDraw 直画，不再占一张全屏位图。 */
-    private var predSeg: FloatArray? = null
+    /** 预测墨迹复用固定线段缓冲，不在每次 MOVE 中分配新数组。 */
+    private val predSeg = FloatArray(4)
+    private val predictionBounds = FloatArray(4)
+    private var predictionBoundsValid = false
+    private var predictionVisible = false
 
     private var drawing = false
     private var erasing = false
@@ -88,10 +109,12 @@ class InkView @JvmOverloads constructor(
     private var dragMode = 0 // 0 无 1 移动 2 缩放
     private var selection: Selection? = null
 
-    private val livePts = ArrayList<Float>()
-    private val liveWs = ArrayList<Float>()
-    private val erasePts = ArrayList<Float>()
-    private val lassoPts = ArrayList<Float>()
+    private val livePts = FloatBuffer(128)
+    private val liveWs = FloatBuffer(64)
+    private val erasePts = FloatBuffer(64)
+    private val lassoPts = FloatBuffer(128)
+    private val liveShapePoints = FloatArray(4)
+    private val liveShapeWidths = floatArrayOf(1f, 1f)
     private var liveMark: Mark? = null
     private var liveShape = Shapes.FREE
     private var liveLayer = Layers.ANSWER
@@ -109,6 +132,8 @@ class InkView @JvmOverloads constructor(
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val scratch = Path()
+    private val touchMatrix = Matrix()
+    private val touchMatrixValues = FloatArray(9)
     private val clearStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
@@ -200,6 +225,23 @@ class InkView @JvmOverloads constructor(
 
     private fun visible(m: Mark): Boolean = m.layer in (host?.visibleLayers ?: setOf(0))
 
+    private fun indexMark(index: Int, mark: Mark) {
+        if (width <= 0 || height <= 0) return
+        val bounds = GeometryCore.markBounds(mark)
+        val left = (bounds[0] * width).toInt().coerceIn(0, width - 1)
+        val top = (bounds[1] * height).toInt().coerceIn(0, height - 1)
+        val right = (bounds[2] * width).toInt().coerceIn(left, width - 1)
+        val bottom = (bounds[3] * height).toInt().coerceIn(top, height - 1)
+        val x0 = (left / spatialCellPx).toInt()
+        val x1 = (right / spatialCellPx).toInt()
+        val y0 = (top / spatialCellPx).toInt()
+        val y1 = (bottom / spatialCellPx).toInt()
+        for (gy in y0..y1) for (gx in x0..x1) {
+            val cell = gy * spatialColumns + gx
+            spatialIndex.getOrPut(cell) { ArrayList() }.add(index)
+        }
+    }
+
     private fun rebuildSpatialIndex() {
         spatialIndex.clear()
         spatialColumns = ((width / spatialCellPx).toInt() + 1).coerceAtLeast(1)
@@ -207,21 +249,7 @@ class InkView @JvmOverloads constructor(
             spatialReady = false
             return
         }
-        marks.forEachIndexed { index, mark ->
-            val bounds = GeometryCore.markBounds(mark)
-            val left = (bounds[0] * width).toInt().coerceIn(0, width - 1)
-            val top = (bounds[1] * height).toInt().coerceIn(0, height - 1)
-            val right = (bounds[2] * width).toInt().coerceIn(left, width - 1)
-            val bottom = (bounds[3] * height).toInt().coerceIn(top, height - 1)
-            val x0 = (left / spatialCellPx).toInt()
-            val x1 = (right / spatialCellPx).toInt()
-            val y0 = (top / spatialCellPx).toInt()
-            val y1 = (bottom / spatialCellPx).toInt()
-            for (gy in y0..y1) for (gx in x0..x1) {
-                val cell = gy * spatialColumns + gx
-                spatialIndex.getOrPut(cell) { ArrayList() }.add(index)
-            }
-        }
+        marks.forEachIndexed(::indexMark)
         spatialReady = true
     }
 
@@ -264,7 +292,8 @@ class InkView @JvmOverloads constructor(
         ensureBuffers()
         drawAllBase(baseC ?: return)
         live?.eraseColor(Color.TRANSPARENT)
-        predSeg = null
+        predictionVisible = false
+        predictionBoundsValid = false
         liveDirty = null
         invalidate()
     }
@@ -325,10 +354,10 @@ class InkView @JvmOverloads constructor(
             canvas.save()
             canvas.scale(sc, sc)
             live?.let { canvas.drawBitmap(it, 0f, 0f, null) }
-            predSeg?.let { s ->
+            if (predictionVisible) {
                 scratch.reset()
-                scratch.moveTo(s[0], s[1])
-                scratch.lineTo(s[2], s[3])
+                scratch.moveTo(predSeg[0], predSeg[1])
+                scratch.lineTo(predSeg[2], predSeg[3])
                 canvas.drawPath(scratch, predPaint)
             }
             canvas.restore()
@@ -339,15 +368,24 @@ class InkView @JvmOverloads constructor(
             ensureBuffers()
             drawAllBase(baseC ?: return)
         }
+        val panViewport = viewport
+        val panOnly = panViewport != null &&
+            kotlin.math.abs(panViewport.scale - 1f) <= 0.0001f &&
+            (kotlin.math.abs(panViewport.originX) > 0.0001f ||
+                kotlin.math.abs(panViewport.originY) > 0.0001f)
+        if (panOnly) {
+            canvas.save()
+            canvas.translate(-panViewport!!.originX, -panViewport!!.originY)
+        }
         base?.let { canvas.drawBitmap(it, 0f, 0f, null) }
         live?.let { canvas.drawBitmap(it, 0f, 0f, null) }
-        val s = predSeg
-        if (s != null) {
+        if (predictionVisible) {
             scratch.reset()
-            scratch.moveTo(s[0], s[1])
-            scratch.lineTo(s[2], s[3])
+            scratch.moveTo(predSeg[0], predSeg[1])
+            scratch.lineTo(predSeg[2], predSeg[3])
             canvas.drawPath(scratch, predPaint)
         }
+        if (panOnly) canvas.restore()
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -384,17 +422,23 @@ class InkView @JvmOverloads constructor(
             if (baseC != null) drawAllBase(baseC!!)
         }
         val vp = viewport
-        val mapped = if (hiResMode && vp != null && vp.scale > 0f) {
+        val needsViewportMap = vp != null && vp.scale > 0f &&
+            (hiResMode || kotlin.math.abs(vp.originX) > 0.0001f ||
+                kotlin.math.abs(vp.originY) > 0.0001f)
+        val mapped = if (needsViewportMap && vp != null) {
             MotionEvent.obtain(ev).apply {
                 val inv = 1f / vp.scale
-                val matrix = Matrix().apply {
-                    setValues(floatArrayOf(
-                        inv, 0f, ZoomTransform.pageCoordinate(0f, vp.originX, vp.scale),
-                        0f, inv, ZoomTransform.pageCoordinate(0f, vp.originY, vp.scale),
-                        0f, 0f, 1f
-                    ))
-                }
-                transform(matrix)
+                touchMatrixValues[0] = inv
+                touchMatrixValues[1] = 0f
+                touchMatrixValues[2] = ZoomTransform.pageCoordinate(0f, vp.originX, vp.scale)
+                touchMatrixValues[3] = 0f
+                touchMatrixValues[4] = inv
+                touchMatrixValues[5] = ZoomTransform.pageCoordinate(0f, vp.originY, vp.scale)
+                touchMatrixValues[6] = 0f
+                touchMatrixValues[7] = 0f
+                touchMatrixValues[8] = 1f
+                touchMatrix.setValues(touchMatrixValues)
+                transform(touchMatrix)
             }
         } else ev
         return try {
@@ -460,20 +504,33 @@ class InkView @JvmOverloads constructor(
         liveShape = if (h.tool == Tools.SHAPE) h.inkShape else Shapes.FREE
         liveLayer = h.activeLayer
         livePts.clear(); liveWs.clear()
-        livePts.add(x); livePts.add(y); liveWs.add(1f)
-        liveMark = Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
-            floatArrayOf(x, y), floatArrayOf(1f), liveLayer)
+        liveMark = if (liveShape == Shapes.FREE) {
+            livePts.add(x); livePts.add(y); liveWs.add(1f)
+            null
+        } else {
+            liveShapePoints[0] = x
+            liveShapePoints[1] = y
+            liveShapePoints[2] = x
+            liveShapePoints[3] = y
+            liveShapeWidths[0] = 1f
+            liveShapeWidths[1] = 1f
+            Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
+                liveShapePoints, liveShapeWidths, liveLayer)
+        }
         drawing = true
         erasing = false
         live?.eraseColor(Color.TRANSPARENT)
-        predSeg = null; liveDirty = null
+        predictionVisible = false
+        predictionBoundsValid = false; liveDirty = null
         strokePaint.color = mapInk(Color.argb(h.inkAlpha, Color.red(h.inkColor),
             Color.green(h.inkColor), Color.blue(h.inkColor)))
         strokePaint.style = Paint.Style.STROKE
         strokePaint.strokeCap = Paint.Cap.ROUND
         strokePaint.strokeJoin = Paint.Join.ROUND
         strokePaint.strokeWidth = h.inkWidth * unit
-        liveC?.drawPoint(tailX, tailY, strokePaint)
+        if (liveShape == Shapes.FREE) {
+            liveC?.drawPoint(tailX, tailY, strokePaint)
+        }
         invalidate()
     }
 
@@ -484,11 +541,8 @@ class InkView @JvmOverloads constructor(
             val nx = (x / width).coerceIn(0f, 1f)
             val ny = (y / height).coerceIn(0f, 1f)
             if (liveShape != Shapes.FREE) {
-                if (livePts.size >= 4) {
-                    livePts[2] = nx; livePts[3] = ny
-                } else {
-                    livePts.add(nx); livePts.add(ny); liveWs.add(1f)
-                }
+                liveShapePoints[2] = nx
+                liveShapePoints[3] = ny
                 return
             }
             val distPx = hypot((nx - lastX) * width, (ny - lastY) * height)
@@ -510,8 +564,6 @@ class InkView @JvmOverloads constructor(
                 ev.getHistoricalEventTime(i), ev.getHistoricalPressure(i))
         }
         take(ev.x, ev.y, ev.eventTime, ev.pressure)
-        liveMark = Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
-            livePts.toFloatArray(), liveWs.toFloatArray(), liveLayer)
         if (liveShape == Shapes.FREE) drawNewSegments(h) else drawShapeLive(h)
         drawPrediction(h)
     }
@@ -523,36 +575,93 @@ class InkView @JvmOverloads constructor(
         strokePaint.color = mapInk(Color.argb(h.inkAlpha, Color.red(h.inkColor),
             Color.green(h.inkColor), Color.blue(h.inkColor)))
         strokePaint.style = Paint.Style.STROKE
-        // 段 i 需要 P[i+1] 才能确定终点，因此只画到 n-2
+        var dirtyLeft = Float.MAX_VALUE
+        var dirtyTop = Float.MAX_VALUE
+        var dirtyRight = -Float.MAX_VALUE
+        var dirtyBottom = -Float.MAX_VALUE
+        var dirtyPadding = 0f
+        // 历史采样仍逐点保留，但每批新增曲线只请求局部重绘。
         var i = nextSeg
         while (i <= n - 2) {
+            val startX = tailX
+            val startY = tailY
             val cx = livePts[2 * i] * width
             val cy = livePts[2 * i + 1] * height
             val ex = (livePts[2 * i] + livePts[2 * (i + 1)]) * 0.5f * width
             val ey = (livePts[2 * i + 1] + livePts[2 * (i + 1) + 1]) * 0.5f * height
             scratch.reset()
-            scratch.moveTo(tailX, tailY)
+            scratch.moveTo(startX, startY)
             scratch.quadTo(cx, cy, ex, ey)
             strokePaint.strokeWidth = base *
                 (liveWs.getOrElse(i - 1) { 1f } + liveWs.getOrElse(i) { 1f }) * 0.5f
             c.drawPath(scratch, strokePaint)
+            val pad = strokePaint.strokeWidth * 0.75f + 2f * density
+            dirtyPadding = maxOf(dirtyPadding, pad)
+            dirtyLeft = minOf(dirtyLeft, startX, cx, ex)
+            dirtyTop = minOf(dirtyTop, startY, cy, ey)
+            dirtyRight = maxOf(dirtyRight, startX, cx, ex)
+            dirtyBottom = maxOf(dirtyBottom, startY, cy, ey)
             tailX = ex; tailY = ey
             i++
         }
         nextSeg = n - 1
-        invalidate()
+        if (dirtyLeft != Float.MAX_VALUE) {
+            invalidateBounds(
+                dirtyLeft - dirtyPadding, dirtyTop - dirtyPadding,
+                dirtyRight + dirtyPadding, dirtyBottom + dirtyPadding
+            )
+        }
     }
 
     private fun drawShapeLive(h: Host) {
         val c = liveC ?: return
-        clearRegion(c, liveDirty)
-        liveDirty = floatArrayOf(0f, 0f, width.toFloat(), height.toFloat())
-        c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-        liveMark?.let {
-            InkGeometry.drawMark(c, it, width.toFloat(), height.toFloat(),
-                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+        val mark = liveMark ?: return
+        val nextDirty = shapeBounds(mark)
+        val previousDirty = liveDirty
+
+        // 只清除上一帧和当前形状覆盖的区域，不再清空横屏整页实时画布。
+        clearRegion(c, previousDirty)
+        clearRegion(c, nextDirty)
+        c.save()
+        c.clipRect(nextDirty[0], nextDirty[1], nextDirty[2], nextDirty[3])
+        InkGeometry.drawMark(c, mark, width.toFloat(), height.toFloat(),
+            strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+        c.restore()
+
+        liveDirty = nextDirty
+        invalidateRect(previousDirty)
+        invalidateRect(nextDirty)
+    }
+
+    private fun shapeBounds(mark: Mark): FloatArray {
+        val x0 = mark.pts[0] * width
+        val y0 = mark.pts[1] * height
+        val x1 = mark.pts[2] * width
+        val y1 = mark.pts[3] * height
+        val base = mark.width * unit
+        val padding = if (mark.shape == Shapes.ARROW) {
+            base * 6f + unit * 0.02f + 4f * density
+        } else {
+            base * 1.5f + 4f * density
         }
-        invalidate()
+        return floatArrayOf(
+            (minOf(x0, x1) - padding).coerceAtLeast(0f),
+            (minOf(y0, y1) - padding).coerceAtLeast(0f),
+            (maxOf(x0, x1) + padding).coerceAtMost(width.toFloat()),
+            (maxOf(y0, y1) + padding).coerceAtMost(height.toFloat())
+        )
+    }
+
+    private fun invalidateBounds(leftF: Float, topF: Float, rightF: Float, bottomF: Float) {
+        val left = leftF.toInt().coerceIn(0, width)
+        val top = topF.toInt().coerceIn(0, height)
+        val right = (rightF.toInt() + 1).coerceIn(left, width)
+        val bottom = (bottomF.toInt() + 1).coerceIn(top, height)
+        if (right > left && bottom > top) invalidate(left, top, right, bottom)
+    }
+
+    private fun invalidateRect(rect: FloatArray?) {
+        if (rect != null) invalidateBounds(rect[0], rect[1], rect[2], rect[3])
     }
 
     /** 用最后一段速度外推一小截，只记录线段，onDraw 直画，抬手即清。 */
@@ -573,8 +682,30 @@ class InkView @JvmOverloads constructor(
             110, Color.red(h.inkColor), Color.green(h.inkColor), Color.blue(h.inkColor)
         ))
         predPaint.strokeWidth = (h.inkWidth * unit).coerceAtLeast(0.8f) * 0.9f
-        predSeg = floatArrayOf(x1, y1, px, py)
-        invalidate()
+        val pad = (h.inkWidth * unit).coerceAtLeast(0.8f) * 0.75f + 2f * density
+        val nextLeft = minOf(x1, px) - pad
+        val nextTop = minOf(y1, py) - pad
+        val nextRight = maxOf(x1, px) + pad
+        val nextBottom = maxOf(y1, py) + pad
+        val dirtyLeft = if (predictionBoundsValid) minOf(predictionBounds[0], nextLeft)
+            else nextLeft
+        val dirtyTop = if (predictionBoundsValid) minOf(predictionBounds[1], nextTop)
+            else nextTop
+        val dirtyRight = if (predictionBoundsValid) maxOf(predictionBounds[2], nextRight)
+            else nextRight
+        val dirtyBottom = if (predictionBoundsValid) maxOf(predictionBounds[3], nextBottom)
+            else nextBottom
+        predictionBounds[0] = nextLeft
+        predictionBounds[1] = nextTop
+        predictionBounds[2] = nextRight
+        predictionBounds[3] = nextBottom
+        predictionBoundsValid = true
+        predSeg[0] = x1
+        predSeg[1] = y1
+        predSeg[2] = px
+        predSeg[3] = py
+        predictionVisible = true
+        invalidateBounds(dirtyLeft, dirtyTop, dirtyRight, dirtyBottom)
     }
 
     // ---------- 橡皮 ----------
@@ -855,7 +986,15 @@ class InkView @JvmOverloads constructor(
     private fun finishMark() {
         if (!drawing) return
         drawing = false
-        val m = liveMark
+        val h = host
+        val m = if (liveShape == Shapes.FREE && h != null) {
+            Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
+                livePts.toFloatArray(), liveWs.toFloatArray(), liveLayer)
+        } else {
+            liveMark?.let {
+                it.copyWith(pts = it.pts.copyOf(), ws = it.ws?.copyOf())
+            }
+        }
         val c = liveC
         // 补最后一段：从 tail 直接连到末点
         if (m != null && liveShape == Shapes.FREE && c != null && livePts.size >= 4) {
@@ -868,14 +1007,25 @@ class InkView @JvmOverloads constructor(
             c.drawPath(scratch, strokePaint)
         }
         live?.eraseColor(Color.TRANSPARENT)
-        predSeg = null; liveDirty = null
+        predictionVisible = false
+        predictionBoundsValid = false; liveDirty = null
         var changed = false
         if (m != null) {
             val tiny = m.shape != Shapes.FREE && m.shape != Shapes.NOTE && m.pts.size >= 4 &&
                 hypot((m.pts[2] - m.pts[0]) * width, (m.pts[3] - m.pts[1]) * height) < 4f
-            if (!tiny) { marks.add(m); changed = true }
+            if (!tiny) {
+                marks.add(m)
+                val index = marks.lastIndex
+                val canvas = baseC
+                if (canvas != null && visible(m)) {
+                    InkGeometry.drawMark(canvas, m, width.toFloat(), height.toFloat(),
+                        strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+                }
+                if (spatialReady) indexMark(index, m)
+                changed = true
+            }
         }
-        if (changed) { drawAllBase(baseC ?: return); commit() }
+        if (changed) commit()
         invalidate()
     }
 
@@ -883,7 +1033,8 @@ class InkView @JvmOverloads constructor(
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         liveMark = null
         live?.eraseColor(Color.TRANSPARENT)
-        predSeg = null; liveDirty = null
+        predictionVisible = false
+        predictionBoundsValid = false; liveDirty = null
         if (selection != null) drawSelectionLive()
         invalidate()
     }
@@ -950,7 +1101,8 @@ class InkView @JvmOverloads constructor(
         baseC = null
         live = null
         liveC = null
-        predSeg = null
+        predictionVisible = false
+        predictionBoundsValid = false
         invalidate()
     }
 }

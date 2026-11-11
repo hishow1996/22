@@ -112,11 +112,11 @@ class PagesAdapter(
         // 所有旋转角度统一使用 viewport 自绘，不再退回整页位图。
         h.zoom.legacyViewScale = false
         h.zoom.onViewportChanged = {
-            h.image.invalidate()
-            h.secondImage.invalidate()
-            h.ink.invalidate()
-            h.secondInk.invalidate()
-            h.draftInk.invalidate()
+            if (h.image.isShown) h.image.invalidate()
+            if (h.secondImage.isShown) h.secondImage.invalidate()
+            if (h.ink.isShown) h.ink.invalidate()
+            if (h.secondInk.isShown) h.secondInk.invalidate()
+            if (h.draftInk.isShown) h.draftInk.invalidate()
         }
         h.zoom.onViewportGestureChanged = { active ->
             h.image.deferHighResolution = active
