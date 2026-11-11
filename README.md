@@ -682,3 +682,36 @@ A 方案的高分辨率放大覆盖所有未旋转页（竖屏与横屏主场景
   58. 隐藏栏竖屏：页面重新按整屏高铺满，不居中留白、不闪白
   59. 铺满后左右可横向拖动看全；双指缩放、单指左右翻页、笔迹落点准
   60. 横屏 FIT / WIDTH / DOUBLE 与 v18 ⇄ 图标、首页两态均无回归
+
+## 底栏 ⇄ 与 ★ 选中态 v20
+
+用户要求：**选中不要淡蓝方块底，图标本身变蓝；再点回原色**。星星同理。
+
+**诊断**
+
+两个按钮走 `style="@style/Tool"`，里面
+`android:tint="@color/icon"`（固定深灰）+ `android:background="@drawable/tool_bg"`
+（`state_selected=true` 时淡蓝圆角方块 `#222F6FED`）。所以点 ⇄ 看到的是
+「多出一块浅蓝底、箭头仍是深灰」；★ 虽在 `refreshBookmark()` 里
+`setColorFilter(accent)` 染蓝，却同时被 `isSelected` 触发同一块底。
+
+**改法（纯资源驱动，零新增逻辑）**
+
+- 新增 `res/color/icon_toggle.xml`：`state_selected=true → @color/accent`
+  (`#2F6FED`)，默认 → `@color/icon` (`#3C3F44`)
+- 两个按钮在布局里显式覆盖 style（XML 属性优先于 style item）：
+  `android:background="@null"` 去掉方块底，
+  `android:tint="@color/icon_toggle"` 让颜色由 View 状态自动跟随
+  —— 点 ⇄、点任意绘图按钮切回做题、冷启动恢复偏好、横竖屏重建、
+  翻页刷新书签，任何路径都不会出现「状态变了颜色没跟上」
+- `refreshBookmark()` 删掉 `setColorFilter`：`ImageView` 上它会覆盖
+  drawable 的 tint list，留着反而让 CSL 失效；`isSelected` 仍是唯一状态源
+- **`tool_bg` 一行未改**：顶栏 6 个绘图按钮的选中态淡蓝底原样保留
+
+状态对应：⇄ 默认浏览（深灰）→ 点一下做题（蓝）→ 再点回浏览（深灰）；
+★ 未收藏（深灰）→ 点一下收藏（蓝）→ 再点取消（深灰）。
+零文字、零动效（沿用「不要按压缩放」），读屏两态文案保留。
+
+**真机验收补充**
+  61. 点 ⇄ 箭头变品牌蓝、无方块底；再点回深灰；★ 收藏变蓝、取消回深灰，
+      顶栏 6 个绘图按钮的淡蓝选中底无回归

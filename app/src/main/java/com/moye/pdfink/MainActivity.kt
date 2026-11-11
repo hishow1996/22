@@ -586,10 +586,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun refreshBookmark() {
         val on = inkStore.bookmarks().contains(currentPage())
+        // v20：颜色由布局里的 icon_toggle（state_selected）自动跟随；
+        // 这里再 setColorFilter 会覆盖 drawable 的 tint list，反而让 CSL 失效。
         btnBookmark.isSelected = on
-        btnBookmark.setColorFilter(
-            ContextCompat.getColor(this, if (on) R.color.accent else R.color.icon)
-        )
     }
 
     private fun setupClicks() {

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 底栏 ⇄ / ★ 的选中态：图标染品牌蓝，取消选中回深灰。
+     颜色状态直接由 View 的 selected 驱动，不产生任何背景方块。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="@color/accent" />
+    <item android:color="@color/icon" />
+</selector>
