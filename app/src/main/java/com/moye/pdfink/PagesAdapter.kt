@@ -96,7 +96,6 @@ class PagesAdapter(
         h.zoom.onFlip = onFlip
         h.zoom.onPanChange = { px, py ->
             if (position == activePosition) onPanChange?.invoke(px, py)
-            onPageViewportChange?.invoke(p0, h.zoom.pageViewportState())
         }
         // 所有旋转角度统一使用 viewport 自绘，不再退回整页位图。
         h.zoom.legacyViewScale = false
@@ -110,6 +109,9 @@ class PagesAdapter(
         h.zoom.onViewportGestureChanged = { active ->
             h.image.deferHighResolution = active
             h.secondImage.deferHighResolution = active
+        }
+        h.zoom.onViewportSettled = {
+            onPageViewportChange?.invoke(p0, h.zoom.pageViewportState())
         }
         h.image.deferHighResolution = false
         h.secondImage.deferHighResolution = false

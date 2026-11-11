@@ -25,6 +25,8 @@ class ZoomHost @JvmOverloads constructor(
     var onZoomChange: ((Float) -> Unit)? = null
     var onFlip: ((Int) -> Unit)? = null
     var onPanChange: ((Float, Float) -> Unit)? = null
+    /** 视口改变后在手势结束或程序化变更完成时保存一次。 */
+    var onViewportSettled: (() -> Unit)? = null
     /** 缩放 / 浏览拖动期间暂停高清图块补渲染，结束后再恢复。 */
     var onViewportGestureChanged: ((Boolean) -> Unit)? = null
 
@@ -46,6 +48,7 @@ class ZoomHost @JvmOverloads constructor(
 
     private var content: View? = null
     private var scale = 1f
+    private var lastNotifiedScale = Float.NaN
     private var tx = 0f
     private var ty = 0f
     private var startDist = 0f
@@ -102,6 +105,8 @@ class ZoomHost @JvmOverloads constructor(
             if (ev.actionMasked == MotionEvent.ACTION_UP ||
                 ev.actionMasked == MotionEvent.ACTION_CANCEL) {
                 doubleTapActive = false
+                notifyScaleIfNeeded(force = true)
+                onViewportSettled?.invoke()
                 parent?.requestDisallowInterceptTouchEvent(false)
             }
             return true
@@ -139,6 +144,8 @@ class ZoomHost @JvmOverloads constructor(
                 startDist = 0f
                 parent?.requestDisallowInterceptTouchEvent(!browseMode)
                 onViewportGestureChanged?.invoke(false)
+                notifyScaleIfNeeded(force = true)
+                onViewportSettled?.invoke()
             }
             return true
         }
@@ -175,6 +182,7 @@ class ZoomHost @JvmOverloads constructor(
                         singlePanning = false
                         parent?.requestDisallowInterceptTouchEvent(false)
                         onViewportGestureChanged?.invoke(false)
+                        onViewportSettled?.invoke()
                     }
                 }
             }
@@ -303,9 +311,19 @@ class ZoomHost @JvmOverloads constructor(
             v.translationY = 0f
         }
         onViewportChanged?.invoke()
+        notifyScaleIfNeeded()
+        onPanChange?.invoke(tx, ty)
+    }
+
+    private fun notifyScaleIfNeeded(force: Boolean = false) {
+        val crossedOne = !lastNotifiedScale.isNaN() &&
+            ((lastNotifiedScale < 1f) != (scale < 1f))
+        if (!force && !lastNotifiedScale.isNaN() &&
+            abs(scale - lastNotifiedScale) < 0.01f && !crossedOne
+        ) return
+        lastNotifiedScale = scale
         onScaleCommit?.invoke(scale)
         onZoomChange?.invoke(scale)
-        onPanChange?.invoke(tx, ty)
     }
 
     /**
@@ -328,17 +346,16 @@ class ZoomHost @JvmOverloads constructor(
         syncViewport(0f, ty)
         // 即使 silent 也要复位 viewport，否则复用的 holder 会残留上一次的倍率
         onViewportChanged?.invoke()
-        onScaleCommit?.invoke(1f)
-        if (!silent) {
-            onZoomChange?.invoke(1f)
-            onPanChange?.invoke(0f, ty)
-        }
+        notifyScaleIfNeeded(force = true)
+        if (!silent) onPanChange?.invoke(0f, ty)
+        onViewportSettled?.invoke()
     }
 
     /** FILL 初始靠左：讲义文字多从左边起，比居中少裁掉半行正文。 */
     fun alignStart() {
         tx = panLimitX()
         applyTransform()
+        onViewportSettled?.invoke()
     }
 
     val zoomScale: Float get() = scale
@@ -354,6 +371,8 @@ class ZoomHost @JvmOverloads constructor(
         } else {
             zoomTo(1.65f, focusX, focusY)
         }
+        notifyScaleIfNeeded(force = true)
+        onViewportSettled?.invoke()
     }
 
     private fun zoomTo(nextScale: Float, focusX: Float, focusY: Float) {
@@ -381,6 +400,8 @@ class ZoomHost @JvmOverloads constructor(
         tx = ZoomTransform.offset(panLimitX(), rememberedPanX)
         ty = ZoomTransform.offset(panLimitY(), rememberedPanY)
         applyTransform()
+        notifyScaleIfNeeded(force = true)
+        onViewportSettled?.invoke()
     }
 
     /** 会话恢复：还原倍率与旧版像素平移量，兼容 v17 及更早版本。 */
@@ -389,6 +410,8 @@ class ZoomHost @JvmOverloads constructor(
         tx = px
         ty = py
         applyTransform()
+        notifyScaleIfNeeded(force = true)
+        onViewportSettled?.invoke()
     }
 
     /** panExtra 由外部写入后，按新边界重新钳一次，避免露出空白。 */
