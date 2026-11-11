@@ -71,7 +71,7 @@ class ZoomTransformTest {
         assertEquals(-1f, safe.panY, 0.0001f)
     }
     @Test
-    fun renderSpaceOriginKeepsPageEdgesAndVisibleTilesAlignedAcrossBuckets() {
+    fun canvasTranslationAndTileWindowStayAlignedAcrossBuckets() {
         val hostSize = 1080f
         val baseSize = 700f
         val baseOrigin = (hostSize - baseSize) * 0.5f
@@ -88,40 +88,21 @@ class ZoomTransformTest {
                 ZoomTransform.renderToDisplayFactor(actualScale, bucket)
             val visibleOrigin =
                 (hostSize - baseSize * actualScale) * 0.5f + translation
-            val renderOrigin = ZoomTransform.renderSpaceOrigin(
-                baseOrigin, visibleOrigin, displayFactor
+            val canvasOffset = ZoomTransform.canvasTranslationOffset(
+                baseOrigin, visibleOrigin
             )
 
-            // Rendered page edge maps back to the exact continuous screen position.
-            assertEquals(
-                visibleOrigin,
-                baseOrigin - renderOrigin * displayFactor,
-                0.0001f
-            )
+            // 页面边缘应落在连续缩放计算出的屏幕位置。
+            assertEquals(visibleOrigin, baseOrigin - canvasOffset, 0.0001f)
 
-            // The tile-selection window and canvas transform share one render origin.
-            val visibleRenderLeft =
-                -visibleOrigin * bucket / actualScale
+            // translate 保持屏幕单位；可见 tile 起点按显示倍率反算后应落在屏幕边缘。
+            val visibleRenderLeft = -visibleOrigin / displayFactor
             assertEquals(
-                visibleRenderLeft,
-                renderOrigin - baseOrigin * bucket / actualScale,
+                0f,
+                baseOrigin - canvasOffset + visibleRenderLeft * displayFactor,
                 0.0001f
             )
         }
-    }
-
-    @Test
-    fun invalidRenderOriginFactorFallsBackSafely() {
-        assertEquals(
-            0f,
-            ZoomTransform.renderSpaceOrigin(100f, 40f, Float.NaN),
-            0.0001f
-        )
-        assertEquals(
-            0f,
-            ZoomTransform.renderSpaceOrigin(100f, 40f, 0f),
-            0.0001f
-        )
     }
 
 }

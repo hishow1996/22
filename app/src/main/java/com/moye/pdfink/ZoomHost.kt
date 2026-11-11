@@ -346,10 +346,10 @@ class ZoomHost @JvmOverloads constructor(
         viewport.bucket = renderScale
         viewport.lw = lw
         viewport.lh = lh
-        // origin 位于图块渲染坐标系，而 ox/lx/oy/ly 是屏幕像素坐标。
-        // 必须除以连续显示倍率；否则 bucket 与实际倍率不一致时底图会偏移。
-        viewport.originX = ZoomTransform.renderSpaceOrigin(ox, lx, displayFactor)
-        viewport.originY = ZoomTransform.renderSpaceOrigin(oy, ly, displayFactor)
+        // Canvas 先 translate 再 scale：平移量保持屏幕像素，不乘图块倍率。
+        // 可见窗口 left/top 另按 renderPerDisplay 换算到图块坐标系。
+        viewport.originX = ZoomTransform.canvasTranslationOffset(ox, lx)
+        viewport.originY = ZoomTransform.canvasTranslationOffset(oy, ly)
         // 分块索引用栅格坐标，所以将屏幕窗口换算到 renderScale 坐标空间。
         viewport.visLeft = -lx * renderPerDisplay
         viewport.visTop = -ly * renderPerDisplay

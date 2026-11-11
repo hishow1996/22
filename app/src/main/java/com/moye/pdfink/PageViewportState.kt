@@ -43,20 +43,11 @@ object ZoomTransform {
     fun renderToDisplayFactor(scale: Float, bucket: Float): Float =
         if (bucket <= 0f) 1f else scale / bucket
 
-    /**
-     * 把屏幕空间中的页面左上偏移换算成图块渲染空间原点。
-     * 底图、笔迹层和可见图块窗口必须共用该坐标系。
-     */
-    fun renderSpaceOrigin(
-        baseOrigin: Float,
-        visibleOrigin: Float,
-        renderToDisplay: Float
-    ): Float {
-        if (!baseOrigin.isFinite() || !visibleOrigin.isFinite() ||
-            !renderToDisplay.isFinite() || renderToDisplay <= 0f
-        ) return 0f
-        return (baseOrigin - visibleOrigin) / renderToDisplay
-    }
+    /** Canvas 的 translate 在 scale 前执行，故平移量保留屏幕像素单位。 */
+    fun canvasTranslationOffset(baseOrigin: Float, visibleOrigin: Float): Float =
+        if (baseOrigin.isFinite() && visibleOrigin.isFinite()) {
+            baseOrigin - visibleOrigin
+        } else 0f
 
     fun displayToRender(value: Float, scale: Float, bucket: Float): Float =
         if (scale <= 0f) value else value * bucket / scale
