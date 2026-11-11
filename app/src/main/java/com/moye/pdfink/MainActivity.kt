@@ -417,6 +417,20 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             .coerceIn(DisplayMode.FIT, DisplayMode.DOUBLE)
         modeChosen = p.getBoolean("modeChosen", false)
         fillScreen = p.getBoolean("fillScreen", true)
+        // v27：应用默认铺满。老版本若手动切过「适应屏幕 / 适应宽度」，
+        // 或旧会话里残着 FIT，升级后一次性回到铺满；只迁移一次，
+        // 之后用户在「更多」里主动选的模式仍照常记住。
+        if (!p.getBoolean("fillMigrated", false)) {
+            fillScreen = true
+            state.displayMode = DisplayMode.WIDTH
+            modeChosen = false
+            p.edit()
+                .putBoolean("fillMigrated", true)
+                .putBoolean("fillScreen", true)
+                .putInt("displayMode", DisplayMode.WIDTH)
+                .putBoolean("modeChosen", false)
+                .apply()
+        }
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
         state.edgeFlip = p.getBoolean("edge", true)
@@ -440,6 +454,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putInt("displayMode", state.displayMode)
             putBoolean("modeChosen", modeChosen)
             putBoolean("fillScreen", fillScreen)
+            putBoolean("fillMigrated", true)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
@@ -1422,6 +1437,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun finishOpenUri(r: PdfRepo, fp: String) {
         openingDocument = false
+        // v27：首次打开（含冷启动恢复、SAF 新选、从首页点记录）先同步方向，
+        // 否则 UiState 的 landscape 初值会让 currentFitMode() 误判成横屏。
+        state.landscape = resources.configuration.orientation !=
+            Configuration.ORIENTATION_PORTRAIT
         val session = sessionRepo.session(fp)
         pageViewports.clear()
         pageViewports.putAll(session.pageViewports)
@@ -1434,8 +1453,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.showCorrection = session.showCorrection
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
         state.displayMode = session.displayMode
-        // 用户未主动选择过显示方式时，横竖屏都默认适合宽度。
-        if (!modeChosen) state.displayMode = DisplayMode.WIDTH
+        // v27：用户未主动选择过显示方式时，首次打开任何文件一律铺满 ——
+        // 既不让旧会话里残留的 FIT 把默认拉回，也不需要用户先去「更多」
+        // 点一次「铺满屏幕」。手动选过（modeChosen=true）仍尊重选择。
+        if (!modeChosen) {
+            fillScreen = true
+            state.displayMode = DisplayMode.WIDTH
+        }
         val savedViewport = session.pageViewports[
             PageViewportState.storageKey(session.page, state.effectiveMode)
         ]

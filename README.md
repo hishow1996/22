@@ -1065,3 +1065,45 @@ RecyclerView 原生接管，页面本身仍一屏完整、不被上下裁切，v
 
 **边界**：v25 图标修复、v23 返回栈、v22 圆盘、v21 放大镜短闪、v20 ⇄/★、
 v19 铺满、v16 默认浏览与手势链全部原样保留。
+
+## 默认铺满 · 首次打开即生效 v27
+
+**用户口径**：应用默认文件铺满屏幕，首次打开文件时直接就是铺满态，
+不需要先去「更多」里点一次「铺满屏幕」。
+
+**诊断**：`fillScreen` 的字段默认值本来就是 `true`，但有两处会把首次
+打开拉回 FIT：
+
+1. `finishOpenUri()` 里 `state.displayMode = session.displayMode`，
+   旧会话（或用户此前手动切过「适应屏幕」后留下的 `modeChosen=true`）
+   会让竖屏走 FIT，页面按宽度 contain，在 19:9 屏上上下各留一大块米白；
+2. 老版本偏好里存过 `fillScreen=false` / `displayMode=FIT` 时，
+   `loadPrefs()` 直接读回，升级后不会自动回默认。
+
+另外 `UiState.landscape` 初值是 `true`，若某条打开路径早于
+`applyOrientationLayout()`，`currentFitMode()` 会把竖屏误判成横屏，
+FILL 分支根本不进。
+
+**P0 升级迁移**：`loadPrefs()` 新增 `fillMigrated` 标记。未迁移时一次性
+强制 `fillScreen=true` / `displayMode=WIDTH` / `modeChosen=false`，并立即
+写回偏好；`savePrefs()` 也持久化该标记。**只迁移一次**，之后用户在
+「更多」里主动切到「适应屏幕 / 适应宽度」仍照常记住，不每次覆盖。
+
+**P1 首次打开强制**：`finishOpenUri()` 开头先同步
+`state.landscape`（按当前 configuration），随后在 `!modeChosen` 时强制
+`fillScreen=true` + `displayMode=WIDTH`。覆盖三条入口：冷启动恢复上次
+文档、SAF 新选文件、从首页点浏览记录；横屏仍走 v14 的 WIDTH，不受影响。
+`ad.fitMode = currentFitMode()` 随即按新状态算成 `PageContainer.FILL`。
+
+**结果**：竖屏首次打开即按可用高度放大（荣耀 10 有栏约 1.27×、
+隐藏栏约 1.53×），上下零留白、文字比 1× 更清晰；左右约 13%/26% 的
+内容用双指横拖看全。菜单里「铺满屏幕」的选中态与实际模式一致。
+
+**不变**：横屏 FIT/WIDTH/DOUBLE、v26 竖屏上下滑、v19 智能铺满的
+`fillScale`/`refreshHostBounds`、v16 默认浏览、v23 返回栈、首页两态、
+零说明性小字。
+
+**验收**：静态断言（迁移标记读写、首次打开强制、方向同步、菜单选中态）
++ `verify.sh` 补 2 条（共 78）+ README。真机荣耀 10 验：清数据首次安装、
+旧版升级、冷启动恢复、SAF 新选、从记录点开，五种首次打开都直接铺满；
+手动切「适应屏幕」后重开仍尊重用户选择。

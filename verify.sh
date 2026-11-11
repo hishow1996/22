@@ -84,3 +84,5 @@ echo "  73. v26 竖屏 pager=VERTICAL / 横屏=HORIZONTAL，切方向保住 curr
 echo "  74. 竖屏上下滑：1x 时纵向交给 RecyclerView 跨页滚动，页内平移不抢不吞"
 echo "  75. 跟手度：首次 MOVE 即切预览、判定阈值补回死区位移、5 层重绘帧对齐"
 echo "  76. 左右滑翻页保留且防重复；放大态关闭 pager 输入、做题态不误触"
+echo "  77. v27 fillMigrated 迁移：旧偏好/旧会话一次性回到默认铺满，用户手动选择仍记住"
+echo "  78. 首次打开三条入口（冷启动恢复 / SAF 新选 / 首页点记录）直接 FILL，方向同步不误判"
