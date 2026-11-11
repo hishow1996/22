@@ -41,8 +41,13 @@ class TiledPageView @JvmOverloads constructor(
     companion object {
         const val TILE_H = 400
         const val PREFETCH = 1
-        const val MAX_PENDING_TILES = 4
+        const val MAX_PENDING_TILES = 8
+        const val PREVIEW_BUCKET = 0.5f
         private val owners = AtomicLong()
+
+        /** 预览图坐标映射到当前栅格坐标；实际显示倍率仍由 viewport.scale 决定。 */
+        fun previewToRenderFactor(renderBucket: Float): Float =
+            renderBucket.coerceAtLeast(PREVIEW_BUCKET) / PREVIEW_BUCKET
 
         /** 栅格分辨率档位不再决定页面实际显示倍率。 */
         fun bucket(s: Float): Float = when {
@@ -88,6 +93,8 @@ class TiledPageView @JvmOverloads constructor(
     private var tiled = false
     private var currentPage = true
     private val pending = HashSet<String>()
+    /** 固定 0.5× 整页预览网格，作为所有高清档位的连续显示底图。 */
+    private var previewGrid: List<TileSpec> = emptyList()
     private val retryAfter = HashMap<String, Long>()
     private val retryCount = HashMap<String, Int>()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -113,6 +120,7 @@ class TiledPageView @JvmOverloads constructor(
         currentPage = isCurrentPage
         epoch = TileCache.epoch
         tiled = true
+        rebuildPreviewGrid()
         background.color = when (t) {
             PageFilter.NIGHT -> 0xFF1B2430.toInt()
             PageFilter.WARM -> 0xFFF2E1C4.toInt()
@@ -127,8 +135,7 @@ class TiledPageView @JvmOverloads constructor(
         currentPage = current
         PdfTileScheduler.reprioritize(
             ownerId, generation, if (current) 0 else 2
-        )
-        invalidate()
+        )        invalidate()
     }
 
     fun unbindTiled() {
@@ -138,6 +145,7 @@ class TiledPageView @JvmOverloads constructor(
         pending.clear()
         retryAfter.clear()
         retryCount.clear()
+        previewGrid = emptyList()
         repo = null
     }
 
@@ -145,7 +153,66 @@ class TiledPageView @JvmOverloads constructor(
         col: Int, row: Int, bucket: Float, logicalW: Int, logicalH: Int
     ): String {
         val id = repo?.cacheId ?: "closed"
-        return "tile:$id:$epoch:$page:${logicalW}x$logicalH:$rotation:$col:$row:$bucket:$tint:$brightness"
+        val namespace = if (kotlin.math.abs(bucket - PREVIEW_BUCKET) < 0.0001f) {
+            "tile-preview"
+        } else {
+            "tile"
+        }
+        return "$namespace:$id:$epoch:$page:${logicalW}x$logicalH:$rotation:$col:$row:$bucket:$tint:$brightness"
+    }
+
+    private fun rebuildPreviewGrid() {
+        if (!tiled || repo == null || baseW <= 0 || baseH <= 0) {
+            previewGrid = emptyList()
+            return
+        }
+        val previewW = (baseW * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        val previewH = (baseH * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        val columns = (previewW + TILE_H - 1) / TILE_H
+        val rows = (previewH + TILE_H - 1) / TILE_H
+        val next = ArrayList<TileSpec>(columns * rows)
+        for (row in 0 until rows) {
+            val y = row * TILE_H
+            val tileH = minOf(TILE_H, previewH - y)
+            for (col in 0 until columns) {
+                val x = col * TILE_H
+                val tileW = minOf(TILE_H, previewW - x)
+                next.add(TileSpec(
+                    col, row, x, y, tileW, tileH,
+                    cacheKey(col, row, PREVIEW_BUCKET, previewW, previewH),
+                    false, Float.MAX_VALUE
+                ))
+            }
+        }
+        previewGrid = next
+    }
+
+    /** 只返回当前视口和一圈预取范围内的预览图块，避免整页任务占满队列。 */
+    private fun previewSpecsFor(vp: Viewport): List<TileSpec> {
+        if (previewGrid.isEmpty() || vp.bucket <= 0f) return emptyList()
+        val factor = PREVIEW_BUCKET / vp.bucket
+        val left = vp.visLeft * factor
+        val top = vp.visTop * factor
+        val width = (vp.visW * factor).toInt().coerceAtLeast(1)
+        val height = (vp.visH * factor).toInt().coerceAtLeast(1)
+        val previewW = (baseW * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        val previewH = (baseH * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        val cols = tileRange(previewW, left, width)
+        val rows = tileRange(previewH, top, height)
+        if (cols.isEmpty() || rows.isEmpty()) return emptyList()
+        val centerX = left + width * 0.5f
+        val centerY = top + height * 0.5f
+        return previewGrid.asSequence()
+            .filter { it.col in cols && it.row in rows }
+            .map { spec ->
+                val visible = spec.x < left + width && spec.x + spec.width > left &&
+                    spec.y < top + height && spec.y + spec.height > top
+                val dx = spec.x + spec.width * 0.5f - centerX
+                val dy = spec.y + spec.height * 0.5f - centerY
+                spec.copy(visible = visible, distance = kotlin.math.abs(dx) + kotlin.math.abs(dy))
+            }
+            .sortedWith(compareBy<TileSpec> { !it.visible }.thenBy { it.distance })
+            .toList()
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -157,6 +224,7 @@ class TiledPageView @JvmOverloads constructor(
             pending.clear()
             retryAfter.clear()
             retryCount.clear()
+            rebuildPreviewGrid()
         }
 
         val vp = viewport
@@ -177,6 +245,7 @@ class TiledPageView @JvmOverloads constructor(
         val visW = vp.visW.coerceAtLeast(1)
         val visH = vp.visH.coerceAtLeast(1)
         val displayFactor = ZoomTransform.renderToDisplayFactor(vp.scale, bucket)
+        val previewFactor = previewToRenderFactor(bucket)
         paint.colorFilter = colorFilter
 
         val cols = tileRange(logicalW, left, visW)
@@ -188,7 +257,6 @@ class TiledPageView @JvmOverloads constructor(
         val specs = ArrayList<TileSpec>(
             (cols.last - cols.first + 1) * (rows.last - rows.first + 1)
         )
-        val keep = HashSet<String>()
         for (row in rows) {
             val y = row * TILE_H
             val tileH = minOf(TILE_H, logicalH - y)
@@ -202,7 +270,6 @@ class TiledPageView @JvmOverloads constructor(
                 val dx = x + tileW * 0.5f - centerX
                 val dy = y + tileH * 0.5f - centerY
                 val key = cacheKey(col, row, bucket, logicalW, logicalH)
-                keep.add(key)
                 specs.add(TileSpec(
                     col, row, x, y, tileW, tileH, key,
                     isVisible, abs(dx) + abs(dy)
@@ -210,7 +277,14 @@ class TiledPageView @JvmOverloads constructor(
             }
         }
 
-        // 当前视口之外的旧排队任务立即撤销，不影响其他页面对同一块的订阅。
+        val previewSpecs = previewSpecsFor(vp)
+        val previewW = (baseW * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        val previewH = (baseH * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        val keep = HashSet<String>(previewSpecs.size + specs.size)
+        previewSpecs.forEach { keep.add(it.cacheKey) }
+        specs.forEach { keep.add(it.cacheKey) }
+
+        // 只撤销离开当前视口和预取范围的任务；低清预览在所有倍率间复用。
         PdfTileScheduler.retain(ownerId, generation, keep)
         pending.retainAll(keep)
         retryAfter.keys.retainAll(keep)
@@ -219,31 +293,70 @@ class TiledPageView @JvmOverloads constructor(
         canvas.save()
         canvas.translate(-originX, -originY)
         canvas.scale(displayFactor, displayFactor)
-        val missing = ArrayList<TileSpec>()
-        for (spec in specs) {
+
+        // 先绘制页面底色，再用固定低清图块托底。高清块未完成时不画白色占位块。
+        canvas.drawRect(left, top, left + visW, top + visH, background)
+        val missingPreview = ArrayList<TileSpec>()
+        canvas.save()
+        canvas.scale(previewFactor, previewFactor)
+        for (spec in previewSpecs) {
             val bitmap = TileCache.get(spec.cacheKey)
             if (bitmap != null) {
                 canvas.drawBitmap(bitmap, spec.x.toFloat(), spec.y.toFloat(), paint)
             } else {
-                canvas.drawRect(
-                    spec.x.toFloat(), spec.y.toFloat(),
-                    (spec.x + spec.width).toFloat(),
-                    (spec.y + spec.height).toFloat(), background
-                )
                 val retry = retryAfter[spec.cacheKey] ?: 0L
                 if (spec.cacheKey !in pending && SystemClock.uptimeMillis() >= retry) {
-                    missing.add(spec)
+                    missingPreview.add(spec)
                 }
             }
         }
         canvas.restore()
 
-        // 当前页可见块 priority=0；当前页预取=1；非当前页面分别为 2 / 3。
-        val slots = (MAX_PENDING_TILES - pending.size).coerceAtLeast(0)
+        val sameAsPreview = kotlin.math.abs(bucket - PREVIEW_BUCKET) < 0.0001f
+        val missingCurrent = ArrayList<TileSpec>()
+        if (!sameAsPreview) {
+            for (spec in specs) {
+                val bitmap = TileCache.get(spec.cacheKey)
+                if (bitmap != null) {
+                    canvas.drawBitmap(bitmap, spec.x.toFloat(), spec.y.toFloat(), paint)
+                } else {
+                    val retry = retryAfter[spec.cacheKey] ?: 0L
+                    if (spec.cacheKey !in pending && SystemClock.uptimeMillis() >= retry) {
+                        missingCurrent.add(spec)
+                    }
+                }
+            }
+        }
+        canvas.restore()
+
+        // 先排当前视口的低清预览，再排高清可见块；预取任务始终靠后。
+        var slots = (MAX_PENDING_TILES - pending.size).coerceAtLeast(0)
+        val visiblePreview = missingPreview.filter { it.visible }
+        visiblePreview.take(slots).forEach { spec ->
+            request(spec, PREVIEW_BUCKET, previewW, previewH)
+            slots--
+        }
+
+        val visibleCurrent = missingCurrent
+            .filter { it.visible }
+            .sortedBy { it.distance }
+        visibleCurrent.take(slots).forEach { spec ->
+            request(spec, bucket, logicalW, logicalH)
+            slots--
+        }
+
         if (slots > 0) {
-            missing.sortedWith(
-                compareBy<TileSpec> { !it.visible }.thenBy { it.distance }
-            ).take(slots).forEach { spec -> request(spec, bucket, logicalW, logicalH) }
+            missingPreview.filter { !it.visible }.take(slots).forEach { spec ->
+                request(spec, PREVIEW_BUCKET, previewW, previewH)
+                slots--
+            }
+        }
+
+        if (slots > 0) {
+            missingCurrent.filter { !it.visible }
+                .sortedBy { it.distance }
+                .take(slots)
+                .forEach { spec -> request(spec, bucket, logicalW, logicalH) }
         }
     }
 

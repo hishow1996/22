@@ -19,6 +19,20 @@ class HiResTileTest {
         assertEquals(4f, TiledPageView.bucket(4f), 0f)
     }
 
+    @Test fun `preview transform remains continuous across render buckets`() {
+        val actualScale = 1.73f
+        val buckets = listOf(0.5f, 0.67f, 0.8f, 1f, 1.5f, 2f, 3f, 4f)
+        buckets.forEach { bucket ->
+            val previewToRender = TiledPageView.previewToRenderFactor(bucket)
+            val renderToDisplay = ZoomTransform.renderToDisplayFactor(actualScale, bucket)
+            assertEquals(
+                actualScale / TiledPageView.PREVIEW_BUCKET,
+                previewToRender * renderToDisplay,
+                0.0001f
+            )
+        }
+    }
+
     @Test fun `logical canvas follows bucket at reduced scale`() {
         assertEquals(540, (1080 * TiledPageView.bucket(0.5f)).toInt())
         assertEquals(4320, (1080 * TiledPageView.bucket(4f)).toInt())
