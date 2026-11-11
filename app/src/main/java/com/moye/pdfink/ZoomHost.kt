@@ -62,6 +62,8 @@ class ZoomHost @JvmOverloads constructor(
     // 在整页模式暂时没有可移动范围时保留上次的阅读位置比例。
     private var rememberedPanX = 0f
     private var rememberedPanY = 0f
+    /** Snapshot captured before a resize can clamp the old pixel translation. */
+    private var pendingResizeViewportState: PageViewportState? = null
 
     private val doubleTapDetector by lazy {
         GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
@@ -120,13 +122,25 @@ class ZoomHost @JvmOverloads constructor(
         dp16 = 16f * d
     }
 
-    /** P0：栏显隐 / insets / 旋转 / 分屏改变宿主视口后，立即重算平移边界与可见窗。 */
+    /**
+     * Capture normalized pan before new bounds can clamp the old pixel translation.
+     * PagesAdapter restores this snapshot after PageContainer and ZoomHost are both laid out.
+     */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (oldw <= 0 || oldh <= 0 || w <= 0 || h <= 0) return
         if (w == oldw && h == oldh) return
         if (baseContentW <= 0 || baseContentH <= 0) return
-        refreshPanBounds()
+        pendingResizeViewportState = pageViewportState()
+        // Refresh the visible window without clamping against half-updated host/page bounds.
+        syncViewport(tx, ty)
+        onViewportChanged?.invoke()
+    }
+
+    fun takePendingResizeViewportState(): PageViewportState? {
+        val saved = pendingResizeViewportState
+        pendingResizeViewportState = null
+        return saved
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
@@ -394,6 +408,7 @@ class ZoomHost @JvmOverloads constructor(
      */
     fun reset(silent: Boolean = false, toTop: Boolean = false) {
         flushTransform()
+        pendingResizeViewportState = null
         scale = 1f
         tx = 0f
         ty = if (toTop) panExtraY.coerceAtLeast(0f) * 0.5f else 0f
@@ -459,6 +474,7 @@ class ZoomHost @JvmOverloads constructor(
 
     fun setPageViewportState(saved: PageViewportState) {
         flushTransform()
+        pendingResizeViewportState = null
         val state = saved.normalized()
         scale = state.zoom
         rememberedPanX = state.panX
@@ -473,6 +489,7 @@ class ZoomHost @JvmOverloads constructor(
     /** 会话恢复：还原倍率与旧版像素平移量，兼容 v17 及更早版本。 */
     fun setScale(s: Float, px: Float = 0f, py: Float = 0f) {
         flushTransform()
+        pendingResizeViewportState = null
         scale = s.coerceIn(ZoomTransform.MIN_SCALE, 4f)
         tx = px
         ty = py
