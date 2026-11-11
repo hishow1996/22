@@ -167,6 +167,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
             pfd.close()
             PdfBitmapCache.clearPrefix("raw:$cacheId:")
             PdfBitmapCache.clearPrefix("tile:$cacheId:")
+            PdfBitmapCache.clearPrefix("tile-preview:$cacheId:")
             PdfBitmapCache.clearPrefix("page:$cacheId:")
         }
     }

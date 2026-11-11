@@ -331,6 +331,7 @@ class PagesAdapter(
 
     fun evictAll() {
         PdfBitmapCache.clearPrefix("tile:${repo.cacheId}:")
+        PdfBitmapCache.clearPrefix("tile-preview:${repo.cacheId}:")
         clearPreview()
     }
 

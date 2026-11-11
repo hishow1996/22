@@ -135,7 +135,8 @@ class TiledPageView @JvmOverloads constructor(
         currentPage = current
         PdfTileScheduler.reprioritize(
             ownerId, generation, if (current) 0 else 2
-        )        invalidate()
+        )
+        invalidate()
     }
 
     fun unbindTiled() {
@@ -398,16 +399,3 @@ class TiledPageView @JvmOverloads constructor(
                 val delay = when (attempts) {
                     1 -> 1_000L
                     2 -> 2_500L
-                    else -> 5_000L
-                }
-                retryAfter[key] = SystemClock.uptimeMillis() + delay
-                postDelayed({
-                    if (bindGeneration == generation && tiled && isAttachedToWindow) {
-                        invalidate()
-                    }
-                }, delay)
-            }
-            invalidate()
-        }
-    }
-}

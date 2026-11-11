@@ -156,11 +156,14 @@ object PdfTileScheduler {
 
     fun cancelRepository(cacheId: String) {
         val prefix = "tile:$cacheId:"
+        val previewPrefix = "tile-preview:$cacheId:"
         synchronized(lock) {
             val iterator = tasks.values.iterator()
             while (iterator.hasNext()) {
                 val task = iterator.next()
-                if (!task.key.startsWith(prefix)) continue
+                if (!task.key.startsWith(prefix) &&
+                    !task.key.startsWith(previewPrefix)
+                ) continue
                 task.cancelled = true
                 if (!task.running) {
                     queue.remove(task)
