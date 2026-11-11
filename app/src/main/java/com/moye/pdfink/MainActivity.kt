@@ -320,6 +320,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
         root = findViewById(R.id.root)
         pager = findViewById(R.id.pager)
+        pager.addOnLayoutChangeListener { _, left, top, right, bottom,
+            oldLeft, oldTop, oldRight, oldBottom ->
+            val sizeChanged = right - left != oldRight - oldLeft ||
+                bottom - top != oldBottom - oldTop
+            if (sizeChanged && repo != null && pager.visibility == View.VISIBLE) {
+                adapter?.refreshHostBounds()
+            }
+        }
         edgeLeft = findViewById(R.id.edgeLeft)
         edgeRight = findViewById(R.id.edgeRight)
         topBar = findViewById(R.id.topBar)
@@ -885,11 +893,24 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.layoutParams = lpBottom
         bottomBar.setPadding(safeL + dp(8), dp(4), safeR + dp(8), cutBottom + dp(4))
 
-        // 横屏左上角可能是刘海（荣耀 10 90°），左右按物理安全区避让；
-        // 系统开了「隐藏显示区域」时 safeL/safeR=0，就是真正铺满。
-        val padL = if (portrait) 0 else safeL
-        val padR = if (portrait) 0 else safeR
-        pager.setPadding(padL, barTop, padR, barBottom)
+        // 将阅读器本身限制在真实可用矩形内，而不是把空白留在 ViewPager2
+        // 的内部 padding 中。ZoomHost、PageContainer 与分块渲染因此共享同一视口。
+        val viewportInsets = PdfViewportGeometry.contentInsets(
+            landscape = !portrait,
+            barsHidden = barsHidden,
+            safeLeft = safeL,
+            safeRight = safeR,
+            toolbarTop = barTop,
+            toolbarBottom = barBottom
+        )
+        val pagerLp = pager.layoutParams as FrameLayout.LayoutParams
+        pagerLp.leftMargin = viewportInsets.left
+        pagerLp.topMargin = viewportInsets.top
+        pagerLp.rightMargin = viewportInsets.right
+        pagerLp.bottomMargin = viewportInsets.bottom
+        pager.layoutParams = pagerLp
+        pager.setPadding(0, 0, 0, 0)
+        pager.clipToPadding = true
         val inDoc = repo != null && pager.visibility == View.VISIBLE
         val barVis = if (barsHidden || !inDoc) View.GONE else View.VISIBLE
         topBar.visibility = barVis
@@ -1180,7 +1201,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // 工具栏显隐会改变视口高度；先保存当前位置，再用归一化状态适配新尺寸。
         saveSessionNow()
         barsHidden = hide
-        // applyChrome updates ViewPager padding and refreshes only affected page geometry.
+        // applyChrome updates the actual reader bounds and refreshes only affected page geometry.
         // Toolbar visibility is not a document/render change: keep tile caches and holders.
         applyChrome()
     }
@@ -2152,6 +2173,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun saveSessionNow() {
         if (openingDocument || vm.currentFp.isEmpty() || !::sessionRepo.isInitialized) return
+        // Snapshot all laid-out pages before any resize or orientation transition.
+        adapter?.capturePageViewports()
         sessionRepo.saveSession(vm.currentFp, DocSession(
             page = currentPage(),
             zoom = currentZoom,
