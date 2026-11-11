@@ -25,6 +25,8 @@ class PagesAdapter(
 ) : RecyclerView.Adapter<PagesAdapter.VH>() {
 
     private val holders = HashMap<Int, VH>()
+    /** Coalesce viewport refreshes until the window has completed its next layout pass. */
+    private var hostBoundsRefreshPending = false
 
     var initialZoom = 1f
     var initialPanX = 0f
@@ -296,61 +298,84 @@ class PagesAdapter(
      */
     fun refreshHostBounds() {
         val anchor = holders.values.firstOrNull() ?: return
-        anchor.itemView.post {
-            for (h in holders.values.toList()) {
-                if (h.boundLogical < 0 ||
-                    h.bindingAdapterPosition == RecyclerView.NO_POSITION
-                ) continue
+        if (hostBoundsRefreshPending) return
 
-                val w = h.pageContainer.width
-                val ht = h.pageContainer.height
-                val hw = h.zoom.width
-                val hh = h.zoom.height
-                if (w <= 0 || ht <= 0 || hw <= 0 || hh <= 0) continue
-
-                val secondVisible = h.secondContainer.visibility == View.VISIBLE
-                val secondW = if (secondVisible) h.secondContainer.width else 0
-                val secondH = if (secondVisible) h.secondContainer.height else 0
-                val primaryChanged = w != h.lastPrimaryW || ht != h.lastPrimaryH
-                val secondChanged = secondVisible &&
-                    (secondW != h.lastSecondW || secondH != h.lastSecondH)
-                val hostChanged = hw != h.lastHostW || hh != h.lastHostH
-
-                if (!primaryChanged && !secondChanged && !hostChanged) continue
-
-                if (primaryChanged || hostChanged) {
-                    // 先保留归一化阅读位置，再按新边界还原，防止栏显隐改变阅读锚点。
-                    val savedViewport = pageViewportProvider?.invoke(h.boundLogical)
-                        ?: h.zoom.pageViewportState()
-                    h.zoom.baseContentW = w
-                    h.zoom.baseContentH = ht
-                    h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
-                    h.zoom.panExtraY = (ht - hh).coerceAtLeast(0).toFloat()
-                    h.zoom.setPageViewportState(savedViewport)
+        // View.post may run before ViewPager2/RecyclerView has consumed the new
+        // padding and completed measuring its page children. Read geometry from
+        // the window's pre-draw pass instead, after every nested child is laid out.
+        val observer = anchor.itemView.rootView.viewTreeObserver
+        if (!observer.isAlive) {
+            anchor.itemView.post { refreshHostBounds() }
+            return
+        }
+        hostBoundsRefreshPending = true
+        observer.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                val currentObserver = anchor.itemView.rootView.viewTreeObserver
+                if (currentObserver.isAlive) {
+                    currentObserver.removeOnPreDrawListener(this)
                 }
-
-                if (primaryChanged) {
-                    h.image.bindTiled(
-                        repo, h.boundLogical, w, ht, state.tint, state.brightness,
-                        state.pageRotation, h.boundPage == activePosition
-                    )
-                }
-
-                if (secondChanged && secondW > 0 && secondH > 0) {
-                    h.secondImage.bindTiled(
-                        repo, h.boundLogical + 1, secondW, secondH,
-                        state.tint, state.brightness, state.pageRotation,
-                        h.boundPage == activePosition
-                    )
-                }
-
-                h.lastHostW = hw
-                h.lastHostH = hh
-                h.lastPrimaryW = w
-                h.lastPrimaryH = ht
-                h.lastSecondW = secondW
-                h.lastSecondH = secondH
+                hostBoundsRefreshPending = false
+                refreshHostBoundsNow()
+                return true
             }
+        })
+    }
+
+    private fun refreshHostBoundsNow() {
+        for (h in holders.values.toList()) {
+            if (h.boundLogical < 0 ||
+                h.bindingAdapterPosition == RecyclerView.NO_POSITION
+            ) continue
+
+            val w = h.pageContainer.width
+            val ht = h.pageContainer.height
+            val hw = h.zoom.width
+            val hh = h.zoom.height
+            if (w <= 0 || ht <= 0 || hw <= 0 || hh <= 0) continue
+
+            val secondVisible = h.secondContainer.visibility == View.VISIBLE
+            val secondW = if (secondVisible) h.secondContainer.width else 0
+            val secondH = if (secondVisible) h.secondContainer.height else 0
+            val primaryChanged = w != h.lastPrimaryW || ht != h.lastPrimaryH
+            val secondChanged = secondVisible &&
+                (secondW != h.lastSecondW || secondH != h.lastSecondH)
+            val hostChanged = hw != h.lastHostW || hh != h.lastHostH
+
+            if (!primaryChanged && !secondChanged && !hostChanged) continue
+
+            if (primaryChanged || hostChanged) {
+                // 先保留归一化阅读位置，再按新边界还原，防止栏显隐改变阅读锚点。
+                val savedViewport = pageViewportProvider?.invoke(h.boundLogical)
+                    ?: h.zoom.pageViewportState()
+                h.zoom.baseContentW = w
+                h.zoom.baseContentH = ht
+                h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
+                h.zoom.panExtraY = (ht - hh).coerceAtLeast(0).toFloat()
+                h.zoom.setPageViewportState(savedViewport)
+            }
+
+            if (primaryChanged) {
+                h.image.bindTiled(
+                    repo, h.boundLogical, w, ht, state.tint, state.brightness,
+                    state.pageRotation, h.boundPage == activePosition
+                )
+            }
+
+            if (secondChanged && secondW > 0 && secondH > 0) {
+                h.secondImage.bindTiled(
+                    repo, h.boundLogical + 1, secondW, secondH,
+                    state.tint, state.brightness, state.pageRotation,
+                    h.boundPage == activePosition
+                )
+            }
+
+            h.lastHostW = hw
+            h.lastHostH = hh
+            h.lastPrimaryW = w
+            h.lastPrimaryH = ht
+            h.lastSecondW = secondW
+            h.lastSecondH = secondH
         }
     }
 
