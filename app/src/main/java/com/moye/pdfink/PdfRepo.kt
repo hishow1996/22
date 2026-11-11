@@ -21,16 +21,48 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
 
     private val renderer = PdfRenderer(pfd)
     private val ratios = ConcurrentHashMap<Int, Float>()
+    // The tile scheduler is serial. Reuse a page for a short run of same-page
+    // tile jobs, then close it to keep the native page resource bounded.
+    private var tileRenderPage: PdfRenderer.Page? = null
+    private var tileRenderPageIndex = -1
+    private var tileRenderPageUses = 0
     val cacheId: String = "doc-${nextId.incrementAndGet()}"
 
     companion object {
+        private const val MAX_TILE_PAGE_REUSES = 4
         private val nextId = AtomicLong()
     }
 
     val count: Int get() = renderer.pageCount
 
+    private fun closeTileRenderPageLocked() {
+        val opened = tileRenderPage
+        tileRenderPage = null
+        tileRenderPageIndex = -1
+        tileRenderPageUses = 0
+        try {
+            opened?.close()
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun acquireTileRenderPageLocked(page: Int): PdfRenderer.Page {
+        val current = tileRenderPage
+        if (current != null && tileRenderPageIndex == page &&
+            tileRenderPageUses < MAX_TILE_PAGE_REUSES
+        ) return current
+
+        closeTileRenderPageLocked()
+        val opened = renderer.openPage(page)
+        tileRenderPage = opened
+        tileRenderPageIndex = page
+        tileRenderPageUses = 0
+        return opened
+    }
+
     fun ratio(page: Int): Float = synchronized(renderer) {
         ratios[page] ?: run {
+            closeTileRenderPageLocked()
             val p = renderer.openPage(page)
             val r = try {
                 p.width.toFloat() / p.height.coerceAtLeast(1).toFloat()
@@ -72,6 +104,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         if (hit != null) {
             hit
         } else {
+            closeTileRenderPageLocked()
             val bmp = Bitmap.createBitmap(rw, rh, Bitmap.Config.ARGB_8888)
             bmp.eraseColor(Color.WHITE)
             try {
@@ -108,15 +141,20 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
         out.eraseColor(Color.WHITE)
         try {
             synchronized(renderer) {
-                val p = renderer.openPage(page)
+                val p = acquireTileRenderPageLocked(page)
                 try {
                     val values = PdfTileTransform.matrixValues(
                         p.width.toFloat(), p.height.toFloat(), lw, left, top, rotation
                     )
                     val m = Matrix().apply { setValues(values) }
                     p.render(out, null, m, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                } finally {
-                    p.close()
+                    tileRenderPageUses++
+                    if (tileRenderPageUses >= MAX_TILE_PAGE_REUSES) {
+                        closeTileRenderPageLocked()
+                    }
+                } catch (failure: Throwable) {
+                    closeTileRenderPageLocked()
+                    throw failure
                 }
             }
             val filtered = PageFilter.apply(out, tint, brightness)
@@ -162,7 +200,10 @@ class PdfRepo(private val ctx: Context, uri: Uri) : Closeable {
     override fun close() {
         PdfTileScheduler.cancelRepository(cacheId)
         try {
-            synchronized(renderer) { renderer.close() }
+            synchronized(renderer) {
+                closeTileRenderPageLocked()
+                renderer.close()
+            }
         } finally {
             pfd.close()
             PdfBitmapCache.clearPrefix("raw:$cacheId:")
