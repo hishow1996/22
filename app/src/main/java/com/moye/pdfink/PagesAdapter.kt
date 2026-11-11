@@ -286,6 +286,17 @@ class PagesAdapter(
         return host.panX to host.panY
     }
 
+    /** Capture live normalized page positions before the host viewport changes. */
+    fun capturePageViewports() {
+        for (h in holders.values.toList()) {
+            if (h.boundLogical < 0 ||
+                h.bindingAdapterPosition == RecyclerView.NO_POSITION ||
+                h.zoom.baseContentW <= 0 || h.zoom.baseContentH <= 0
+            ) continue
+            onPageViewportChange?.invoke(h.boundLogical, h.zoom.pageViewportState())
+        }
+    }
+
     /** 切换浏览 / 做题时，已绑定的所有页立刻生效，不用等重新 bind。 */
     fun setBrowseMode(v: Boolean) {
         for (h in holders.values) h.zoom.browseMode = v
@@ -311,10 +322,7 @@ class PagesAdapter(
         hostBoundsRefreshPending = true
         observer.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
-                val currentObserver = anchor.itemView.rootView.viewTreeObserver
-                if (currentObserver.isAlive) {
-                    currentObserver.removeOnPreDrawListener(this)
-                }
+                if (observer.isAlive) observer.removeOnPreDrawListener(this)
                 hostBoundsRefreshPending = false
                 refreshHostBoundsNow()
                 return true
@@ -346,7 +354,8 @@ class PagesAdapter(
 
             if (primaryChanged || hostChanged) {
                 // 先保留归一化阅读位置，再按新边界还原，防止栏显隐改变阅读锚点。
-                val savedViewport = pageViewportProvider?.invoke(h.boundLogical)
+                val savedViewport = h.zoom.takePendingResizeViewportState()
+                    ?: pageViewportProvider?.invoke(h.boundLogical)
                     ?: h.zoom.pageViewportState()
                 h.zoom.baseContentW = w
                 h.zoom.baseContentH = ht
