@@ -112,11 +112,21 @@ class PagesAdapter(
         // 所有旋转角度统一使用 viewport 自绘，不再退回整页位图。
         h.zoom.legacyViewScale = false
         h.zoom.onViewportChanged = {
+            val vectorMode = kotlin.math.abs(h.zoom.viewport.scale - 1f) > 0.0001f
+            if (h.ink.isShown) {
+                if (h.ink.hiResMode != vectorMode) h.ink.hiResMode = vectorMode
+                else h.ink.invalidate()
+            }
+            if (h.secondInk.isShown) {
+                if (h.secondInk.hiResMode != vectorMode) h.secondInk.hiResMode = vectorMode
+                else h.secondInk.invalidate()
+            }
+            if (h.draftInk.isShown) {
+                if (h.draftInk.hiResMode != vectorMode) h.draftInk.hiResMode = vectorMode
+                else h.draftInk.invalidate()
+            }
             if (h.image.isShown) h.image.invalidate()
             if (h.secondImage.isShown) h.secondImage.invalidate()
-            if (h.ink.isShown) h.ink.invalidate()
-            if (h.secondInk.isShown) h.secondInk.invalidate()
-            if (h.draftInk.isShown) h.draftInk.invalidate()
         }
         h.zoom.onViewportGestureChanged = { active ->
             h.image.deferHighResolution = active

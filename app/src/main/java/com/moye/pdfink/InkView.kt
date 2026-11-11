@@ -653,10 +653,23 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun invalidateBounds(leftF: Float, topF: Float, rightF: Float, bottomF: Float) {
-        val left = leftF.toInt().coerceIn(0, width)
-        val top = topF.toInt().coerceIn(0, height)
-        val right = (rightF.toInt() + 1).coerceIn(left, width)
-        val bottom = (bottomF.toInt() + 1).coerceIn(top, height)
+        // dirty rectangle 以页面坐标给出；invalidate 需要的是视口最终显示坐标。
+        // 与 onDraw 的 translate/scale 保持同一变换，避免缩放或平移后留下残影。
+        val vp = viewport
+        val scale = vp?.scale?.takeIf { it > 0f } ?: 1f
+        val renderToDisplay = if (vp != null && vp.bucket > 0f) {
+            scale / vp.bucket
+        } else 1f
+        val originX = vp?.originX ?: 0f
+        val originY = vp?.originY ?: 0f
+        val leftF = leftF * scale - originX * renderToDisplay
+        val topF = topF * scale - originY * renderToDisplay
+        val rightF = rightF * scale - originX * renderToDisplay
+        val bottomF = bottomF * scale - originY * renderToDisplay
+        val left = kotlin.math.floor(leftF).toInt().coerceIn(0, width)
+        val top = kotlin.math.floor(topF).toInt().coerceIn(0, height)
+        val right = (kotlin.math.ceil(rightF).toInt() + 1).coerceIn(left, width)
+        val bottom = (kotlin.math.ceil(bottomF).toInt() + 1).coerceIn(top, height)
         if (right > left && bottom > top) invalidate(left, top, right, bottom)
     }
 

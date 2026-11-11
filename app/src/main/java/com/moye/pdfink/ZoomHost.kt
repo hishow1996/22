@@ -267,7 +267,7 @@ class ZoomHost @JvmOverloads constructor(
                 if (scale <= ZoomTransform.MIN_SCALE + 0.0001f) {
                     scale = ZoomTransform.MIN_SCALE
                     // 只有到达最小倍率才钳位；小于 1× 的倍率必须保留。
-                    applyTransform()
+                    scheduleTransform()
                 }
                 startDist = 0f
             }
