@@ -361,8 +361,10 @@
             android:layout_width="38dp"
             android:layout_height="38dp"
             style="@style/Tool"
+            android:background="@null"
             android:contentDescription="@string/cd_zoom_reset"
-            android:src="@drawable/ic_zoom_reset" />
+            android:src="@drawable/ic_zoom_reset"
+            android:tint="@color/icon_action" />
 
     </LinearLayout>
 

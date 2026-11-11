@@ -179,6 +179,15 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var btnShow: ImageButton
     private lateinit var btnBrowse: ImageButton
     private lateinit var btnBookmark: ImageButton
+    private lateinit var btnZoomReset: ImageButton
+
+    /** v21：点击短闪 180ms 后回原色并恢复 1× 的淡显；带销毁检查，不空跑。 */
+    private val zoomResetOff = Runnable {
+        if (!isDestroyed && ::btnZoomReset.isInitialized) {
+            btnZoomReset.isSelected = false
+            refreshZoomReset()
+        }
+    }
 
     // ----- InkView.Host -----
     override val tool: Int get() = currentTool
@@ -338,6 +347,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnShow = findViewById(R.id.btnShow)
         btnBrowse = findViewById(R.id.btnBrowse)
         btnBookmark = findViewById(R.id.btnBookmark)
+        btnZoomReset = findViewById(R.id.btnZoomReset)
 
         buildDots()
         buildBrushSlots()
@@ -633,10 +643,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             inkStore.toggleBookmark(currentPage())
             refreshBookmark()
         }
-        findViewById<ImageButton>(R.id.btnZoomReset).setOnClickListener {
+        btnZoomReset.setOnClickListener {
             adapter?.resetZoom(pager.currentItem)
             currentZoom = 1f
             updatePagerInput()
+            // v21 ②：resetZoom 已把 1× 的逐页位置写进内存 pageViewports，
+            // 但没落盘；补一次，避免复位后直接杀进程重开回到旧倍率 / 旧位置。
+            saveSessionNow()
+            // v21 ①：点击短闪。本来就是 1× 时画面不变，反馈由按钮自己承担；
+            // 先拉满 alpha，让淡显状态下这一下蓝也看得清。
+            btnZoomReset.isSelected = true
+            btnZoomReset.alpha = 1f
+            btnZoomReset.removeCallbacks(zoomResetOff)
+            btnZoomReset.postDelayed(zoomResetOff, 180L)
         }
         btnHide.setOnClickListener { toggleBars(true) }
         btnShow.setOnClickListener { toggleBars(false) }
@@ -1003,6 +1022,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // 否则放大后翻到下一页仍会误禁横向翻页。
         val z = adapter?.zoomOf(pos) ?: 1f
         pager.isUserInputEnabled = state.browse && z <= 1.01f
+        refreshZoomReset(pos)
+    }
+
+    /**
+     * v21 ①：1× 时降到 0.4f，放大 / 缩小（含 0.5×）后恢复 1f。
+     * 只降透明度、绝不 setEnabled(false) —— 真禁用会让 1× 的点击短闪消失。
+     * 短闪期间 isSelected=true，直接跳过，避免被缩放回调打断。
+     */
+    private fun refreshZoomReset(pos: Int = pager.currentItem) {
+        if (!::btnZoomReset.isInitialized || btnZoomReset.isSelected) return
+        val z = adapter?.zoomOf(pos) ?: 1f
+        btnZoomReset.alpha =
+            if (kotlin.math.abs(z - 1f) > 0.01f) 1f else 0.4f
     }
 
     private fun step(delta: Int) {

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v21 瞬时动作按钮：点击 / 按下染品牌蓝，抬手或短闪结束回深灰。
+     selected 放在最前，保证 180ms 短闪期间抬手也保持蓝色。
+     纯颜色状态，不产生任何方块 / 圆形背景，也不含动画。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="@color/accent" />
+    <item android:state_pressed="true" android:color="@color/accent" />
+    <item android:color="@color/icon" />
+</selector>

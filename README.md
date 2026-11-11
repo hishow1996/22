@@ -715,3 +715,60 @@ A 方案的高分辨率放大覆盖所有未旋转页（竖屏与横屏主场景
 **真机验收补充**
   61. 点 ⇄ 箭头变品牌蓝、无方块底；再点回深灰；★ 收藏变蓝、取消回深灰，
       顶栏 6 个绘图按钮的淡蓝选中底无回归
+
+## 放大镜点击反馈 v21
+
+用户要求：**点击底栏放大镜时添加一个反馈效果**。按推荐口径实现
+「B 点击后短闪 180ms」，并把范围拉满（P1 两项也做）。
+
+**诊断：这个按钮现在是零反馈**
+
+`btnZoomReset` 走 `style="@style/Tool"`：`tint="@color/icon"` 固定深灰、
+`background="@drawable/tool_bg"`（只有 `selected=true` 才有淡蓝底，而它
+从不设 selected）。点击回调只有 `resetZoom / currentZoom=1f /
+updatePagerInput` 三行，**没有任何颜色、状态或动画变化**。更关键：
+本来就是 1× 时复位对画面几乎零变化，纸没动、按钮也没变，感知上就是
+「没反应」—— 反馈必须由按钮自己承担，不能指望画面变化。
+
+**P0：点击短闪（纯颜色、零动画、零背景）**
+
+- 新增 `res/color/icon_action.xml`：`state_selected` / `state_pressed`
+  → `@color/accent`（`#2F6FED`），默认 → `@color/icon`（`#3C3F44`）。
+  selected 放最前，保证短闪期间抬手也保持蓝
+- 布局显式 `background="@null"` + `tint="@color/icon_action"` 覆盖 style，
+  与 v20 的 ⇄ / ★ 同一套「无方块底、图标本身变蓝」观感
+- 点击置 `isSelected=true` 并把 alpha 拉满，**180ms** 后复位；
+  `removeCallbacks` + `postDelayed` 让连续快点从最后一次点击重新计时，
+  Runnable 带 `isDestroyed` + `::btnZoomReset.isInitialized` 检查
+- 零文字、零 Toast、零按压缩放（沿用 v12「不要动效」口径）；
+  即使本来就是 1× 也能明确看到「点到了」
+
+**P1-① 未缩放降透明度**
+
+`refreshZoomReset()` 挂在已有的 `updatePagerInput()` 里：1× 时按钮
+`alpha=0.4f`，放大 / 缩小（含 v17 的 0.5×）后恢复 1f。这个出口在
+onCreate、翻页、双指缩放、模式切换、复位、`setBrowseMode` 后都会走到，
+无需逐处补调用。**只降 alpha，不 `setEnabled(false)`** —— 真禁用会让
+1× 时的点击短闪彻底消失，而 1× 恰恰最需要反馈；点击瞬间 alpha 会临时
+拉满，短闪结束后按当前倍率恢复。
+
+**P1-② 复位写回会话**
+
+`resetZoom()` 会经 `onPanChange → onPageViewportChange` 把 1× 的逐页位置
+写进内存 `pageViewports`，但**没有落盘**；原来只在翻页 / 退出时才顺带
+保存，复位完直接杀进程重开有可能回到旧倍率 / 旧阅读位置。点击后补一次
+`saveSessionNow()` 修掉。
+
+**边界**
+
+`tool_bg` 一行未改（顶栏 6 个绘图按钮淡蓝选中底原样保留）；
+`ic_zoom_reset` 图形、⇄ / ★ 的 `icon_toggle`、v19 竖屏智能铺满、
+v18 ⇄、默认浏览与手势链、首页两态全部原样保留。
+另：这个图标画的是「放大镜+加号」、实际功能是缩放复位，语义仍错位，
+本轮按范围只做反馈，不动图形。
+
+**真机验收补充**
+  62. 点放大镜：图标短闪品牌蓝约 180ms 后回深灰、无方块底、无文字；
+      本来 1× 时也能看到反馈；连续快点不残留蓝色
+  63. 1× 时按钮淡显 0.4f、放大或缩小后恢复高亮，但淡显下仍可点；
+      复位后杀进程重开不再回到旧倍率
