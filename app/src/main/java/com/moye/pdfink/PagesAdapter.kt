@@ -207,8 +207,8 @@ class PagesAdapter(
             h.zoom.baseContentW = w
             h.zoom.baseContentH = ht
 
-            // WIDTH 模式页面比容器高，把超出量交给 ZoomHost 做 1x 纵向平移边界
-            h.zoom.panExtraX = 0f
+            // FILL 下页面横向也会超出，panExtraX 不能再写死 0
+            h.zoom.panExtraX = (w - h.zoom.width).coerceAtLeast(0).toFloat()
             h.zoom.panExtraY = (ht - h.zoom.height).coerceAtLeast(0).toFloat()
             val remembered = pageViewportProvider?.invoke(p0)
             when {
@@ -218,8 +218,12 @@ class PagesAdapter(
                         initialPanX != 0f || initialPanY != 0f) -> {
                     h.zoom.setScale(initialZoom, initialPanX, initialPanY)
                 }
-                else -> h.zoom.reset(silent = false,
-                    toTop = fitMode == PageContainer.WIDTH)
+                else -> {
+                    h.zoom.reset(silent = false,
+                        toTop = fitMode == PageContainer.WIDTH ||
+                            fitMode == PageContainer.FILL)
+                    if (fitMode == PageContainer.FILL) h.zoom.alignStart()
+                }
             }
             if (position == restorePanAt) restorePanAt = -1
 
@@ -253,6 +257,45 @@ class PagesAdapter(
     /** 切换浏览 / 做题时，已绑定的所有页立刻生效，不用等重新 bind。 */
     fun setBrowseMode(v: Boolean) {
         for (h in holders.values) h.zoom.browseMode = v
+    }
+
+    private var syncedW = -1
+    private var syncedH = -1
+    private var syncedHostW = -1
+    private var syncedHostH = -1
+
+    /**
+     * P0：宿主视口尺寸变了（栏显隐 / insets / 旋转 / 分屏），页面重新 measure
+     * 后必须把新几何回传给 ZoomHost 与分块层，否则平移边界、可见窗口、
+     * PDF 采样尺寸都停在旧值 —— 就是截图里「浏览区域被钉在中间」的根因。
+     * 尺寸没变时直接跳过，避免 insets 回调反复重绑。
+     */
+    fun refreshHostBounds() {
+        val first = holders.values.firstOrNull() ?: return
+        first.itemView.post {
+            val w = first.pageContainer.width
+            val ht = first.pageContainer.height
+            val hw = first.zoom.width
+            val hh = first.zoom.height
+            if (w <= 0 || ht <= 0 || hw <= 0 || hh <= 0) return@post
+            if (w == syncedW && ht == syncedH &&
+                hw == syncedHostW && hh == syncedHostH) return@post
+            syncedW = w; syncedH = ht; syncedHostW = hw; syncedHostH = hh
+            for (h in holders.values) {
+                h.zoom.baseContentW = w
+                h.zoom.baseContentH = ht
+                h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
+                h.zoom.panExtraY = (ht - hh).coerceAtLeast(0).toFloat()
+                // 不改 scale / 不 reset：用户手动缩放与归一化阅读位置原样保留
+                h.zoom.refreshPanBounds()
+                h.image.bindTiled(
+                    repo, h.boundLogical, w, ht, state.tint, state.brightness,
+                    state.pageRotation, h.boundPage == activePosition
+                )
+            }
+            // 逻辑画布尺寸变了，旧块 key 已不匹配；bump epoch 强制重渲染
+            TileCache.clear()
+        }
     }
 
     fun bitmapFor(page: Int): android.graphics.Bitmap? =

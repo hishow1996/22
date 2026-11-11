@@ -624,3 +624,61 @@ A 方案的高分辨率放大覆盖所有未旋转页（竖屏与横屏主场景
 **真机验收补充**
   56. 底栏模式按钮固定显示双向箭头，不随浏览 / 做题切换图形；做题态仍有
       淡蓝高亮、两态读屏正确，默认浏览与手势链无回归
+
+## 竖屏浏览区域铺满 v19（P0 + P1）
+
+**截图反馈**：有栏时页面与顶/底栏之间各有大片空白；隐藏栏后
+文件仍没占满整个屏幕，浏览区域像被固定在中间一条。
+
+**诊断：不是「隐藏栏后 padding 没归零」复发** —— `applyChrome()` 里
+`barsHidden → 0` 一直在、也生效了。归零反而让空白更明显，真正卡住的是
+页面尺寸口径：
+
+- 竖屏默认 `DisplayMode.WIDTH`，`PageContainer.onMeasure()` 的 WIDTH
+  分支**只读 availW、完全不读 availH**，A4 页固定 1080×1528；
+  `spreadRoot` 又 `gravity=center`，于是在 1935px（有栏）/ 2340px
+  （隐藏栏）的可用高里居中，上下各留约 200 / 400px 纯空白
+- `ZoomHost` 没有 `onSizeChanged`，`PagesAdapter` 只在 `onBindViewHolder`
+  的 post 里写一次 `baseContentW/H` 与 `panExtraY`，`panExtraX` 还写死 0。
+  宿主视口变了，平移边界、可见窗口、PDF 采样尺寸可能停在旧值
+
+> 物理限制：竖版 PDF（≈0.707）与 19:9 屏（≈0.462）比例不同，
+> **不变形、不裁切就不可能同时铺满宽和高**。P1 采用推荐口径 C
+> 「至少铺满一个方向」，代价是左右约 20% 内容需要横向拖动查看。
+
+**P0 尺寸同步**
+
+- `ZoomHost.onSizeChanged` → `refreshPanBounds()`，重算 `panLimit` /
+  `viewport.visW/visH`，尺寸没变不重复算
+- `PagesAdapter.refreshHostBounds()`：宿主尺寸变化后回写
+  `baseContentW/H`、`panExtraX/Y`，`refreshPanBounds()` 并重新
+  `bindTiled`；带尺寸去重，insets 回调反复触发也不重绑；**不 reset、
+  不改 scale**，用户手动缩放与归一化阅读位置原样保留
+- `applyChrome()` 末尾统一触发（唯一出口）；`activity_main.xml` 的
+  静态 `paddingTop/Bottom` 清零，栏高与 padding 全由 `applyChrome()` 管
+- `panExtraX` 改按 `(页面宽 − 宿主宽)` 真实超出量计算
+
+**P1 智能铺满（推荐 C）**
+
+- `PageContainer.FILL` + 纯函数 `fillScale(availW, availH, ratio)`：
+  以「按宽度铺满」为基准放大到上下铺满；A4 有栏约 1.27×、
+  隐藏栏约 1.53×，都在 `MAX_AUTO_SCALE=1.8` 内，四边零留白；
+  宽幅页面钳到 1.8×，宁可留一点白也不裁掉整页内容
+- 竖屏默认启用（`fillScreen` 偏好，默认 true）；「更多」里竖屏现在是
+  **适应屏幕 / 适应宽度 / 铺满屏幕** 三态互斥单选；横屏
+  FIT / WIDTH / DOUBLE 完全不受影响
+- FILL 初始 `alignStart()` 靠左（讲义文字多从左边起，少裁半行正文）
+- 横向有裁切时双指横滑改成平移，不再误触发翻页；页面横向没有超出
+  时横滑翻页照旧。单指左右翻页、双指缩放、纵向平移不变
+- 复用 v15 分块：页面基准变宽 → 逻辑画布变宽 → PDF 按更高采样，
+  **文字比 1× 更清晰**；笔迹按归一化坐标同步放大，落点不偏；
+  会话按页/模式保存归一化位置，栏显隐 / 旋转不回弹
+
+> 取舍：P2「栏改半透明浮层」不在本轮范围，栏仍占位；隐藏栏时
+> 可用高变成整屏，页面会自动按新尺寸重算并继续铺满。
+
+**真机验收补充**
+  57. 有栏竖屏：页面上下贴住内容区，顶/底栏之间不再有空白
+  58. 隐藏栏竖屏：页面重新按整屏高铺满，不居中留白、不闪白
+  59. 铺满后左右可横向拖动看全；双指缩放、单指左右翻页、笔迹落点准
+  60. 横屏 FIT / WIDTH / DOUBLE 与 v18 ⇄ 图标、首页两态均无回归

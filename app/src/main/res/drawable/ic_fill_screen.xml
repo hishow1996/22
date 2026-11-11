@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 铺满屏幕：四角外扩的取景框，与 ic_fit_screen / ic_fit_width 同重 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FF000000" android:pathData="M3,9V3H9V4.8H4.8V9Z" />
+    <path android:fillColor="#FF000000" android:pathData="M15,3H21V9H19.2V4.8H15Z" />
+    <path android:fillColor="#FF000000" android:pathData="M21,15V21H15V19.2H19.2V15Z" />
+    <path android:fillColor="#FF000000" android:pathData="M9,21H3V15H4.8V19.2H9Z" />
+    <path android:fillColor="#FF000000" android:pathData="M7,11H17V13H7Z" />
+</vector>

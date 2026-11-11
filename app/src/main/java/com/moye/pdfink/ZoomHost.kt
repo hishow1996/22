@@ -85,6 +85,15 @@ class ZoomHost @JvmOverloads constructor(
         dp16 = 16f * d
     }
 
+    /** P0：栏显隐 / insets / 旋转 / 分屏改变宿主视口后，立即重算平移边界与可见窗。 */
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (oldw <= 0 || oldh <= 0 || w <= 0 || h <= 0) return
+        if (w == oldw && h == oldh) return
+        if (baseContentW <= 0 || baseContentH <= 0) return
+        refreshPanBounds()
+    }
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (browseMode) doubleTapDetector.onTouchEvent(ev)
         if (doubleTapActive) {
@@ -193,7 +202,10 @@ class ZoomHost @JvmOverloads constructor(
                 val dx = mx - startMidX
                 val dy = my - startMidY
                 val spreadDelta = abs(d - startDist)
-                if (!flipDone && abs(dx) > dp70 && spreadDelta < dp16 && abs(dx) > abs(dy)) {
+                // FILL 铺满后横向有裁切：双指横滑优先用来看被裁的左右内容，
+                // 不再抢成翻页；页面横向没有超出时才恢复横滑翻页。
+                if (!flipDone && panLimitX() <= 0.5f && abs(dx) > dp70 &&
+                    spreadDelta < dp16 && abs(dx) > abs(dy)) {
                     flipDone = true
                     onFlip?.invoke(if (dx > 0f) -1 else 1)
                 } else if (!flipDone) {
@@ -315,6 +327,12 @@ class ZoomHost @JvmOverloads constructor(
             onZoomChange?.invoke(1f)
             onPanChange?.invoke(0f, ty)
         }
+    }
+
+    /** FILL 初始靠左：讲义文字多从左边起，比居中少裁掉半行正文。 */
+    fun alignStart() {
+        tx = panLimitX()
+        applyTransform()
     }
 
     val zoomScale: Float get() = scale

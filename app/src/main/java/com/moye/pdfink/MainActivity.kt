@@ -131,6 +131,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private var pendingPdfWidth: Int = 1240
     /** 用户是否主动选择过显示模式；未选择时竖屏和横屏默认 WIDTH */
     private var modeChosen = false
+    /** P1：竖屏默认智能铺满；用户切到「适应屏幕 / 适应宽度」后记住。 */
+    private var fillScreen = true
     private var pendingExport: (() -> Unit)? = null
     private var sysTop = 0
     private var sysBottom = 0
@@ -396,6 +398,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.displayMode = p.getInt("displayMode", DisplayMode.WIDTH)
             .coerceIn(DisplayMode.FIT, DisplayMode.DOUBLE)
         modeChosen = p.getBoolean("modeChosen", false)
+        fillScreen = p.getBoolean("fillScreen", true)
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
         state.edgeFlip = p.getBoolean("edge", true)
@@ -418,6 +421,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("spread", state.spread)
             putInt("displayMode", state.displayMode)
             putBoolean("modeChosen", modeChosen)
+            putBoolean("fillScreen", fillScreen)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
@@ -853,6 +857,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnShow.translationX = safeL.toFloat()
 
         refreshTools()
+        // P0：栏显隐 / insets / 旋转改了宿主视口，页面几何必须跟着重算，
+        // 否则 FILL 铺满后平移边界与分块视口还停在旧尺寸。
+        if (inDoc) adapter?.refreshHostBounds()
     }
 
     /** 竖屏浮层里的调色 / 粗细 / 笔刷槽，功能与主条完全一致。 */
@@ -1029,11 +1036,30 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /** 把当前显示模式推给 adapter 并重渲染。竖屏默认按宽度适配。 */
+    /** 竖屏默认智能铺满；横屏 FIT / WIDTH / DOUBLE 一概不受 fillScreen 影响。 */
+    private fun currentFitMode(): Int {
+        val mode = state.effectiveMode
+        return when {
+            !state.landscape && fillScreen && mode == DisplayMode.WIDTH ->
+                PageContainer.FILL
+            mode == DisplayMode.WIDTH -> PageContainer.WIDTH
+            else -> PageContainer.FIT
+        }
+    }
+
+    private fun setPortraitMode(fit: Boolean, fill: Boolean) {
+        fillScreen = fill
+        state.displayMode = if (fit) DisplayMode.FIT else DisplayMode.WIDTH
+        modeChosen = true
+        savePrefs()
+        applyPageMode()
+        saveSessionNow()
+    }
+
     private fun applyPageMode() {
         val mode = state.effectiveMode
         adapter?.let {
-            it.fitMode = if (mode == DisplayMode.WIDTH)
-                PageContainer.WIDTH else PageContainer.FIT
+            it.fitMode = currentFitMode()
             it.doublePage = mode == DisplayMode.DOUBLE
         }
         refreshPageLayout()
@@ -1308,8 +1334,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 pageViewports.remove(oldest)
             }
         }
-        ad.fitMode = if (state.effectiveMode == DisplayMode.WIDTH)
-            PageContainer.WIDTH else PageContainer.FIT
+        ad.fitMode = currentFitMode()
         ad.doublePage = state.effectiveMode == DisplayMode.DOUBLE
         ad.onPanChange = { px, py -> currentPanX = px; currentPanY = py }
         ad.setBrowseMode(state.browse)
@@ -1524,10 +1549,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     ) else listOf(
         MenuAction(R.drawable.ic_fit_screen, getString(R.string.cd_fit_screen), {
             state.effectiveMode == DisplayMode.FIT
-        }) { setDisplayMode(DisplayMode.FIT) },
+        }) { setPortraitMode(fit = true, fill = false) },
         MenuAction(R.drawable.ic_fit_width, getString(R.string.cd_fit_width), {
-            state.effectiveMode == DisplayMode.WIDTH
-        }) { setDisplayMode(DisplayMode.WIDTH) }
+            !fillScreen && state.effectiveMode == DisplayMode.WIDTH
+        }) { setPortraitMode(fit = false, fill = false) },
+        MenuAction(R.drawable.ic_fill_screen, getString(R.string.cd_fill_screen), {
+            fillScreen && state.effectiveMode == DisplayMode.WIDTH
+        }) { setPortraitMode(fit = false, fill = true) }
     )
 
     private fun showMenu() {
