@@ -26,7 +26,7 @@ class PageContainer @JvmOverloads constructor(
          * 抽成纯函数便于 JVM 单测。
          */
         fun fillScale(availW: Int, availH: Int, ratio: Float): Float {
-            if (availW <= 0 || availH <= 0 || ratio <= 0f) return 1f
+            if (availW <= 0 || availH <= 0 || !ratio.isFinite() || ratio <= 0f) return 1f
             val baseH = availW / ratio
             if (baseH <= 0f) return 1f
             return (availH / baseH).coerceIn(1f, MAX_AUTO_SCALE)
@@ -35,7 +35,7 @@ class PageContainer @JvmOverloads constructor(
 
     var ratio: Float = 0.75f
         set(value) {
-            if (value > 0f && value != field) {
+            if (value.isFinite() && value > 0f && value != field) {
                 field = value
                 requestLayout()
             }
@@ -52,24 +52,25 @@ class PageContainer @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val availW = MeasureSpec.getSize(widthMeasureSpec)
         val availH = MeasureSpec.getSize(heightMeasureSpec)
+        val safeRatio = ratio.takeIf { it.isFinite() && it > 0f } ?: 0.75f
         var w = availW.coerceAtLeast(1)
-        var h = (w / ratio).roundToInt().coerceAtLeast(1)
+        var h = (w / safeRatio).roundToInt().coerceAtLeast(1)
         if (fitMode == FILL) {
             // 智能铺满：页面高度向可用高对齐，宽度按比例一起放大；
             // 横向超出交给 ZoomHost 的 panLimitX（双指横向拖动可看全）。
-            val s = fillScale(availW, availH, ratio)
+            val s = fillScale(availW, availH, safeRatio)
             w = (availW * s).roundToInt().coerceAtLeast(1)
-            h = (w / ratio).roundToInt().coerceAtLeast(1)
+            h = (w / safeRatio).roundToInt().coerceAtLeast(1)
         } else if (fitMode == WIDTH) {
             // 按宽度铺满：不再受 availH 约束，超出部分由 ZoomHost 双指上下平移
         } else {
             if (h > availH) {
                 h = availH.coerceAtLeast(1)
-                w = (h * ratio).roundToInt().coerceAtLeast(1)
+                w = (h * safeRatio).roundToInt().coerceAtLeast(1)
             }
             if (w > availW) {
                 w = availW.coerceAtLeast(1)
-                h = (w / ratio).roundToInt().coerceAtLeast(1)
+                h = (w / safeRatio).roundToInt().coerceAtLeast(1)
             }
         }
         val ew = MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY)
