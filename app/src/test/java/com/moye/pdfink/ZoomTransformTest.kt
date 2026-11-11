@@ -1,6 +1,7 @@
 package com.moye.pdfink
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ZoomTransformTest {
@@ -132,6 +133,45 @@ class ZoomTransformTest {
         assertTrue(first.visibleLeft != second.visibleLeft)
         assertEquals(first.visibleWidth, second.visibleWidth)
         assertEquals(first.visibleHeight, second.visibleHeight)
+    }
+
+    @Test
+    fun touchCoordinatesMapBackToTheSamePdfPointForEachPage() {
+        val hostW = 1200
+        val hostH = 800
+        val pagePointX = 173f
+        val pagePointY = 241f
+        val scale = 1.65f
+        val bucket = 1.5f
+        val translationX = 54f
+        val translationY = -32f
+        val frames = listOf(
+            PageFrame(20f, 90f, 520, 620),
+            PageFrame(560f, 170f, 620, 460)
+        )
+
+        for (frame in frames) {
+            val mapping = ZoomTransform.pageViewportMapping(
+                hostW, hostH, frame, scale, bucket, translationX, translationY
+            )
+            val displayedLeft = hostW * 0.5f +
+                (frame.left - hostW * 0.5f) * scale + translationX
+            val displayedTop = hostH * 0.5f +
+                (frame.top - hostH * 0.5f) * scale + translationY
+            val touchLocalX = displayedLeft + pagePointX * scale - frame.left
+            val touchLocalY = displayedTop + pagePointY * scale - frame.top
+
+            assertEquals(
+                pagePointX,
+                ZoomTransform.pageCoordinate(touchLocalX, mapping.originX, scale),
+                0.0001f
+            )
+            assertEquals(
+                pagePointY,
+                ZoomTransform.pageCoordinate(touchLocalY, mapping.originY, scale),
+                0.0001f
+            )
+        }
     }
 
     @Test
