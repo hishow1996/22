@@ -132,7 +132,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : PageSource {
     override fun renderTile(
         page: Int, lw: Int, lh: Int, left: Int, top: Int,
         tw: Int, th: Int, tint: Int, brightness: Float,
-        rotation: Int = 0
+        rotation: Int
     ): Bitmap {
         if (lw <= 0 || tw <= 0 || th <= 0 || left >= lw || top >= lh) {
             return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
@@ -168,7 +168,7 @@ class PdfRepo(private val ctx: Context, uri: Uri) : PageSource {
 
     override fun render(
         page: Int, w: Int, h: Int, tint: Int, brightness: Float,
-        rotation: Int = 0
+        rotation: Int
     ): Bitmap {
         val normalizedRotation = PdfTileTransform.normalizeRotation(rotation)
         val swap = normalizedRotation == 90 || normalizedRotation == 270

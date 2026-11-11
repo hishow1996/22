@@ -857,7 +857,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 rv.edgeEffectFactory =
                     object : androidx.recyclerview.widget.RecyclerView.EdgeEffectFactory() {
                         override fun createEdgeEffect(
-                            view: View, direction: Int
+                            view: androidx.recyclerview.widget.RecyclerView, direction: Int
                         ): android.widget.EdgeEffect =
                             android.widget.EdgeEffect(view.context).apply {
                                 color = 0xFF2F6FED.toInt()
