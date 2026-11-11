@@ -389,14 +389,18 @@
                 android:gravity="center"
                 android:orientation="vertical">
 
+                <!-- v22：无记录态恢复图二的 88dp 白圆盘（历史原值，
+                     逐像素对齐截图：264px 外径 / 3.0 = 88dp，1dp 淡描边）。
+                     图案 padding=26dp 后仍是 36dp，与图一/图二实测一致。 -->
                 <ImageButton
                     android:id="@+id/btnOpenEmpty"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
                     android:layout_gravity="center_horizontal"
-                    android:background="@null"
+                    android:background="@drawable/round_btn"
                     android:contentDescription="@string/cd_open"
-                    android:padding="10dp"
+                    android:elevation="2dp"
+                    android:padding="26dp"
                     android:scaleType="centerInside"
                     android:src="@drawable/ic_folder"
                     android:tint="@color/icon" />
