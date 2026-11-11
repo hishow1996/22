@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 图形：两实心方块等大 7x7 纯黑，斜带顺对角线连接；
+     不挖空、不换图形、不用透明度属性，避免同向重叠框把左上撑成实心大块 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M4,4H11V11H4V4Z M3,3H12V12H3V3Z M14,14L21,14L21,21L14,21Z" android:fillAlpha="0.85" />
-    <path android:fillColor="#FF000000" android:pathData="M3,20L10,13L8,11L1,18L3,20Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M4,4H11V11H4V4Z M14,14H21V21H14V14Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M8.72,10.28L14.72,16.28L16.28,14.72L10.28,8.72Z" />
 </vector>

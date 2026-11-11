@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 套索：仍是两根绳圈（描边，不是填充粗环）。一条连续 stroke 串起
+     外匝→过渡→内匝，像一根绳盘了两匝；匝距 3.0 > 线宽 1.8 不再糊。
+     右上三角绳结已删；绳尾沿右上切线略弯、渐细、斜口收笔，
+     lineCap=butt 不用正圆帽；内匝偏心 0.4 避免同心圆太规整。
+     圆弧全用 C 贝塞尔，不用 A，兼容 EMUI 8.1。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:pathData="M12,4C7.6,4 4,7 4,11C4,15 7,18 11,18C14,18 16,16.8 17.5,14.8L21,15L18.5,11.5L16.5,13.8C15.5,15.3 13.5,16 11,16C8.2,16 6,13.9 6,11C6,8 8.6,6 12,6C15,6 17.5,7.7 18,10"
-        android:strokeColor="#FF000000" android:strokeWidth="1.8"
-        android:strokeLineCap="round" android:strokeLineJoin="round" />
-    <path android:fillColor="#FF000000" android:pathData="M18,10L21,15L17.8,14.6L18,10Z" />
+    <path
+        android:pathData="M18.8,11 C18.8,14.657 16.259,17.824 12.688,18.615 C9.118,19.407 5.476,17.611 3.931,14.296 C2.385,10.982 3.35,7.038 6.252,4.812 C9.153,2.585 13.212,2.674 16.014,5.025 C15.914,5.625 14.385,6.923 14.485,7.623 C12.761,6.176 10.264,6.122 8.478,7.492 C6.692,8.862 6.099,11.289 7.05,13.329 C8.001,15.368 10.242,16.473 12.439,15.986 C14.636,15.499 16.2,13.551 16.2,11.3"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="round" />
+    <path android:fillColor="#FF000000" android:pathData="M19.7,11 L19.688,10.408 L19.772,9.754 L19.934,9.058 L20.15,8.336 L20.391,7.605 L20.627,6.875 L20.826,6.155 L20.957,5.452 L20.984,4.775 L20.868,4.14 L20.324,4.649 L20.223,5.13 L20.04,5.649 L19.79,6.206 L19.491,6.797 L19.166,7.419 L18.833,8.069 L18.515,8.749 L18.235,9.46 L18.019,10.208 L17.9,11 Z" />
 </vector>
