@@ -86,16 +86,25 @@ class TiledPageView @JvmOverloads constructor(
         val cols: IntRange,
         val rows: IntRange,
         val previewCols: IntRange,
-        val previewRows: IntRange
+        val previewRows: IntRange,
+        val transitionBaseW: Int,
+        val transitionBaseH: Int,
+        val transitionCols: IntRange,
+        val transitionRows: IntRange
     )
 
     private data class RenderPlan(
         val signature: PlanSignature,
         val specs: MutableList<TileSpec>,
         val previewSpecs: MutableList<TileSpec>,
+        val transitionPreviewSpecs: MutableList<TileSpec>,
         val keepKeys: Set<String>,
         val previewW: Int,
-        val previewH: Int
+        val previewH: Int,
+        val transitionScaleX: Float,
+        val transitionScaleY: Float,
+        val transitionViewportFactorX: Float,
+        val transitionViewportFactorY: Float
     )
 
     var viewport: Viewport? = null
@@ -124,6 +133,10 @@ class TiledPageView @JvmOverloads constructor(
     private val pending = HashSet<String>()
     /** 固定 0.5× 整页预览网格，作为所有高清档位的连续显示底图。 */
     private var previewGrid: List<TileSpec> = emptyList()
+    /** 页面尺寸变化时保留上一尺寸的低清图块，作为新尺寸的临时底图。 */
+    private var transitionPreviewGrid: List<TileSpec> = emptyList()
+    private var transitionBaseW = 0
+    private var transitionBaseH = 0
     private var renderPlan: RenderPlan? = null
     private val missingPreview = ArrayList<TileSpec>()
     private val missingCurrent = ArrayList<TileSpec>()
@@ -144,6 +157,28 @@ class TiledPageView @JvmOverloads constructor(
         pageRotation: Int = 0, isCurrentPage: Boolean = true
     ) {
         if (w <= 0 || h <= 0) return
+        val normalizedRotation = PdfTileTransform.normalizeRotation(pageRotation)
+        val sameContent = tiled && repo === r && page == p && tint == t &&
+            kotlin.math.abs(brightness - b) < 0.0001f &&
+            rotation == normalizedRotation && epoch == TileCache.epoch
+        val sameSize = baseW == w && baseH == h
+
+        if (sameContent && sameSize) {
+            setCurrentPage(isCurrentPage)
+            invalidate()
+            return
+        }
+
+        if (sameContent && previewGrid.isNotEmpty() && !sameSize) {
+            transitionPreviewGrid = previewGrid
+            transitionBaseW = baseW
+            transitionBaseH = baseH
+        } else if (!sameContent) {
+            transitionPreviewGrid = emptyList()
+            transitionBaseW = 0
+            transitionBaseH = 0
+        }
+
         PdfTileScheduler.cancelOwner(ownerId)
         generation++
         pending.clear()
@@ -155,7 +190,7 @@ class TiledPageView @JvmOverloads constructor(
         baseH = h
         tint = t
         brightness = b
-        rotation = PdfTileTransform.normalizeRotation(pageRotation)
+        rotation = normalizedRotation
         currentPage = isCurrentPage
         epoch = TileCache.epoch
         tiled = true
@@ -168,7 +203,7 @@ class TiledPageView @JvmOverloads constructor(
             PageFilter.WARM -> 0xFFF2E1C4.toInt()
             else -> Color.WHITE
         }
-        setImageBitmap(null)
+        if (!sameContent) setImageBitmap(null)
         invalidate()
     }
 
@@ -189,6 +224,9 @@ class TiledPageView @JvmOverloads constructor(
         retryAfter.clear()
         retryCount.clear()
         previewGrid = emptyList()
+        transitionPreviewGrid = emptyList()
+        transitionBaseW = 0
+        transitionBaseH = 0
         renderPlan = null
         missingPreview.clear()
         missingCurrent.clear()
@@ -250,10 +288,16 @@ class TiledPageView @JvmOverloads constructor(
         rows: IntRange,
         previewCols: IntRange,
         previewRows: IntRange,
+        transitionCols: IntRange,
+        transitionRows: IntRange,
+        transitionFactorX: Float,
+        transitionFactorY: Float,
         logicalW: Int,
         logicalH: Int,
         previewW: Int,
-        previewH: Int
+        previewH: Int,
+        transitionW: Int,
+        transitionH: Int
     ): RenderPlan {
         val specs = ArrayList<TileSpec>()
         if (!cols.isEmpty() && !rows.isEmpty()) {
@@ -284,10 +328,28 @@ class TiledPageView @JvmOverloads constructor(
             }
         }
 
+        val transitionSpecs = ArrayList<TileSpec>()
+        if (!transitionCols.isEmpty() && !transitionRows.isEmpty()) {
+            val columns = (transitionW + TILE_H - 1) / TILE_H
+            for (row in transitionRows) {
+                for (col in transitionCols) {
+                    val index = row * columns + col
+                    if (index in transitionPreviewGrid.indices) {
+                        transitionSpecs.add(transitionPreviewGrid[index])
+                    }
+                }
+            }
+        }
+
         val keep = HashSet<String>(previewSpecs.size + specs.size)
         previewSpecs.forEach { keep.add(it.cacheKey) }
         specs.forEach { keep.add(it.cacheKey) }
-        return RenderPlan(signature, specs, previewSpecs, keep, previewW, previewH)
+        return RenderPlan(
+            signature, specs, previewSpecs, transitionSpecs, keep, previewW, previewH,
+            if (transitionFactorX > 0f) 1f / transitionFactorX else 1f,
+            if (transitionFactorY > 0f) 1f / transitionFactorY else 1f,
+            transitionFactorX, transitionFactorY
+        )
     }
 
     private fun updatePlanPriorities(plan: RenderPlan, vp: Viewport) {
@@ -307,6 +369,21 @@ class TiledPageView @JvmOverloads constructor(
             updatePriority(it, previewLeft, previewTop, previewWidth, previewHeight)
         }
         plan.previewSpecs.sortWith(tileOrder)
+
+        if (plan.transitionPreviewSpecs.isNotEmpty()) {
+            val transitionLeft = left * plan.transitionViewportFactorX
+            val transitionTop = top * plan.transitionViewportFactorY
+            val transitionWidth = (width * plan.transitionViewportFactorX)
+                .toInt().coerceAtLeast(1)
+            val transitionHeight = (height * plan.transitionViewportFactorY)
+                .toInt().coerceAtLeast(1)
+            plan.transitionPreviewSpecs.forEach {
+                updatePriority(
+                    it, transitionLeft, transitionTop, transitionWidth, transitionHeight
+                )
+            }
+            plan.transitionPreviewSpecs.sortWith(tileOrder)
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -318,6 +395,9 @@ class TiledPageView @JvmOverloads constructor(
             pending.clear()
             retryAfter.clear()
             retryCount.clear()
+            transitionPreviewGrid = emptyList()
+            transitionBaseW = 0
+            transitionBaseH = 0
             renderPlan = null
             missingPreview.clear()
             missingCurrent.clear()
@@ -359,14 +439,45 @@ class TiledPageView @JvmOverloads constructor(
         val previewCols = tileRange(previewW, previewLeft, previewVisW)
         val previewRows = tileRange(previewH, previewTop, previewVisH)
 
+        val hasTransition = transitionPreviewGrid.isNotEmpty() &&
+            transitionBaseW > 0 && transitionBaseH > 0
+        val transitionFactorX = if (hasTransition) {
+            PREVIEW_BUCKET * transitionBaseW.toFloat() /
+                (baseW.toFloat() * bucket.coerceAtLeast(PREVIEW_BUCKET))
+        } else 0f
+        val transitionFactorY = if (hasTransition) {
+            PREVIEW_BUCKET * transitionBaseH.toFloat() /
+                (baseH.toFloat() * bucket.coerceAtLeast(PREVIEW_BUCKET))
+        } else 0f
+        val transitionW = if (hasTransition) {
+            (transitionBaseW * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        } else 0
+        val transitionH = if (hasTransition) {
+            (transitionBaseH * PREVIEW_BUCKET).toInt().coerceAtLeast(1)
+        } else 0
+        val transitionLeft = left * transitionFactorX
+        val transitionTop = top * transitionFactorY
+        val transitionVisW = (visW * transitionFactorX).toInt().coerceAtLeast(1)
+        val transitionVisH = (visH * transitionFactorY).toInt().coerceAtLeast(1)
+        val transitionCols = if (hasTransition) {
+            tileRange(transitionW, transitionLeft, transitionVisW)
+        } else IntRange.EMPTY
+        val transitionRows = if (hasTransition) {
+            tileRange(transitionH, transitionTop, transitionVisH)
+        } else IntRange.EMPTY
+
         val signature = PlanSignature(
-            page, bucket, logicalW, logicalH, cols, rows, previewCols, previewRows
+            page, bucket, logicalW, logicalH, cols, rows, previewCols, previewRows,
+            if (hasTransition) transitionBaseW else 0,
+            if (hasTransition) transitionBaseH else 0,
+            transitionCols, transitionRows
         )
         var plan = renderPlan
         if (plan == null || plan.signature != signature) {
             plan = buildRenderPlan(
                 signature, cols, rows, previewCols, previewRows,
-                logicalW, logicalH, previewW, previewH
+                transitionCols, transitionRows, transitionFactorX, transitionFactorY,
+                logicalW, logicalH, previewW, previewH, transitionW, transitionH
             )
             renderPlan = plan
 
@@ -387,6 +498,19 @@ class TiledPageView @JvmOverloads constructor(
         canvas.scale(displayFactor, displayFactor)
 
         canvas.drawRect(left, top, left + visW, top + visH, background)
+
+        if (plan.transitionPreviewSpecs.isNotEmpty()) {
+            canvas.save()
+            canvas.scale(plan.transitionScaleX, plan.transitionScaleY)
+            for (spec in plan.transitionPreviewSpecs) {
+                val bitmap = TileCache.get(spec.cacheKey)
+                if (bitmap != null) {
+                    canvas.drawBitmap(bitmap, spec.x.toFloat(), spec.y.toFloat(), paint)
+                }
+            }
+            canvas.restore()
+        }
+
         canvas.save()
         canvas.scale(previewFactor, previewFactor)
         for (spec in plan.previewSpecs) {

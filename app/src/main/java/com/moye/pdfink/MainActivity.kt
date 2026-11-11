@@ -1119,8 +1119,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // 工具栏显隐会改变视口高度；先保存当前位置，再用归一化状态适配新尺寸。
         saveSessionNow()
         barsHidden = hide
+        // applyChrome updates ViewPager padding and refreshes only affected page geometry.
+        // Toolbar visibility is not a document/render change: keep tile caches and holders.
         applyChrome()
-        refreshPageLayout()
     }
 
     /** 可用尺寸变了，必须按新尺寸重渲染，否则纸页变大后仍是旧的低清位图。 */

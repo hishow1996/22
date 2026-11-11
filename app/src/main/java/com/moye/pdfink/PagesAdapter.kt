@@ -63,6 +63,12 @@ class PagesAdapter(
         val ratioFailures = HashSet<Int>()
         var boundPage = -1
         var boundLogical = -1
+        var lastHostW = -1
+        var lastHostH = -1
+        var lastPrimaryW = -1
+        var lastPrimaryH = -1
+        var lastSecondW = -1
+        var lastSecondH = -1
     }
 
     /** 双页模式下每个 item 是一组两页，itemCount 减半。 */
@@ -80,6 +86,12 @@ class PagesAdapter(
         val token = h.renderToken
         h.ratioJob?.cancel()
         h.boundPage = position
+        h.lastHostW = -1
+        h.lastHostH = -1
+        h.lastPrimaryW = -1
+        h.lastPrimaryH = -1
+        h.lastSecondW = -1
+        h.lastSecondH = -1
         // 双页模式：一个 item 承载 p0 与 p0+1 两个逻辑页，键不重叠
         val p0 = DisplayMode.logical(
             if (doublePage) DisplayMode.DOUBLE else DisplayMode.FIT, true, position)
@@ -267,42 +279,67 @@ class PagesAdapter(
         for (h in holders.values) h.zoom.browseMode = v
     }
 
-    private var syncedW = -1
-    private var syncedH = -1
-    private var syncedHostW = -1
-    private var syncedHostH = -1
-
     /**
-     * P0：宿主视口尺寸变了（栏显隐 / insets / 旋转 / 分屏），页面重新 measure
-     * 后必须把新几何回传给 ZoomHost 与分块层，否则平移边界、可见窗口、
-     * PDF 采样尺寸都停在旧值 —— 就是截图里「浏览区域被钉在中间」的根因。
-     * 尺寸没变时直接跳过，避免 insets 回调反复重绑。
+     * 栏显隐 / insets / 分屏改变宿主视口后，按每个 holder 的实际尺寸更新几何。
+     * 不清空全局 tile cache；尺寸变化只生成新 key，旧低清预览可暂时托底，
+     * 尺寸恢复时也能复用仍在缓存中的图块。
      */
     fun refreshHostBounds() {
-        val first = holders.values.firstOrNull() ?: return
-        first.itemView.post {
-            val w = first.pageContainer.width
-            val ht = first.pageContainer.height
-            val hw = first.zoom.width
-            val hh = first.zoom.height
-            if (w <= 0 || ht <= 0 || hw <= 0 || hh <= 0) return@post
-            if (w == syncedW && ht == syncedH &&
-                hw == syncedHostW && hh == syncedHostH) return@post
-            syncedW = w; syncedH = ht; syncedHostW = hw; syncedHostH = hh
-            for (h in holders.values) {
-                h.zoom.baseContentW = w
-                h.zoom.baseContentH = ht
-                h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
-                h.zoom.panExtraY = (ht - hh).coerceAtLeast(0).toFloat()
-                // 不改 scale / 不 reset：用户手动缩放与归一化阅读位置原样保留
-                h.zoom.refreshPanBounds()
-                h.image.bindTiled(
-                    repo, h.boundLogical, w, ht, state.tint, state.brightness,
-                    state.pageRotation, h.boundPage == activePosition
-                )
+        val anchor = holders.values.firstOrNull() ?: return
+        anchor.itemView.post {
+            for (h in holders.values.toList()) {
+                if (h.boundLogical < 0 ||
+                    h.bindingAdapterPosition == RecyclerView.NO_POSITION
+                ) continue
+
+                val w = h.pageContainer.width
+                val ht = h.pageContainer.height
+                val hw = h.zoom.width
+                val hh = h.zoom.height
+                if (w <= 0 || ht <= 0 || hw <= 0 || hh <= 0) continue
+
+                val secondVisible = h.secondContainer.visibility == View.VISIBLE
+                val secondW = if (secondVisible) h.secondContainer.width else 0
+                val secondH = if (secondVisible) h.secondContainer.height else 0
+                val primaryChanged = w != h.lastPrimaryW || ht != h.lastPrimaryH
+                val secondChanged = secondVisible &&
+                    (secondW != h.lastSecondW || secondH != h.lastSecondH)
+                val hostChanged = hw != h.lastHostW || hh != h.lastHostH
+
+                if (!primaryChanged && !secondChanged && !hostChanged) continue
+
+                if (primaryChanged || hostChanged) {
+                    // 先保留归一化阅读位置，再按新边界还原，防止栏显隐改变阅读锚点。
+                    val savedViewport = h.zoom.pageViewportState()
+                    h.zoom.baseContentW = w
+                    h.zoom.baseContentH = ht
+                    h.zoom.panExtraX = (w - hw).coerceAtLeast(0).toFloat()
+                    h.zoom.panExtraY = (ht - hh).coerceAtLeast(0).toFloat()
+                    h.zoom.setPageViewportState(savedViewport)
+                }
+
+                if (primaryChanged) {
+                    h.image.bindTiled(
+                        repo, h.boundLogical, w, ht, state.tint, state.brightness,
+                        state.pageRotation, h.boundPage == activePosition
+                    )
+                }
+
+                if (secondChanged && secondW > 0 && secondH > 0) {
+                    h.secondImage.bindTiled(
+                        repo, h.boundLogical + 1, secondW, secondH,
+                        state.tint, state.brightness, state.pageRotation,
+                        h.boundPage == activePosition
+                    )
+                }
+
+                h.lastHostW = hw
+                h.lastHostH = hh
+                h.lastPrimaryW = w
+                h.lastPrimaryH = ht
+                h.lastSecondW = secondW
+                h.lastSecondH = secondH
             }
-            // 逻辑画布尺寸变了，旧块 key 已不匹配；bump epoch 强制重渲染
-            TileCache.clear()
         }
     }
 
