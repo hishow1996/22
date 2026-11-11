@@ -1255,3 +1255,44 @@ fillV29Migrated、FILL 顶部对齐、relayoutForChrome）+ `verify.sh` 补 4 �
 （共 86）+ README + 三格对照预览。真机荣耀 10 叠图量「纸顶=栏底、
 纸底=栏顶」与「隐藏栏纸顶=0、纸底=屏底」，再验三模式切换 / 旋转 /
 笔迹落点 / 分屏。
+
+## 荣耀 10 顶部功能栏刘海遮挡修复 v30
+
+**现象**：v29 之后，竖屏顶部功能栏的文件夹 / 色圈 / 笔 / 橡皮图标被刘海挖孔遮住。
+
+**根因**：`setupInsets()` 在 API≥P 且用户没开「隐藏显示区域」时设置
+`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`，**窗口本来就画进刘海区**；
+状态栏虽被 `hideSystemBars()` 隐藏，物理挖孔仍在屏幕顶部。v29 为修「同一刘海
+高度被算进顶栏高 + 顶栏 padding + 阅读区三处」的重复留白，把竖屏 `cutTop`
+一刀切归零 —— 顺带把必需的物理避让也删了，顶栏从 y=0 起、仅 18px 顶部
+padding，图标正好落进挖孔区。
+
+**修法（只算一次，不回退 v29）**
+
+- `ChromeLayout.metrics()` 恢复 `cutTop = max(sysTop, safeT)`（竖屏横屏一致，
+  `safeT` 来自 `DisplayCutout.safeInsetTop`，EMUI 8.1 走华为私有
+  `HwNotchSizeUtil`；系统开「隐藏显示区域」时 `NotchCompat` 返回 0，无双份留白）。
+- `barTop = baseTop + cutTop + gapTop` 是**容器总高**（白色背景延伸到刘海区），
+  `topPaddingTop = cutTop + gapTop` 是**图标起始 y**，二者是包含关系，不是叠加。
+  阅读区只按 `barTop` 扣一次，绝不重复压矮；`barTop - topPaddingTop = baseTop`
+  恒定，图标可用高度不被刘海吃掉。
+- 首页 `homeHeader` / `homeStage` 复用同一份 `cm.cutTop`，不再各算一套。
+- **隐藏栏态**：顶栏消失但挖孔还在。`PdfViewportGeometry.contentInsets()`
+  新增带默认值的 `hiddenSafeTop` 参数（默认 0，原调用与单测语义不变），
+  传 `cm.hiddenPagerTop = cutTop`；纸页顶部让开物理刘海区，FILL 按新的
+  可用高重新严格铺满。系统开了「隐藏显示区域」时该值为 0，仍是真·整屏。
+- `cutBottom` 竖屏仍为 0（底部无刘海），横屏继续保留旋转后的左右 / 底部避让。
+
+**与 v29 的关系**：v29 修的是「重复留白 + 默认没进 FILL + 页面居中」，v30 只
+把被误删的物理避让补回来，且严格限制在顶栏自身与隐藏栏顶部，不叠加进阅读区。
+FILL 严格 cover、顶部对齐、`fillV29Migrated`、`relayoutForChrome` 全部保留。
+
+**已知限制**：隐藏栏时屏幕最顶的刘海挖孔区不显示文档内容（硬件遮挡，画上也
+看不见），所以「铺满整屏」的口径是「铺满除物理刘海区以外的整屏」；
+v29 完成图里的 2340/2340 在这台机型上是 2268/2268，比例仍是 100%。
+
+**验收**：`ChromeLayoutTest` 13 条（新增图标避开挖孔、只算一次、隐藏栏避让、
+系统隐藏区域为 0、负值钳制、横屏侧刘海）+ `PdfViewportGeometryTest` 5 条
+（新增隐藏栏物理避让）+ 静态断言 + `verify.sh` 补 2 条（共 88）+ README +
+刘海遮挡对照图。真机荣耀 10 验：竖屏顶栏图标完整可见、与挖孔不重叠；
+隐藏栏后纸页顶部不被挡；旋转横屏后刘海在左、顶部不多留白。

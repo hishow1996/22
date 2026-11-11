@@ -94,3 +94,5 @@ echo "  83. v29 ChromeLayout：竖屏 cutTop/cutBottom=0，顶栏不再被刘海
 echo "  84. FILL 严格 cover：页高=可用高（有栏=栏间 / 隐藏栏=整屏），四边零留白"
 echo "  85. 竖屏 FILL/WIDTH 顶部对齐；currentFitMode 三态互斥；v29 老配置一次性回默认铺满"
 echo "  86. 栏显隐强制 requestLayout + 重渲染；横屏三模式 / 首页 header / 悬浮按钮不回归"
+echo "  87. v30 荣耀 10：SHORT_EDGES 下顶栏图标避开物理刘海，barTop 只含一次 cutTop"
+echo "  88. 隐藏栏时阅读区仍让开刘海挖孔区；系统开隐藏显示区域时避让为 0；横屏侧刘海不回归"

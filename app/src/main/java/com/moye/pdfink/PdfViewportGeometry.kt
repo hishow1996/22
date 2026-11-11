@@ -20,16 +20,24 @@ data class PdfContentInsets(
 }
 
 object PdfViewportGeometry {
+    /**
+     * v30：隐藏工具栏后「铺满整屏」不含物理刘海挖孔区 —— 屏幕最顶那条
+     * 属于硬件遮挡，纸页画上去也看不见。hiddenSafeTop 来自
+     * ChromeLayout.metrics().hiddenPagerTop，系统开了「隐藏显示区域」时为 0。
+     * 默认值 0 保持原有调用与单测语义不变。
+     */
     fun contentInsets(
         landscape: Boolean,
         barsHidden: Boolean,
         safeLeft: Int,
         safeRight: Int,
         toolbarTop: Int,
-        toolbarBottom: Int
+        toolbarBottom: Int,
+        hiddenSafeTop: Int = 0
     ): PdfContentInsets = PdfContentInsets(
         left = if (landscape) safeLeft.coerceAtLeast(0) else 0,
-        top = if (barsHidden) 0 else toolbarTop.coerceAtLeast(0),
+        top = if (barsHidden) hiddenSafeTop.coerceAtLeast(0)
+        else toolbarTop.coerceAtLeast(0),
         right = if (landscape) safeRight.coerceAtLeast(0) else 0,
         bottom = if (barsHidden) 0 else toolbarBottom.coerceAtLeast(0)
     )

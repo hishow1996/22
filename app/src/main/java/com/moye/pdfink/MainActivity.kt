@@ -888,10 +888,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      */
     private fun applyChrome() {
         val portrait = !state.landscape
-        // v29：栏自身几何的唯一出口。状态栏 / 导航栏已彻底隐藏、竖屏也不
-        // 延伸进刘海区，因此竖屏 cutTop/cutBottom 一律 0 —— 旧版把同一个
-        // safeInsetTop 同时算进「顶栏高度 + 顶栏顶部 padding + 阅读区」三处，
-        // 屏幕上缘就多出一条白带、内容区又被压矮（截图里那片空白）。
+        // v30：栏自身几何的唯一出口。荣耀 10 在 SHORT_EDGES 下窗口会画进
+        // 刘海区，cutTop 必须取物理刘海深度把顶栏图标推到挖孔下方；
+        // 但只用于顶栏自身，不再叠加到阅读区（v29 修掉的重复留白不回归）。
         // 阅读区矩形仍由 PdfViewportGeometry 用 barTop/barBottom 唯一推算。
         val cm = ChromeLayout.metrics(
             portrait = portrait, barsHidden = barsHidden,
@@ -904,7 +903,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val barTop = cm.barTop
         val barBottom = cm.barBottom
         val cutBottom = cm.cutBottom               // v11 悬浮按钮沿用
-        val homeCutTop = maxOf(sysTop, safeT)     // 首页 header 仍避让刘海
+        val homeCutTop = cm.cutTop                // 首页 header 同一份刘海避让
 
         val lpTop = topBar.layoutParams as FrameLayout.LayoutParams
         lpTop.height = barTop
@@ -925,7 +924,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             safeLeft = safeL,
             safeRight = safeR,
             toolbarTop = barTop,
-            toolbarBottom = barBottom
+            toolbarBottom = barBottom,
+            hiddenSafeTop = cm.hiddenPagerTop
         )
         val pagerLp = pager.layoutParams as FrameLayout.LayoutParams
         pagerLp.leftMargin = viewportInsets.left

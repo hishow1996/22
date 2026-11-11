@@ -6,7 +6,7 @@ import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** v29：栏占位唯一出口、严格 cover、竖屏三态判定（纯 JVM）。 */
+/** 栏占位唯一出口、物理刘海避让、严格 cover、竖屏三态判定（纯 JVM）。 */
 class ChromeLayoutTest {
 
     /** 3.0 密度下：baseTop 150px、baseBottom 144px、gap 18/12px，刘海 72px。 */
@@ -18,29 +18,57 @@ class ChromeLayoutTest {
         safeL = safeL, safeT = safeT, safeR = 0, safeB = 0
     )
 
-    @Test fun `portrait bars no longer absorb notch height`() {
+    @Test fun `portrait top bar content is pushed below the physical notch`() {
         val cm = metrics(portrait = true, hidden = false)
-        // 旧版：barTop = 150 + 72 + 18 = 240，图标上方凭空多 72px 白带
-        assertEquals(168, cm.barTop)
+        // 荣耀 10 SHORT_EDGES：窗口画进刘海区，图标必须从 y=72 以下开始。
+        assertEquals(72, cm.cutTop)
+        assertEquals(240, cm.barTop)          // 150 + 72 + 18
+        assertEquals(90, cm.topPaddingTop)    // 18 + 72
         assertEquals(156, cm.barBottom)
-        assertEquals(18, cm.topPaddingTop)
         assertEquals(12, cm.bottomPaddingBottom)
+        assertEquals(0, cm.cutBottom)         // 竖屏底部无刘海
         assertEquals(0, cm.pagerLeft)
         assertEquals(0, cm.pagerRight)
-        assertEquals(0, cm.cutBottom)
     }
 
-    @Test fun `hidden bars leave zero padding so pager is full screen`() {
+    @Test fun `notch clearance is counted once not three times`() {
+        val cm = metrics(portrait = true, hidden = false)
+        // barTop 已含 cutTop，topPaddingTop 是它的子集；阅读区只按 barTop
+        // 扣一次。图标可用高度恒等于 baseTop，不会被刘海吃掉。
+        assertEquals(150, cm.barTop - cm.topPaddingTop)
+        assertTrue(cm.topPaddingTop >= cm.cutTop)
+    }
+
+    @Test fun `hidden bars still avoid the physical notch`() {
         val cm = metrics(portrait = true, hidden = true)
         assertEquals(0, cm.barTop)
         assertEquals(0, cm.barBottom)
+        // 顶栏消失但挖孔还在：纸页顶部仍要让开 72px（FILL 按新可用高重算）
+        assertEquals(72, cm.hiddenPagerTop)
+    }
+
+    @Test fun `system hide notch area means zero app clearance`() {
+        val cm = metrics(portrait = true, hidden = false, safeT = 0)
+        assertEquals(0, cm.cutTop)
+        assertEquals(168, cm.barTop)
+        assertEquals(18, cm.topPaddingTop)
+        assertEquals(0, cm.hiddenPagerTop)
+    }
+
+    @Test fun `negative cutout insets are clamped`() {
+        val cm = metrics(portrait = true, hidden = false, safeT = -30)
+        assertEquals(0, cm.cutTop)
+        assertEquals(168, cm.barTop)
     }
 
     @Test fun `landscape still avoids rotated notch`() {
-        val cm = metrics(portrait = false, hidden = false, safeL = 72)
-        assertEquals(240, cm.barTop)
-        assertEquals(90, cm.topPaddingTop)
+        // 横屏后刘海贴左边：safeT=0 / safeL=72，顶部不需要额外避让
+        val cm = metrics(portrait = false, hidden = false, safeT = 0, safeL = 72)
+        assertEquals(0, cm.cutTop)
+        assertEquals(168, cm.barTop)
+        assertEquals(18, cm.topPaddingTop)
         assertEquals(72, cm.pagerLeft)
+        assertEquals(0, cm.hiddenPagerTop)
     }
 
     private fun pageH(availW: Int, ratio: Float, s: Float): Int =
