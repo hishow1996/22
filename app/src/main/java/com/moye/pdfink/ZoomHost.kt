@@ -210,8 +210,8 @@ class ZoomHost @JvmOverloads constructor(
                     val dy = ev.y - lastSingleY
                     val dxAbs = abs(ev.x - singleStartX)
                     val dyAbs = abs(ev.y - singleStartY)
-                    // 竖屏 FILL 下 panLimitY≈0，纵向交给 pager；只有页面自身
-                    // 纵向超出（横屏 WIDTH）或放大后才在这里做页内平移。
+                    // 竖屏完整页适配时 panLimitY≈0，纵向交给 pager；只有页面自身
+                    // 纵向超出（WIDTH）或放大后才在这里做页内平移。
                     val canPan = panLimitY() > 0.5f
                     val zoomed = scale > 1.01f
 
@@ -292,8 +292,8 @@ class ZoomHost @JvmOverloads constructor(
                 val dx = mx - startMidX
                 val dy = my - startMidY
                 val spreadDelta = abs(d - startDist)
-                // FILL 铺满后横向有裁切：双指横滑优先用来看被裁的左右内容，
-                // 不再抢成翻页；页面横向没有超出时才恢复横滑翻页。
+                // 只有页面在当前视口中确有横向溢出时，双指横滑才用于页内平移；
+                // 页面横向没有超出时仍允许横滑翻页。
                 if (!flipDone && panLimitX() <= 0.5f && abs(dx) > dp70 &&
                     spreadDelta < dp16 && abs(dx) > abs(dy)) {
                     flipDone = true
@@ -346,8 +346,10 @@ class ZoomHost @JvmOverloads constructor(
         viewport.bucket = renderScale
         viewport.lw = lw
         viewport.lh = lh
-        viewport.originX = ox - lx
-        viewport.originY = oy - ly
+        // origin 位于图块渲染坐标系，而 ox/lx/oy/ly 是屏幕像素坐标。
+        // 必须除以连续显示倍率；否则 bucket 与实际倍率不一致时底图会偏移。
+        viewport.originX = ZoomTransform.renderSpaceOrigin(ox, lx, displayFactor)
+        viewport.originY = ZoomTransform.renderSpaceOrigin(oy, ly, displayFactor)
         // 分块索引用栅格坐标，所以将屏幕窗口换算到 renderScale 坐标空间。
         viewport.visLeft = -lx * renderPerDisplay
         viewport.visTop = -ly * renderPerDisplay
@@ -426,14 +428,6 @@ class ZoomHost @JvmOverloads constructor(
         onViewportChanged?.invoke()
         notifyScaleIfNeeded(force = true)
         if (!silent) onPanChange?.invoke(0f, ty)
-        onViewportSettled?.invoke()
-    }
-
-    /** FILL 初始靠左：讲义文字多从左边起，比居中少裁掉半行正文。 */
-    fun alignStart() {
-        flushTransform()
-        tx = panLimitX()
-        applyTransform()
         onViewportSettled?.invoke()
     }
 

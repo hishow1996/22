@@ -239,7 +239,7 @@ class PagesAdapter(
             h.zoom.baseContentW = w
             h.zoom.baseContentH = ht
 
-            // FILL 下页面横向也会超出，panExtraX 不能再写死 0
+            // 按页面与实际阅读视口的尺寸差计算平移余量；完整页适配时余量为 0。
             h.zoom.panExtraX = (w - h.zoom.width).coerceAtLeast(0).toFloat()
             h.zoom.panExtraY = (ht - h.zoom.height).coerceAtLeast(0).toFloat()
             val remembered = pageViewportProvider?.invoke(p0)
@@ -251,10 +251,10 @@ class PagesAdapter(
                     h.zoom.setScale(initialZoom, initialPanX, initialPanY)
                 }
                 else -> {
-                    h.zoom.reset(silent = false,
-                        toTop = fitMode == PageContainer.WIDTH ||
-                            fitMode == PageContainer.FILL)
-                    if (fitMode == PageContainer.FILL) h.zoom.alignStart()
+                    h.zoom.reset(
+                        silent = false,
+                        toTop = fitMode == PageContainer.WIDTH
+                    )
                 }
             }
             if (position == restorePanAt) restorePanAt = -1

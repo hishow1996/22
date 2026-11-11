@@ -70,4 +70,58 @@ class ZoomTransformTest {
         assertEquals(0f, safe.panX, 0.0001f)
         assertEquals(-1f, safe.panY, 0.0001f)
     }
+    @Test
+    fun renderSpaceOriginKeepsPageEdgesAndVisibleTilesAlignedAcrossBuckets() {
+        val hostSize = 1080f
+        val baseSize = 700f
+        val baseOrigin = (hostSize - baseSize) * 0.5f
+        val translation = 83f
+        val cases = listOf(
+            0.83f to 0.8f,
+            1.3f to 1.2f,
+            1.65f to 1.6f,
+            2.3f to 2.2f
+        )
+
+        for ((actualScale, bucket) in cases) {
+            val displayFactor =
+                ZoomTransform.renderToDisplayFactor(actualScale, bucket)
+            val visibleOrigin =
+                (hostSize - baseSize * actualScale) * 0.5f + translation
+            val renderOrigin = ZoomTransform.renderSpaceOrigin(
+                baseOrigin, visibleOrigin, displayFactor
+            )
+
+            // Rendered page edge maps back to the exact continuous screen position.
+            assertEquals(
+                visibleOrigin,
+                baseOrigin - renderOrigin * displayFactor,
+                0.0001f
+            )
+
+            // The tile-selection window and canvas transform share one render origin.
+            val visibleRenderLeft =
+                -visibleOrigin * bucket / actualScale
+            assertEquals(
+                visibleRenderLeft,
+                renderOrigin - baseOrigin * bucket / actualScale,
+                0.0001f
+            )
+        }
+    }
+
+    @Test
+    fun invalidRenderOriginFactorFallsBackSafely() {
+        assertEquals(
+            0f,
+            ZoomTransform.renderSpaceOrigin(100f, 40f, Float.NaN),
+            0.0001f
+        )
+        assertEquals(
+            0f,
+            ZoomTransform.renderSpaceOrigin(100f, 40f, 0f),
+            0.0001f
+        )
+    }
+
 }

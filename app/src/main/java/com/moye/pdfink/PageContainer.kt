@@ -6,30 +6,40 @@ import android.view.View.MeasureSpec
 import android.widget.FrameLayout
 import kotlin.math.roundToInt
 
-/** 按 PDF 页宽高比摆页面，保证图片层与笔迹层像素区域完全一致。 */
+/**
+ * 按 PDF 页宽高比摆放页面，保证底图层与笔迹层使用完全相同的像素区域。
+ *
+ * FIT / FILL 都完整显示整页；FILL 代表尽可能使用整个阅读视口，
+ * 不是把页面放大到视口之外。页面比例与屏幕比例不同时允许自然留白。
+ */
 class PageContainer @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : FrameLayout(context, attrs) {
 
     companion object {
-        const val FIT = 0       // contain：整页放进可用区域
-        const val WIDTH = 1     // 宽度铺满，高度按比例，可超出容器
-        const val FILL = 2      // 智能铺满：按可用高度放大，横向超出可平移
-
-        /** 自动放大上限：宽幅页面不该被 cover 放大到裁掉大半内容。 */
-        const val MAX_AUTO_SCALE = 1.8f
+        const val FIT = 0       // 完整显示整页，宽高都不超过阅读视口
+        const val WIDTH = 1     // 页面宽度适配视口，高度可滚动
+        const val FILL = 2      // 使用最大可用尺寸完整显示整页，不裁切
 
         /**
-         * P1 智能 cover：以「按宽度铺满」为基准，放大到至少让上下铺满。
-         * A4 竖页在 19:9 屏上约 1.27x（有栏）/ 1.53x（隐藏栏），都在上限内，
-         * 四边零留白；宽幅页面钳到 1.8x，宁可留一点白也不裁掉整页内容。
-         * 抽成纯函数便于 JVM 单测。
+         * 在给定视口内按原始宽高比取得最大完整页面尺寸。
+         * 返回尺寸始终不超过视口；整数像素取整产生的误差不改变页面比例。
          */
-        fun fillScale(availW: Int, availH: Int, ratio: Float): Float {
-            if (availW <= 0 || availH <= 0 || !ratio.isFinite() || ratio <= 0f) return 1f
-            val baseH = availW / ratio
-            if (baseH <= 0f) return 1f
-            return (availH / baseH).coerceIn(1f, MAX_AUTO_SCALE)
+        fun fitPageSize(availW: Int, availH: Int, ratio: Float): Pair<Int, Int> {
+            if (availW <= 0 || availH <= 0 || !ratio.isFinite() || ratio <= 0f) {
+                return 1 to 1
+            }
+            var w = availW
+            var h = (w / ratio).roundToInt().coerceAtLeast(1)
+            if (h > availH) {
+                h = availH
+                w = (h * ratio).roundToInt().coerceAtLeast(1)
+            }
+            if (w > availW) {
+                w = availW
+                h = (w / ratio).roundToInt().coerceAtLeast(1)
+            }
+            return w.coerceIn(1, availW) to h.coerceIn(1, availH)
         }
     }
 
@@ -55,24 +65,24 @@ class PageContainer @JvmOverloads constructor(
         val safeRatio = ratio.takeIf { it.isFinite() && it > 0f } ?: 0.75f
         var w = availW.coerceAtLeast(1)
         var h = (w / safeRatio).roundToInt().coerceAtLeast(1)
-        if (fitMode == FILL) {
-            // 智能铺满：页面高度向可用高对齐，宽度按比例一起放大；
-            // 横向超出交给 ZoomHost 的 panLimitX（双指横向拖动可看全）。
-            val s = fillScale(availW, availH, safeRatio)
-            w = (availW * s).roundToInt().coerceAtLeast(1)
-            h = (w / safeRatio).roundToInt().coerceAtLeast(1)
-        } else if (fitMode == WIDTH) {
-            // 按宽度铺满：不再受 availH 约束，超出部分由 ZoomHost 双指上下平移
-        } else {
-            if (h > availH) {
-                h = availH.coerceAtLeast(1)
-                w = (h * safeRatio).roundToInt().coerceAtLeast(1)
+
+        when (fitMode) {
+            WIDTH -> {
+                // 按宽度适配；长页面保留完整高度，由阅读视口滚动查看。
             }
-            if (w > availW) {
-                w = availW.coerceAtLeast(1)
-                h = (w / safeRatio).roundToInt().coerceAtLeast(1)
+            FIT, FILL -> {
+                // FILL 也必须 contain：铺满阅读视口不能以裁切 PDF 页面为代价。
+                val size = fitPageSize(availW, availH, safeRatio)
+                w = size.first
+                h = size.second
+            }
+            else -> {
+                val size = fitPageSize(availW, availH, safeRatio)
+                w = size.first
+                h = size.second
             }
         }
+
         val ew = MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY)
         val eh = MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY)
         super.onMeasure(ew, eh)

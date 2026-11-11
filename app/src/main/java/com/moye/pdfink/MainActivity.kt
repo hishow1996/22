@@ -136,7 +136,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private var pendingPdfWidth: Int = 1240
     /** 用户是否主动选择过显示模式；未选择时竖屏和横屏默认 WIDTH */
     private var modeChosen = false
-    /** P1：竖屏默认智能铺满；用户切到「适应屏幕 / 适应宽度」后记住。 */
+    /** P1：竖屏默认在阅读区域内完整显示页面；用户切到其他模式后记住。 */
     private var fillScreen = true
     private var pendingExport: (() -> Unit)? = null
     private var sysTop = 0
@@ -1018,8 +1018,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnShow.translationX = safeL.toFloat()
 
         refreshTools()
-        // P0：栏显隐 / insets / 旋转改了宿主视口，页面几何必须跟着重算，
-        // 否则 FILL 铺满后平移边界与分块视口还停在旧尺寸。
+        // 栏显隐 / insets / 旋转改了宿主视口，页面几何必须跟着重算，
+        // 避免平移边界与分块视口继续使用旧尺寸。
         if (inDoc) adapter?.refreshHostBounds()
     }
 
@@ -1212,8 +1212,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         adapter?.notifyDataSetChanged()
     }
 
-    /** 把当前显示模式推给 adapter 并重渲染。竖屏默认按宽度适配。 */
-    /** 竖屏默认智能铺满；横屏 FIT / WIDTH / DOUBLE 一概不受 fillScreen 影响。 */
+    /** 把当前显示模式推给 adapter 并重渲染。 */
+    /** 竖屏默认完整显示页面；横屏 FIT / WIDTH / DOUBLE 不受 fillScreen 影响。 */
     private fun currentFitMode(): Int {
         val mode = state.effectiveMode
         return when {
@@ -1547,9 +1547,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.showCorrection = session.showCorrection
         currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
         state.displayMode = session.displayMode
-        // v27：用户未主动选择过显示方式时，首次打开任何文件一律铺满 ——
-        // 既不让旧会话里残留的 FIT 把默认拉回，也不需要用户先去「更多」
-        // 点一次「铺满屏幕」。手动选过（modeChosen=true）仍尊重选择。
+        // v27：用户未主动选择过显示方式时，首次打开任何文件默认完整页适配 ——
+        // 不让旧会话里残留的 FIT 状态影响新默认值；手动选过（modeChosen=true）仍尊重选择。
         if (!modeChosen) {
             fillScreen = true
             state.displayMode = DisplayMode.WIDTH
