@@ -132,6 +132,26 @@ object InkGeometry {
         }
     }
 
+    /**
+     * 便签实际占的像素矩形 [l, t, r, b]；没有文本返回 null。
+     * 供 InkView 的分块层判断便签会碰到哪几块。算法必须与 [drawNote] 保持一致。
+     */
+    fun noteBox(m: Mark, w: Float, h: Float, textPaint: Paint): FloatArray? {
+        val txt = m.text ?: return null
+        if (m.pts.size < 2) return null
+        val lines = txt.split('\n')
+        val unit = min(w, h).coerceAtLeast(1f)
+        val size = (unit * 0.028f).coerceAtLeast(11f)
+        textPaint.textSize = size
+        val widest = lines.maxOf { textPaint.measureText(it) }
+        val pad = size * 0.4f
+        val boxW = widest + pad * 2f
+        val boxH = size * 1.35f * lines.size + pad * 2f
+        val x = (m.pts[0] * w).coerceIn(0f, (w - boxW).coerceAtLeast(0f))
+        val y = (m.pts[1] * h).coerceIn(0f, (h - boxH).coerceAtLeast(0f))
+        return floatArrayOf(x, y, x + boxW, y + boxH)
+    }
+
     fun shapeMark(
         color: Int, width: Float, alpha: Int, shape: Int,
         layer: Int, x0: Float, y0: Float, x1: Float, y1: Float

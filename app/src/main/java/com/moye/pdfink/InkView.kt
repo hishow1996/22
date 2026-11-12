@@ -1,7 +1,6 @@
 package com.moye.pdfink
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -93,10 +92,14 @@ class InkView @JvmOverloads constructor(
     private val spatialCellPx = 256f
     private var before: List<Mark> = emptyList()
 
-    private var base: Bitmap? = null
-    private var baseC: Canvas? = null
-    private var live: Bitmap? = null
-    private var liveC: Canvas? = null
+    /**
+     * 已落笔 / 当前笔两层。都是稀疏分块位图（见 InkLayer）：横屏整页位图太大，
+     * 写字时整张重传 GPU 会明显延迟，滑动时也占满显存。
+     */
+    private val baseTiles = InkLayer()
+    private val liveTiles = InkLayer()
+    /** [markPixelBounds] 的复用输出缓冲。 */
+    private val markBoundsPx = FloatArray(4)
     /** 预测墨迹复用固定线段缓冲，不在每次 MOVE 中分配新数组。 */
     private val predSeg = FloatArray(4)
     private val predictionBounds = FloatArray(4)
@@ -138,10 +141,6 @@ class InkView @JvmOverloads constructor(
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-    }
-    private val clearRect = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
         xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
     private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -214,12 +213,47 @@ class InkView @JvmOverloads constructor(
 
     private fun ensureBuffers() {
         if (width <= 0 || height <= 0) return
-        if (base == null || base!!.width != width || base!!.height != height) {
-            base?.recycle(); live?.recycle()
-            base = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            baseC = Canvas(base!!)
-            live = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            liveC = Canvas(live!!)
+        if (!baseTiles.matches(width, height)) {
+            baseTiles.resize(width, height)
+            liveTiles.resize(width, height)
+        }
+    }
+
+    /**
+     * 一笔在层坐标（像素）里可能碰到的范围，已外扩笔宽 / 箭头 / 便签框。
+     * 分块层靠它决定这一笔要画进哪几块，宁大勿小：小了会在块边界处切掉笔迹。
+     */
+    private fun markPixelBounds(m: Mark, out: FloatArray) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (m.shape == Shapes.NOTE) {
+            val box = InkGeometry.noteBox(m, w, h, textPaint)
+            if (box != null) {
+                val pad = 4f * density
+                out[0] = box[0] - pad
+                out[1] = box[1] - pad
+                out[2] = box[2] + pad
+                out[3] = box[3] + pad
+                return
+            }
+        }
+        val b = GeometryCore.markBounds(m)
+        val base = (m.width * unit).coerceAtLeast(0.8f)
+        val pad = base * 6f + unit * 0.03f + 4f * density
+        out[0] = b[0] * w - pad
+        out[1] = b[1] * h - pad
+        out[2] = b[2] * w + pad
+        out[3] = b[3] * h + pad
+    }
+
+    /** 把一笔画进指定层。 */
+    private fun paintMark(layer: InkLayer, m: Mark) {
+        markPixelBounds(m, markBoundsPx)
+        layer.paint(
+            markBoundsPx[0], markBoundsPx[1], markBoundsPx[2], markBoundsPx[3]
+        ) { c ->
+            InkGeometry.drawMark(c, m, width.toFloat(), height.toFloat(),
+                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
         }
     }
 
@@ -272,26 +306,26 @@ class InkView @JvmOverloads constructor(
         return found.sorted()
     }
 
-    private fun drawAllBase(c: Canvas) {
+    private fun drawAllBase() {
         rebuildSpatialIndex()
-        base?.eraseColor(Color.TRANSPARENT)
+        baseTiles.clear()
         for (m in marks) {
             if (!visible(m)) continue
-            InkGeometry.drawMark(c, m, width.toFloat(), height.toFloat(),
-                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+            paintMark(baseTiles, m)
         }
     }
 
-    private fun clearRegion(c: Canvas?, r: FloatArray?) {
-        if (c == null || r == null) return
+    private fun clearRegion(layer: InkLayer, r: FloatArray?) {
+        if (r == null) return
         if (r[2] <= r[0] || r[3] <= r[1]) return
-        c.drawRect(RectF(r[0], r[1], r[2], r[3]), clearRect)
+        layer.clearRect(r[0], r[1], r[2], r[3])
     }
 
     private fun rebuild() {
         ensureBuffers()
-        drawAllBase(baseC ?: return)
-        live?.eraseColor(Color.TRANSPARENT)
+        if (!baseTiles.ready) return
+        drawAllBase()
+        liveTiles.clear()
         predictionVisible = false
         predictionBoundsValid = false
         liveDirty = null
@@ -300,24 +334,29 @@ class InkView @JvmOverloads constructor(
 
     /** 局部重绘：橡皮抬手后只刷被扫过的矩形，不再重建整页位图。 */
     private fun rebuildRegion(dirty: FloatArray) {
-        val c = baseC ?: return
+        if (!baseTiles.ready) return
         val r = GeometryCore.clampRect(dirty, width.toFloat(), height.toFloat())
         rebuildSpatialIndex()
         if (r[2] <= r[0] || r[3] <= r[1]) { rebuild(); return }
-        clearRegion(c, r)
-        c.save()
-        c.clipRect(r[0], r[1], r[2], r[3])
+        clearRegion(baseTiles, r)
         for (index in indicesInRect(r)) {
             val m = marks[index]
             if (!visible(m)) continue
             val b = GeometryCore.markBounds(m)
             val pb = floatArrayOf(b[0] * width, b[1] * height, b[2] * width, b[3] * height)
             if (!GeometryCore.overlaps(pb, r)) continue
-            InkGeometry.drawMark(c, m, width.toFloat(), height.toFloat(),
-                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+            // 只在「这一笔触及的范围 ∩ 重绘矩形」里作画
+            markPixelBounds(m, markBoundsPx)
+            val left = maxOf(markBoundsPx[0], r[0])
+            val top = maxOf(markBoundsPx[1], r[1])
+            val right = minOf(markBoundsPx[2], r[2])
+            val bottom = minOf(markBoundsPx[3], r[3])
+            baseTiles.paint(left, top, right, bottom, create = true, clip = true) { c ->
+                InkGeometry.drawMark(c, m, width.toFloat(), height.toFloat(),
+                    strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+            }
         }
-        c.restore()
-        clearRegion(liveC, r)
+        clearRegion(liveTiles, r)
         invalidate(r[0].toInt(), r[1].toInt(), r[2].toInt() + 1, r[3].toInt() + 1)
     }
 
@@ -353,7 +392,7 @@ class InkView @JvmOverloads constructor(
             // 正在写的一笔仍走局部位图，按逻辑画布缩放铺开；抬手并入 marks 后即锐利
             canvas.save()
             canvas.scale(sc, sc)
-            live?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+            liveTiles.draw(canvas)
             if (predictionVisible) {
                 scratch.reset()
                 scratch.moveTo(predSeg[0], predSeg[1])
@@ -364,9 +403,10 @@ class InkView @JvmOverloads constructor(
             canvas.restore()
             return
         }
-        if (base == null) {
+        if (!baseTiles.ready) {
             ensureBuffers()
-            drawAllBase(baseC ?: return)
+            if (!baseTiles.ready) return
+            drawAllBase()
         }
         val panViewport = viewport
         val panOnly = panViewport != null &&
@@ -377,8 +417,8 @@ class InkView @JvmOverloads constructor(
             canvas.save()
             canvas.translate(-panViewport!!.originX, -panViewport!!.originY)
         }
-        base?.let { canvas.drawBitmap(it, 0f, 0f, null) }
-        live?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+        baseTiles.draw(canvas)
+        liveTiles.draw(canvas)
         if (predictionVisible) {
             scratch.reset()
             scratch.moveTo(predSeg[0], predSeg[1])
@@ -416,10 +456,10 @@ class InkView @JvmOverloads constructor(
         if (h.browseMode) return false
         if (loadingMarks) return true
         if (ev.actionMasked == MotionEvent.ACTION_DOWN && blocked(ev)) return false
-        // 低内存回收后，下一次编辑前重建笔迹缓冲，避免 liveC/baseC 为空导致笔迹不能提交。
-        if (base == null || live == null) {
+        // 低内存回收后，下一次编辑前重建笔迹缓冲，避免笔迹缓冲未就绪导致笔迹不能提交。
+        if (!baseTiles.ready) {
             ensureBuffers()
-            if (baseC != null) drawAllBase(baseC!!)
+            if (baseTiles.ready) drawAllBase()
         }
         val vp = viewport
         val needsViewportMap = vp != null && vp.scale > 0f &&
@@ -519,7 +559,7 @@ class InkView @JvmOverloads constructor(
         }
         drawing = true
         erasing = false
-        live?.eraseColor(Color.TRANSPARENT)
+        liveTiles.clear()
         predictionVisible = false
         predictionBoundsValid = false; liveDirty = null
         strokePaint.color = mapInk(Color.argb(h.inkAlpha, Color.red(h.inkColor),
@@ -529,7 +569,12 @@ class InkView @JvmOverloads constructor(
         strokePaint.strokeJoin = Paint.Join.ROUND
         strokePaint.strokeWidth = h.inkWidth * unit
         if (liveShape == Shapes.FREE) {
-            liveC?.drawPoint(tailX, tailY, strokePaint)
+            val px = tailX
+            val py = tailY
+            val pad = strokePaint.strokeWidth * 0.75f + 2f * density
+            liveTiles.paint(px - pad, py - pad, px + pad, py + pad) { c ->
+                c.drawPoint(px, py, strokePaint)
+            }
         }
         invalidate()
     }
@@ -569,7 +614,7 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun drawNewSegments(h: Host) {
-        val c = liveC ?: return
+        if (!liveTiles.ready) return
         val n = livePts.size / 2
         val base = (h.inkWidth * unit).coerceAtLeast(0.8f)
         strokePaint.color = mapInk(Color.argb(h.inkAlpha, Color.red(h.inkColor),
@@ -594,8 +639,12 @@ class InkView @JvmOverloads constructor(
             scratch.quadTo(cx, cy, ex, ey)
             strokePaint.strokeWidth = base *
                 (liveWs.getOrElse(i - 1) { 1f } + liveWs.getOrElse(i) { 1f }) * 0.5f
-            c.drawPath(scratch, strokePaint)
             val pad = strokePaint.strokeWidth * 0.75f + 2f * density
+            // 这一小段只会碰到几块小位图，不再整页重传
+            liveTiles.paint(
+                minOf(startX, cx, ex) - pad, minOf(startY, cy, ey) - pad,
+                maxOf(startX, cx, ex) + pad, maxOf(startY, cy, ey) + pad
+            ) { c -> c.drawPath(scratch, strokePaint) }
             dirtyPadding = maxOf(dirtyPadding, pad)
             dirtyLeft = minOf(dirtyLeft, startX, cx, ex)
             dirtyTop = minOf(dirtyTop, startY, cy, ey)
@@ -614,19 +663,21 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun drawShapeLive(h: Host) {
-        val c = liveC ?: return
+        if (!liveTiles.ready) return
         val mark = liveMark ?: return
         val nextDirty = shapeBounds(mark)
         val previousDirty = liveDirty
 
         // 只清除上一帧和当前形状覆盖的区域，不再清空横屏整页实时画布。
-        clearRegion(c, previousDirty)
-        clearRegion(c, nextDirty)
-        c.save()
-        c.clipRect(nextDirty[0], nextDirty[1], nextDirty[2], nextDirty[3])
-        InkGeometry.drawMark(c, mark, width.toFloat(), height.toFloat(),
-            strokePaint, scratch, textPaint, bgPaint, ::mapInk)
-        c.restore()
+        clearRegion(liveTiles, previousDirty)
+        clearRegion(liveTiles, nextDirty)
+        liveTiles.paint(
+            nextDirty[0], nextDirty[1], nextDirty[2], nextDirty[3],
+            create = true, clip = true
+        ) { c ->
+            InkGeometry.drawMark(c, mark, width.toFloat(), height.toFloat(),
+                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+        }
 
         liveDirty = nextDirty
         invalidateRect(previousDirty)
@@ -729,21 +780,36 @@ class InkView @JvmOverloads constructor(
         erasePts.clear(); erasePts.add(x); erasePts.add(y)
         erasing = true; drawing = false
         clearStroke.strokeWidth = h.eraserWidth * unit
-        val c = baseC ?: return
-        c.drawPoint(x * width, y * height, clearStroke)
+        if (!baseTiles.ready) return
+        val px = x * width
+        val py = y * height
+        val pad = clearStroke.strokeWidth * 0.5f + 2f * density
+        // create=false：没有笔迹的地方不需要分配位图
+        baseTiles.paint(px - pad, py - pad, px + pad, py + pad, create = false) { c ->
+            c.drawPoint(px, py, clearStroke)
+        }
         invalidate()
     }
 
     private fun erasePoints(ev: MotionEvent) {
-        val c = baseC ?: return
+        if (!baseTiles.ready) return
         fun take(x: Float, y: Float) {
             val nx = (x / width).coerceIn(0f, 1f)
             val ny = (y / height).coerceIn(0f, 1f)
             if (hypot((nx - lastX) * width, (ny - lastY) * height) < 1.2f) return
+            val x0 = lastX * width
+            val y0 = lastY * height
+            val x1 = nx * width
+            val y1 = ny * height
             scratch.reset()
-            scratch.moveTo(lastX * width, lastY * height)
-            scratch.lineTo(nx * width, ny * height)
-            c.drawPath(scratch, clearStroke)
+            scratch.moveTo(x0, y0)
+            scratch.lineTo(x1, y1)
+            val pad = clearStroke.strokeWidth * 0.5f + 2f * density
+            baseTiles.paint(
+                minOf(x0, x1) - pad, minOf(y0, y1) - pad,
+                maxOf(x0, x1) + pad, maxOf(y0, y1) + pad,
+                create = false
+            ) { c -> c.drawPath(scratch, clearStroke) }
             erasePts.add(nx); erasePts.add(ny)
             lastX = nx; lastY = ny
         }
@@ -800,7 +866,7 @@ class InkView @JvmOverloads constructor(
         lassoPts.clear(); lassoPts.add(x); lassoPts.add(y)
         lastX = x; lastY = y
         lassoing = true
-        live?.eraseColor(Color.TRANSPARENT)
+        liveTiles.clear()
         liveDirty = null
     }
 
@@ -820,11 +886,10 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun drawLassoLive() {
-        val c = liveC ?: return
-        clearRegion(c, liveDirty)
+        if (!liveTiles.ready) return
+        liveTiles.wipe()
+        liveDirty = null
         val poly = lassoPts.toFloatArray()
-        liveDirty = floatArrayOf(0f, 0f, width.toFloat(), height.toFloat())
-        c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
         if (poly.size >= 4) {
             scratch.reset()
             scratch.moveTo(poly[0] * width, poly[1] * height)
@@ -834,7 +899,12 @@ class InkView @JvmOverloads constructor(
                 i += 2
             }
             scratch.close()
-            c.drawPath(scratch, boxPaint)
+            val b = GeometryCore.bounds(poly)
+            val pad = boxPaint.strokeWidth + 4f * density
+            liveTiles.paint(
+                b[0] * width - pad, b[1] * height - pad,
+                b[2] * width + pad, b[3] * height + pad
+            ) { c -> c.drawPath(scratch, boxPaint) }
         }
         invalidate()
     }
@@ -858,7 +928,8 @@ class InkView @JvmOverloads constructor(
         val cy = (b[1] + b[3]) * 0.5f
         for (i in idx.asReversed()) marks.removeAt(i)
         selection = Selection(idx, orig, cx, cy)
-        drawAllBase(baseC ?: return)
+        if (!baseTiles.ready) return
+        drawAllBase()
         drawSelectionLive()
         h.onSelectionChanged(true)
         invalidate()
@@ -883,18 +954,17 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun drawSelectionLive() {
-        val c = liveC ?: return
+        if (!liveTiles.ready) return
         val s = selection ?: return
-        clearRegion(c, liveDirty)
-        liveDirty = floatArrayOf(0f, 0f, width.toFloat(), height.toFloat())
-        c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-        for (m in transformed(s)) {
-            InkGeometry.drawMark(c, m, width.toFloat(), height.toFloat(),
-                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
-        }
+        liveTiles.wipe()
+        liveDirty = null
+        for (m in transformed(s)) paintMark(liveTiles, m)
         val b = selectionBox(s)
-        c.drawRect(RectF(b[0], b[1], b[2], b[3]), boxPaint)
-        c.drawCircle(b[2], b[3], 7f * density, handlePaint)
+        val pad = boxPaint.strokeWidth + 10f * density
+        liveTiles.paint(b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad) { c ->
+            c.drawRect(RectF(b[0], b[1], b[2], b[3]), boxPaint)
+            c.drawCircle(b[2], b[3], 7f * density, handlePaint)
+        }
         invalidate()
     }
 
@@ -917,9 +987,10 @@ class InkView @JvmOverloads constructor(
         marks.addAll(transformed(s))
         selection = null
         host?.onSelectionChanged(false)
-        live?.eraseColor(Color.TRANSPARENT)
+        liveTiles.clear()
         liveDirty = null
-        drawAllBase(baseC ?: return)
+        if (!baseTiles.ready) return
+        drawAllBase()
         invalidate()
         commit()
     }
@@ -933,17 +1004,18 @@ class InkView @JvmOverloads constructor(
         marks.clear(); marks.addAll(list)
         selection = null
         host?.onSelectionChanged(false)
-        live?.eraseColor(Color.TRANSPARENT)
+        liveTiles.clear()
         liveDirty = null
         rebuild()
     }
 
     fun deleteSelection() {
         val s = selection ?: return
-        drawAllBase(baseC ?: return)
+        if (!baseTiles.ready) return
+        drawAllBase()
         selection = null
         host?.onSelectionChanged(false)
-        live?.eraseColor(Color.TRANSPARENT)
+        liveTiles.clear()
         liveDirty = null
         invalidate()
         commit()
@@ -1008,18 +1080,9 @@ class InkView @JvmOverloads constructor(
                 it.copyWith(pts = it.pts.copyOf(), ws = it.ws?.copyOf())
             }
         }
-        val c = liveC
-        // 补最后一段：从 tail 直接连到末点
-        if (m != null && liveShape == Shapes.FREE && c != null && livePts.size >= 4) {
-            val n = livePts.size / 2
-            scratch.reset()
-            scratch.moveTo(tailX, tailY)
-            scratch.lineTo(livePts[2 * (n - 1)] * width, livePts[2 * (n - 1) + 1] * height)
-            strokePaint.strokeWidth = (host?.inkWidth ?: 0.007f) * unit *
-                (liveWs.getOrElse(n - 2) { 1f } + liveWs.getOrElse(n - 1) { 1f }) * 0.5f
-            c.drawPath(scratch, strokePaint)
-        }
-        live?.eraseColor(Color.TRANSPARENT)
+        // 原来这里会把最后一段补画到实时层，但紧接着整层就被清空、中间没有刷新，
+        // 补画从来不可见（整笔随后完整画进已落笔层），所以直接清空。
+        liveTiles.clear()
         predictionVisible = false
         predictionBoundsValid = false; liveDirty = null
         var changed = false
@@ -1029,10 +1092,8 @@ class InkView @JvmOverloads constructor(
             if (!tiny) {
                 marks.add(m)
                 val index = marks.lastIndex
-                val canvas = baseC
-                if (canvas != null && visible(m)) {
-                    InkGeometry.drawMark(canvas, m, width.toFloat(), height.toFloat(),
-                        strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+                if (baseTiles.ready && visible(m)) {
+                    paintMark(baseTiles, m)
                 }
                 if (spatialReady) indexMark(index, m)
                 changed = true
@@ -1045,7 +1106,7 @@ class InkView @JvmOverloads constructor(
     private fun cancelGesture() {
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         liveMark = null
-        live?.eraseColor(Color.TRANSPARENT)
+        liveTiles.clear()
         predictionVisible = false
         predictionBoundsValid = false; liveDirty = null
         if (selection != null) drawSelectionLive()
@@ -1106,14 +1167,10 @@ class InkView @JvmOverloads constructor(
         rebuild()
     }
 
-    /** 低内存时释放两张全屏位图，下次 onDraw 按需重建。 */
+    /** 低内存时释放两层笔迹位图，下次 onDraw 按需重建。 */
     fun releaseBuffers() {
-        base?.recycle()
-        live?.recycle()
-        base = null
-        baseC = null
-        live = null
-        liveC = null
+        baseTiles.release()
+        liveTiles.release()
         predictionVisible = false
         predictionBoundsValid = false
         invalidate()

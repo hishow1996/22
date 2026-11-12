@@ -537,9 +537,30 @@ class TiledPageView @JvmOverloads constructor(
         canvas.translate(-originX, -originY)
         canvas.scale(displayFactor, displayFactor)
 
-        canvas.drawRect(left, top, left + visW, top + visH, background)
+        val sameAsPreview = kotlin.math.abs(bucket - PREVIEW_BUCKET) < 0.0001f
+        // 当前档位的可见图块已全部就绪时（图块是不透明的），底色、过渡预览和预览层
+        // 都会被完全盖住，不必再画。横屏整屏每帧少三遍铺满屏幕的绘制，滑动更轻。
+        // 预览层仍然遍历一遍，只为发现缺失的预览图块并补渲染。
+        var currentCovers = false
+        if (!sameAsPreview) {
+            var anyVisible = false
+            var allReady = true
+            for (spec in plan.specs) {
+                if (!spec.visible) continue
+                anyVisible = true
+                if (TileCache.get(spec.cacheKey) == null) {
+                    allReady = false
+                    break
+                }
+            }
+            currentCovers = anyVisible && allReady
+        }
 
-        if (plan.transitionPreviewSpecs.isNotEmpty()) {
+        if (!currentCovers) {
+            canvas.drawRect(left, top, left + visW, top + visH, background)
+        }
+
+        if (!currentCovers && plan.transitionPreviewSpecs.isNotEmpty()) {
             canvas.save()
             canvas.scale(plan.transitionScaleX, plan.transitionScaleY)
             for (spec in plan.transitionPreviewSpecs) {
@@ -556,7 +577,9 @@ class TiledPageView @JvmOverloads constructor(
         for (spec in plan.previewSpecs) {
             val bitmap = TileCache.get(spec.cacheKey)
             if (bitmap != null) {
-                canvas.drawBitmap(bitmap, spec.x.toFloat(), spec.y.toFloat(), paint)
+                if (!currentCovers) {
+                    canvas.drawBitmap(bitmap, spec.x.toFloat(), spec.y.toFloat(), paint)
+                }
             } else {
                 val retry = retryAfter[spec.cacheKey] ?: 0L
                 if (spec.cacheKey !in pending && SystemClock.uptimeMillis() >= retry) {
@@ -566,7 +589,6 @@ class TiledPageView @JvmOverloads constructor(
         }
         canvas.restore()
 
-        val sameAsPreview = kotlin.math.abs(bucket - PREVIEW_BUCKET) < 0.0001f
         if (!sameAsPreview) {
             for (spec in plan.specs) {
                 val bitmap = TileCache.get(spec.cacheKey)
