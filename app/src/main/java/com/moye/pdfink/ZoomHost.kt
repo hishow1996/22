@@ -76,6 +76,14 @@ class ZoomHost @JvmOverloads constructor(
         }).apply { setIsLongpressEnabled(false) }
     }
 
+    /**
+     * 连续滚动（竖屏铺满屏幕）：本 View 就是列表里的一页，高度等于页高。
+     * 1× 时双指上下拖动改为滚动外层列表；不允许缩到 1× 以下；不做双指横滑翻页。
+     */
+    var continuousScroll = false
+    private val lowestScale: Float
+        get() = if (continuousScroll) 1f else ZoomTransform.MIN_SCALE
+
     /** 由 PagesAdapter 按 state.browse 下发；浏览模式需自己消费 DOWN。 */
     var browseMode = false
     /**
@@ -367,13 +375,22 @@ class ZoomHost @JvmOverloads constructor(
                 val spreadDelta = abs(d - startDist)
                 // 只有页面在当前视口中确有横向溢出时，双指横滑才用于页内平移；
                 // 页面横向没有超出时仍允许横滑翻页。
-                if (!flipDone && panLimitX() <= 0.5f && abs(dx) > dp70 &&
+                val list = if (continuousScroll && scale <= 1.01f && spreadDelta <= 3f)
+                    parent as? androidx.recyclerview.widget.RecyclerView else null
+                if (!flipDone && !continuousScroll && panLimitX() <= 0.5f && abs(dx) > dp70 &&
                     spreadDelta < dp16 && abs(dx) > abs(dy)) {
                     flipDone = true
                     onFlip?.invoke(if (dx > 0f) -1 else 1)
+                } else if (!flipDone && list != null) {
+                    // 连续滚动：双指拖动 = 滚动整个列表。滚动会带着本 View 一起移动，
+                    // 下一次事件的本地坐标已经扣掉了位移，所以起点 startMidY 不用改。
+                    val px = dy.toInt()
+                    if (px != 0) list.scrollBy(0, -px)
+                    startDist = d
+                    startMidX = mx
                 } else if (!flipDone) {
                     if (spreadDelta > 3f) {
-                        scale = (scale * d / startDist).coerceIn(ZoomTransform.MIN_SCALE, 4f)
+                        scale = (scale * d / startDist).coerceIn(lowestScale, 4f)
                     }
                     startDist = d
                     tx += dx
@@ -384,8 +401,8 @@ class ZoomHost @JvmOverloads constructor(
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (scale <= ZoomTransform.MIN_SCALE + 0.0001f) {
-                    scale = ZoomTransform.MIN_SCALE
+                if (scale <= lowestScale + 0.0001f) {
+                    scale = lowestScale
                     // 只有到达最小倍率才钳位；小于 1× 的倍率必须保留。
                     scheduleTransform()
                 }

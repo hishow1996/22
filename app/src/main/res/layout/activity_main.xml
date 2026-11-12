@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="@color/paper">
 
-    <androidx.viewpager2.widget.ViewPager2
+    <com.moye.pdfink.ReaderPager
         android:id="@+id/pager"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

@@ -160,7 +160,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private val widthDots = ArrayList<View>()
 
     private lateinit var root: View
-    private lateinit var pager: ViewPager2
+    private lateinit var pager: ReaderPager
     private lateinit var edgeLeft: View
     private lateinit var edgeRight: View
     private lateinit var topBar: FrameLayout
@@ -874,9 +874,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // post 到布局后，避开 adapter 尚未挂载的冷启动首帧。
         pager.post {
             try {
-                val rv = pager.getChildAt(0)
-                        as? androidx.recyclerview.widget.RecyclerView ?: return@post
-                rv.edgeEffectFactory =
+                pager.setEdgeEffectFactory(
                     object : androidx.recyclerview.widget.RecyclerView.EdgeEffectFactory() {
                         override fun createEdgeEffect(
                             view: androidx.recyclerview.widget.RecyclerView, direction: Int
@@ -885,6 +883,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                                 color = 0xFF2F6FED.toInt()
                             }
                     }
+                )
             } catch (_: Throwable) { }
         }
     }
@@ -1283,12 +1282,27 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         updatePagerInput()
     }
 
+    /**
+     * 竖屏「铺满屏幕」= 连续滚动（像 WPS / Microsoft 365：页页相连往下排）。
+     * 横屏、适应屏幕、适应宽度、双页仍是逐页翻页，一行不改。
+     */
+    private fun wantContinuous(): Boolean =
+        !state.landscape && currentFitMode() == PageContainer.FILL &&
+            state.effectiveMode != DisplayMode.DOUBLE
+
+    private fun syncContinuous() {
+        val on = wantContinuous()
+        adapter?.continuous = on
+        pager.setContinuous(on)
+    }
+
     private fun applyPageMode() {
         val mode = state.effectiveMode
         adapter?.let {
             it.fitMode = currentFitMode()
             it.doublePage = mode == DisplayMode.DOUBLE
         }
+        syncContinuous()
         refreshPageLayout()
         updatePagerInput()
     }
@@ -1642,6 +1656,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         ad.onPanChange = { px, py -> currentPanX = px; currentPanY = py }
         ad.setBrowseMode(state.browse)
         adapter = ad
+        val continuousNow = wantContinuous()
+        ad.continuous = continuousNow
+        pager.setContinuous(continuousNow)
         pager.adapter = ad
         pager.visibility = View.VISIBLE
         emptyState.visibility = View.GONE

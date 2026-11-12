@@ -29,6 +29,44 @@ class PagesAdapter(
     /** Coalesce viewport refreshes until the window has completed its next layout pass. */
     private var hostBoundsRefreshPending = false
 
+    /** 竖屏「铺满屏幕」的连续滚动：每页按页宽比例定高，一页接一页往下排。 */
+    var continuous = false
+    private var recycler: RecyclerView? = null
+    private var lastRatio = ContinuousMath.DEFAULT_RATIO
+
+    /** 连续滚动时屏幕上同时有好几页，全部按「当前页」优先级渲染。 */
+    private fun isActive(position: Int) = continuous || position == activePosition
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        super.onAttachedToRecyclerView(recyclerView)
+        recycler = recyclerView
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        if (recycler === recyclerView) recycler = null
+        super.onDetachedFromRecyclerView(recyclerView)
+    }
+
+    /** 列表项高度：连续滚动按页比例，逐页翻页回到铺满。 */
+    private fun applyItemHeight(h: VH, ratio: Float) {
+        val lp = h.itemView.layoutParams ?: return
+        var want = ViewGroup.LayoutParams.MATCH_PARENT
+        if (continuous) {
+            val rv = recycler
+            if (rv != null) {
+                val inset = rv.resources.getDimensionPixelSize(R.dimen.pdf_page_horizontal_inset)
+                val ih = ContinuousMath.itemHeight(
+                    rv.width - rv.paddingLeft - rv.paddingRight, inset, ratio
+                )
+                if (ih > 0) want = ih
+            }
+        }
+        if (lp.height != want) {
+            lp.height = want
+            h.itemView.layoutParams = lp
+        }
+    }
+
     var initialZoom = 1f
     var initialPanX = 0f
     var initialPanY = 0f
@@ -39,7 +77,7 @@ class PagesAdapter(
             if (field == value) return
             field = value
             holders.forEach { (position, holder) ->
-                val active = position == value
+                val active = isActive(position)
                 holder.image.setCurrentPage(active)
                 holder.secondImage.setCurrentPage(active)
             }
@@ -103,6 +141,7 @@ class PagesAdapter(
         h.zoom.reset(silent = true,
             toTop = fitMode == PageContainer.WIDTH && (!state.landscape || state.pageRotation == 0))
         h.zoom.browseMode = state.browse
+        h.zoom.continuousScroll = continuous
         h.zoom.onZoomChange = { value ->
             if (position == activePosition) onZoomChange(value)
         }
@@ -164,6 +203,8 @@ class PagesAdapter(
                 ?: if (p1 in h.ratioFailures) 0.75f else null
         } else null
         val ratiosReady = ratio0 != null && (!showSecond || ratio1 != null)
+        if (ratio0 != null) lastRatio = ratio0
+        applyItemHeight(h, ratio0 ?: lastRatio)
         h.pageContainer.ratio = ratio0 ?: 0.75f
         h.secondContainer.ratio = ratio1 ?: ratio0 ?: 0.75f
         h.draftContainer.ratio = h.pageContainer.ratio
@@ -234,8 +275,8 @@ class PagesAdapter(
         h.secondImage.unbindTiled()
         h.image.setImageBitmap(null)
         h.secondImage.setImageBitmap(null)
-        h.image.setCurrentPage(position == activePosition)
-        h.secondImage.setCurrentPage(position == activePosition)
+        h.image.setCurrentPage(isActive(position))
+        h.secondImage.setCurrentPage(isActive(position))
 
         h.ink.setPageLook(state.tint)
         h.secondInk.setPageLook(state.tint)
@@ -279,7 +320,7 @@ class PagesAdapter(
             // 0°/90°/180°/270° 全部按当前视口分块渲染。
             h.image.bindTiled(
                 repo, p0, w, ht, state.tint, state.brightness,
-                state.pageRotation, position == activePosition
+                state.pageRotation, isActive(position)
             )
             if (showSecond) {
                 val w2 = h.secondContainer.width
@@ -287,7 +328,7 @@ class PagesAdapter(
                 if (w2 > 0 && h2 > 0) {
                     h.secondImage.bindTiled(
                         repo, p1, w2, h2, state.tint, state.brightness,
-                        state.pageRotation, position == activePosition
+                        state.pageRotation, isActive(position)
                     )
                 }
             }
@@ -398,7 +439,7 @@ class PagesAdapter(
                 h.image.bindTiled(
                     repo, h.boundLogical, primaryFrame.width, primaryFrame.height,
                     state.tint, state.brightness, state.pageRotation,
-                    h.boundPage == activePosition
+                    isActive(h.boundPage)
                 )
             }
 
@@ -406,7 +447,7 @@ class PagesAdapter(
                 h.secondImage.bindTiled(
                     repo, h.boundLogical + 1, secondFrame.width, secondFrame.height,
                     state.tint, state.brightness, state.pageRotation,
-                    h.boundPage == activePosition
+                    isActive(h.boundPage)
                 )
             }
 
