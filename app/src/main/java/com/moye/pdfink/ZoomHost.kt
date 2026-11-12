@@ -78,6 +78,14 @@ class ZoomHost @JvmOverloads constructor(
 
     /** 由 PagesAdapter 按 state.browse 下发；浏览模式需自己消费 DOWN。 */
     var browseMode = false
+    /**
+     * 放大后页面会铺到原本页框之外（上下空白区），系统按子 View 原始边界做命中，
+     * 那里的触摸到不了笔迹层。DOWN 落在页框外时由这里手动转发给最近的页面笔迹层，
+     * 本次手势的后续事件也一直转发给它。
+     */
+    private var manualInk: View? = null
+    private var manualDx = 0f
+    private var manualDy = 0f
     private var singleStartX = 0f
     private var singleStartY = 0f
     private var lastSingleX = 0f
@@ -182,7 +190,10 @@ class ZoomHost @JvmOverloads constructor(
                 // 都被这里吞掉，若不补发 CANCEL，那一笔会永远残留在 live 缓冲。
                 val c = MotionEvent.obtain(ev.downTime, ev.eventTime,
                     MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
-                try { super.dispatchTouchEvent(c) } finally { c.recycle() }
+                try {
+                    if (manualInk != null) sendManual(c) else super.dispatchTouchEvent(c)
+                } finally { c.recycle() }
+                manualInk = null
             }
             zooming = true
         }
@@ -267,7 +278,66 @@ class ZoomHost @JvmOverloads constructor(
             }
             return true
         }
+        if (manualInk != null) {
+            val handled = sendManual(ev)
+            if (ev.actionMasked == MotionEvent.ACTION_UP ||
+                ev.actionMasked == MotionEvent.ACTION_CANCEL) manualInk = null
+            return handled
+        }
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            val target = outsideFrameInk(ev.x, ev.y)
+            if (target != null) {
+                manualInk = target.first
+                manualDx = target.second
+                manualDy = target.third
+                val handled = sendManual(ev)
+                if (!handled) manualInk = null
+                return handled
+            }
+        }
         return super.dispatchTouchEvent(ev)
+    }
+
+    private fun sendManual(ev: MotionEvent): Boolean {
+        val v = manualInk ?: return false
+        val c = MotionEvent.obtain(ev)
+        c.offsetLocation(-manualDx, -manualDy)
+        return try { v.dispatchTouchEvent(c) } finally { c.recycle() }
+    }
+
+    /**
+     * DOWN 点不在任何页框内、但落在放大后显示出的页面范围内时，
+     * 返回应接收该手势的笔迹层及「宿主坐标 → 笔迹层本地坐标」的偏移。
+     */
+    private fun outsideFrameInk(x: Float, y: Float): Triple<View, Float, Float>? {
+        if (legacyViewScale || scale <= 1.001f || width <= 0 || height <= 0) return null
+        val pages = listOf(primaryPage, secondaryPage, draftPage)
+        var best: Triple<View, Float, Float>? = null
+        var bestGap = Float.MAX_VALUE
+        for (page in pages) {
+            val f = pageFrameFor(page) ?: continue
+            // 点在原始页框内：系统自己会命中，无需手动转发
+            if (x >= f.left && x < f.left + f.width && y >= f.top && y < f.top + f.height) {
+                return null
+            }
+            val cx = width * 0.5f
+            val cy = height * 0.5f
+            val dl = cx + (f.left - cx) * scale + tx
+            val dt = cy + (f.top - cy) * scale + ty
+            val dr = dl + f.width * scale
+            val db = dt + f.height * scale
+            if (x < dl || x >= dr || y < dt || y >= db) continue
+            val ink = (page as? android.view.ViewGroup)?.let { g ->
+                (0 until g.childCount).map { g.getChildAt(it) }
+                    .lastOrNull { it is InkView && it.visibility == View.VISIBLE }
+            } ?: continue
+            val gap = maxOf(dl - x, x - dr, 0f)
+            if (gap < bestGap) {
+                bestGap = gap
+                best = Triple(ink, f.left, f.top)
+            }
+        }
+        return best
     }
 
     private fun distance(ev: MotionEvent): Float = hypot(

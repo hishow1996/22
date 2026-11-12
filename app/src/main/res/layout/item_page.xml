@@ -18,6 +18,8 @@
         android:paddingEnd="@dimen/pdf_page_horizontal_inset">
 
         <com.moye.pdfink.PageContainer
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:id="@+id/pageContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -42,6 +44,8 @@
 
         <!-- v7 双页并排：相邻的下一页。GONE 时不参与 LinearLayout 的 weight 分配 -->
         <com.moye.pdfink.PageContainer
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:id="@+id/secondContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -67,6 +71,8 @@
         </com.moye.pdfink.PageContainer>
 
         <com.moye.pdfink.PageContainer
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:id="@+id/draftContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
