@@ -1,11 +1,13 @@
 package com.moye.pdfink
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import kotlinx.coroutines.Job
+import kotlin.math.ceil
 import kotlin.math.floor
 import android.graphics.Paint
 import android.graphics.Path
@@ -100,6 +102,19 @@ class InkView @JvmOverloads constructor(
     private val liveTiles = InkLayer()
     /** [markPixelBounds] 的复用输出缓冲。 */
     private val markBoundsPx = FloatArray(4)
+    /**
+     * 放大模式下书写时的「已有笔迹」缓存。放大后每帧都要把可见笔迹全部矢量重画，
+     * 页面上笔迹一多，写字每帧都在重画一整屏，所以卡。书写期间已有笔迹和视口都不变，
+     * 所以只在落笔后的第一帧画一次到屏幕大小的位图，之后每帧直接贴图；
+     * 抬笔 / 视口变化 / 笔迹变化时丢弃，回到逐帧矢量（保持锐利）。
+     */
+    private var hiResCache: Bitmap? = null
+    private var hiResCacheLeft = 0
+    private var hiResCacheTop = 0
+    private val hiResCacheKey = FloatArray(10)
+    private val hiResKeyNow = FloatArray(10)
+    /** 本次手势里视口变过或内存不足：不再建缓存，直到手势结束。 */
+    private var hiResCacheBroken = false
     /** 预测墨迹复用固定线段缓冲，不在每次 MOVE 中分配新数组。 */
     private val predSeg = FloatArray(4)
     private val predictionBounds = FloatArray(4)
@@ -165,7 +180,11 @@ class InkView @JvmOverloads constructor(
     /** 倍率偏离 1× 时切矢量重绘，避免笔迹位图跟不上连续缩放。 */
     var hiResMode: Boolean = false
         set(v) {
-            if (v != field) { field = v; invalidate() }
+            if (v != field) {
+                field = v
+                if (!v) dropHiResCache()
+                invalidate()
+            }
         }
     private var pageTint = InkPalette.WHITE
     private fun mapInk(argb: Int): Int = InkPalette.mapColor(argb, pageTint)
@@ -210,6 +229,75 @@ class InkView @JvmOverloads constructor(
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { rebuild() }
+
+    private fun dropHiResCache() {
+        hiResCache?.recycle()
+        hiResCache = null
+        hiResCacheBroken = false
+    }
+
+    private fun gestureActive(): Boolean = drawing || erasing || lassoing || dragMode != 0
+
+    /** 把与可见窗相交的笔迹以矢量画到 [c]；[c] 已设好逻辑坐标变换。 */
+    private fun drawVisibleMarks(c: Canvas, lw: Float, lh: Float, r: FloatArray, sc: Float) {
+        // 栅格清晰度与页面实际显示倍率分开，书写矢量坐标使用同一显示变换。
+        // 空间索引先筛出与当前视口相交的批注，再执行精确 bbox 检查。
+        val pageRect = floatArrayOf(r[0] / sc, r[1] / sc, r[2] / sc, r[3] / sc)
+        for (index in indicesInRect(pageRect)) {
+            val m = marks[index]
+            if (!visible(m)) continue
+            val b = GeometryCore.markBounds(m)
+            val pb = floatArrayOf(b[0] * lw, b[1] * lh, b[2] * lw, b[3] * lh)
+            if (!GeometryCore.overlaps(pb, r)) continue
+            InkGeometry.drawMark(c, m, lw, lh,
+                strokePaint, scratch, textPaint, bgPaint, ::mapInk)
+        }
+    }
+
+    /**
+     * 书写中返回「已有笔迹」缓存位图（视图坐标，左上角见 hiResCacheLeft/Top）；
+     * 不适用时返回 null，调用方逐帧矢量重画。
+     */
+    private fun obtainHiResCache(
+        vp: Viewport, displayFactor: Float, r: FloatArray, lw: Float, lh: Float, sc: Float
+    ): Bitmap? {
+        if (hiResCacheBroken) return null
+        val key = hiResKeyNow
+        key[0] = vp.scale; key[1] = vp.bucket
+        key[2] = vp.lw.toFloat(); key[3] = vp.lh.toFloat()
+        key[4] = vp.originX; key[5] = vp.originY
+        key[6] = vp.visLeft; key[7] = vp.visTop
+        key[8] = vp.visW.toFloat(); key[9] = vp.visH.toFloat()
+        val existing = hiResCache
+        if (existing != null) {
+            if (key.contentEquals(hiResCacheKey)) return existing
+            // 书写途中视口变了（如缩放动画）：这一手势退回逐帧矢量，不反复重建缓存
+            dropHiResCache()
+            hiResCacheBroken = true
+            return null
+        }
+        val cl = floor(vp.visLeft * displayFactor - vp.originX).toInt()
+        val ct = floor(vp.visTop * displayFactor - vp.originY).toInt()
+        val cw = ceil(vp.visW * displayFactor).toInt() + 2
+        val ch = ceil(vp.visH * displayFactor).toInt() + 2
+        if (cw <= 2 || ch <= 2 || cw > 4096 || ch > 4096) return null
+        val bitmap = try {
+            Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888)
+        } catch (e: OutOfMemoryError) {
+            hiResCacheBroken = true
+            return null
+        }
+        val c = Canvas(bitmap)
+        // 位图像素 (x, y) 对应视图坐标 (cl + x, ct + y)，与逐帧矢量的变换一致
+        c.translate(-cl - vp.originX, -ct - vp.originY)
+        c.scale(displayFactor, displayFactor)
+        drawVisibleMarks(c, lw, lh, r, sc)
+        hiResCache = bitmap
+        hiResCacheLeft = cl
+        hiResCacheTop = ct
+        System.arraycopy(key, 0, hiResCacheKey, 0, key.size)
+        return bitmap
+    }
 
     private fun ensureBuffers() {
         if (width <= 0 || height <= 0) return
@@ -322,6 +410,7 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun rebuild() {
+        dropHiResCache()
         ensureBuffers()
         if (!baseTiles.ready) return
         drawAllBase()
@@ -334,6 +423,7 @@ class InkView @JvmOverloads constructor(
 
     /** 局部重绘：橡皮抬手后只刷被扫过的矩形，不再重建整页位图。 */
     private fun rebuildRegion(dirty: FloatArray) {
+        dropHiResCache()
         if (!baseTiles.ready) return
         val r = GeometryCore.clampRect(dirty, width.toFloat(), height.toFloat())
         rebuildSpatialIndex()
@@ -372,23 +462,20 @@ class InkView @JvmOverloads constructor(
             val r = floatArrayOf(vp.visLeft, vp.visTop,
                 vp.visLeft + vp.visW.coerceAtLeast(1),
                 vp.visTop + vp.visH.coerceAtLeast(1))
+            // 书写中已有笔迹不变：贴缓存位图，不再每帧重画整屏矢量
+            val cached = if (gestureActive()) {
+                obtainHiResCache(vp, displayFactor, r, lw, lh, sc)
+            } else {
+                if (hiResCache != null || hiResCacheBroken) dropHiResCache()
+                null
+            }
+            if (cached != null) {
+                canvas.drawBitmap(cached, hiResCacheLeft.toFloat(), hiResCacheTop.toFloat(), null)
+            }
             canvas.save()
             canvas.translate(-vp.originX, -vp.originY)
             canvas.scale(displayFactor, displayFactor)
-            // 栅格清晰度与页面实际显示倍率分开，书写矢量坐标使用同一显示变换。
-            // 空间索引先筛出与当前视口相交的批注，再执行精确 bbox 检查。
-            val pageRect = floatArrayOf(
-                r[0] / sc, r[1] / sc, r[2] / sc, r[3] / sc
-            )
-            for (index in indicesInRect(pageRect)) {
-                val m = marks[index]
-                if (!visible(m)) continue
-                val b = GeometryCore.markBounds(m)
-                val pb = floatArrayOf(b[0] * lw, b[1] * lh, b[2] * lw, b[3] * lh)
-                if (!GeometryCore.overlaps(pb, r)) continue
-                InkGeometry.drawMark(canvas, m, lw, lh,
-                    strokePaint, scratch, textPaint, bgPaint, ::mapInk)
-            }
+            if (cached == null) drawVisibleMarks(canvas, lw, lh, r, sc)
             // 正在写的一笔仍走局部位图，按逻辑画布缩放铺开；抬手并入 marks 后即锐利
             canvas.save()
             canvas.scale(sc, sc)
@@ -1057,6 +1144,7 @@ class InkView @JvmOverloads constructor(
 
     // ---------- 收尾 / 历史 ----------
     private fun finish() {
+        dropHiResCache()
         when {
             erasing -> finishErase()
             lassoing -> finishLasso()
@@ -1107,6 +1195,7 @@ class InkView @JvmOverloads constructor(
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         liveMark = null
         liveTiles.clear()
+        dropHiResCache()
         predictionVisible = false
         predictionBoundsValid = false; liveDirty = null
         if (selection != null) drawSelectionLive()
@@ -1171,6 +1260,7 @@ class InkView @JvmOverloads constructor(
     fun releaseBuffers() {
         baseTiles.release()
         liveTiles.release()
+        dropHiResCache()
         predictionVisible = false
         predictionBoundsValid = false
         invalidate()
