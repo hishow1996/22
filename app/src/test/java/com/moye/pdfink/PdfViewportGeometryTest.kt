@@ -53,7 +53,7 @@ class PdfViewportGeometryTest {
     }
 
     @Test
-    fun hiddenToolbarsStillAvoidPhysicalNotch() {
+    fun hiddenToolbarsHonourExplicitSafeTop() {
         val insets = PdfViewportGeometry.contentInsets(
             landscape = false,
             barsHidden = true,

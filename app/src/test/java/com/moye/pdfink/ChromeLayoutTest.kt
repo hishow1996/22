@@ -3,10 +3,8 @@ package com.moye.pdfink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
-/** 栏占位唯一出口、物理刘海避让、严格 cover、竖屏三态判定（纯 JVM）。 */
+/** 栏占位唯一出口、物理刘海避让、竖屏三态判定（纯 JVM）。 */
 class ChromeLayoutTest {
 
     /** 3.0 密度下：baseTop 150px、baseBottom 144px、gap 18/12px，刘海 72px。 */
@@ -39,12 +37,12 @@ class ChromeLayoutTest {
         assertTrue(cm.topPaddingTop >= cm.cutTop)
     }
 
-    @Test fun `hidden bars still avoid the physical notch`() {
+    @Test fun `hidden bars let the page start at the very top`() {
         val cm = metrics(portrait = true, hidden = true)
         assertEquals(0, cm.barTop)
         assertEquals(0, cm.barBottom)
-        // 顶栏消失但挖孔还在：纸页顶部仍要让开 72px（FILL 按新可用高重算）
-        assertEquals(72, cm.hiddenPagerTop)
+        // 顶栏消失后纸页从屏幕最顶开始，不留刘海灰条
+        assertEquals(0, cm.hiddenPagerTop)
     }
 
     @Test fun `system hide notch area means zero app clearance`() {
@@ -69,44 +67,6 @@ class ChromeLayoutTest {
         assertEquals(18, cm.topPaddingTop)
         assertEquals(72, cm.pagerLeft)
         assertEquals(0, cm.hiddenPagerTop)
-    }
-
-    private fun pageH(availW: Int, ratio: Float, s: Float): Int =
-        (availW * s / ratio).roundToInt()
-
-    @Test fun `a4 with bars fills exactly the between-bars area`() {
-        val s = PageContainer.fillScaleExact(1080, 1935, 0.707f)
-        assertTrue(s > 1.2f)
-        assertEquals(1935, pageH(1080, 0.707f, s))
-        assertTrue((1080 * s).roundToInt() > 1080) // 横向超出可平移
-    }
-
-    @Test fun `a4 with hidden bars fills the whole screen`() {
-        val s = PageContainer.fillScaleExact(1080, 2340, 0.707f)
-        assertEquals(2340, pageH(1080, 0.707f, s))
-    }
-
-    @Test fun `tall page fills width and overflows vertically instead of leaving white`() {
-        val s = PageContainer.fillScaleExact(1080, 1935, 0.3f)
-        assertEquals(1f, s, 0.001f)
-        val h = pageH(1080, 0.3f, s)
-        assertTrue("height must overflow viewport", h > 1935)
-        assertEquals(1080, (1080 * s).roundToInt())
-    }
-
-    @Test fun `wide page is no longer capped at 1_8x`() {
-        // v19 的 1.8x 会让页高只有 1080*1.8/1.8=1080，上下留 1260px 白。
-        val s = PageContainer.fillScaleExact(1080, 2340, 1.8f)
-        assertTrue(s > 3f)
-        assertEquals(2340, pageH(1080, 1.8f, s))
-    }
-
-    @Test fun `invalid inputs are safe`() {
-        assertEquals(1f, PageContainer.fillScaleExact(0, 1935, 0.707f), 0.001f)
-        assertEquals(1f, PageContainer.fillScaleExact(1080, 0, 0.707f), 0.001f)
-        assertEquals(1f, PageContainer.fillScaleExact(1080, 1935, 0f), 0.001f)
-        assertTrue(abs(PageContainer.fillScaleExact(1080, 999999, 20f) -
-            PageContainer.MAX_FILL_SCALE) < 0.001f)
     }
 
     @Test fun `portrait three modes are mutually exclusive`() {

@@ -152,7 +152,7 @@ class PagesAdapter(
 
         // v31：三态对齐表。v29 的「非 FIT 一律顶部对齐」把「适应宽度」也
         // 贴到栏下、底部堆出约 455px 空白；现在 FIT / WIDTH 回垂直居中，
-        // 只有 FILL（严格 cover）保持靠左上。横屏三模式不动。
+        // 只有 FILL（页宽铺满、贴顶）保持靠左上。横屏三模式不动。
         h.pageContainer.fitMode = fitMode
         h.secondContainer.fitMode = PageContainer.FIT
         h.draftContainer.fitMode = PageContainer.FIT

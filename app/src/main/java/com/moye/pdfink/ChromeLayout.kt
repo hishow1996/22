@@ -10,7 +10,8 @@ package com.moye.pdfink
  * v30：cutTop 恢复取物理刘海深度，但**只用于顶栏自身**：
  *   barTop（容器总高，背景延伸到刘海区）与 topPaddingTop（图标起始 y）
  *   是包含关系，不再叠加到阅读区；阅读区顶部由 barTop 一次给出。
- *   隐藏栏时顶栏消失，但物理刘海仍在，阅读区顶部改为 hiddenPagerTop。
+ *   隐藏栏时顶栏消失，阅读区从屏幕最顶开始（hiddenPagerTop = 0），
+ *   纸页不再为刘海留出灰条；顶栏显示时的刘海避让不变。
  * cutBottom 竖屏为 0（底部无刘海），横屏保留旋转后的安全区。
  */
 data class ChromeMetrics(
@@ -59,8 +60,8 @@ object ChromeLayout {
             pagerRight = if (portrait) 0 else safeR,
             cutTop = cutTop,
             cutBottom = cutBottom,
-            // 隐藏栏后纸页仍要避开物理刘海（FILL 会按新可用高重新铺满）。
-            hiddenPagerTop = cutTop
+            // 隐藏栏后纸页顶到屏幕最顶，不再留刘海灰条。
+            hiddenPagerTop = 0
         )
     }
 }

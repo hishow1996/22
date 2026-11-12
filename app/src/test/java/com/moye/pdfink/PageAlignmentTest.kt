@@ -3,7 +3,7 @@ package com.moye.pdfink
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** v31：适应屏幕 / 适应宽度居中，铺满屏幕靠左上，横屏不受影响。 */
+/** 适应屏幕 / 适应宽度居中，铺满屏幕（页宽贴满、靠顶），横屏不受影响。 */
 class PageAlignmentTest {
 
     private val availH = 2016f

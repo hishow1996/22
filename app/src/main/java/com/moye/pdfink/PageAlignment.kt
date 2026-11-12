@@ -10,7 +10,7 @@ package com.moye.pdfink
  * 现在按真实页高决定：
  *  - 适应屏幕 FIT  ：整页 contain，页高恒 ≤ 可用高 → 垂直居中
  *  - 适应宽度 WIDTH：页高 < 可用高 → 上下均分；页高 ≥ 可用高 → 回页顶可拖
- *  - 铺满屏幕 FILL ：严格 cover，四边零留白 → 靠左上（v29 原样）
+ *  - 铺满屏幕 FILL ：页宽 = 视口宽，左右零裁切 → 靠左上
  * 横屏 FIT / WIDTH / DOUBLE 一律 CENTER，一行不改。
  */
 object PageAlignment {

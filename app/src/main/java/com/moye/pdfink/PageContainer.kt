@@ -9,8 +9,9 @@ import kotlin.math.roundToInt
 /**
  * 按 PDF 页宽高比摆放页面，保证底图层与笔迹层使用完全相同的像素区域。
  *
- * FIT / FILL 都完整显示整页；FILL 代表尽可能使用整个阅读视口，
- * 不是把页面放大到视口之外。页面比例与屏幕比例不同时允许自然留白。
+ * FIT 完整显示整页（宽高都不超出视口）；WIDTH / FILL 页宽等于视口宽、
+ * 左右零裁切，高度随比例，长页可上下滚动。FILL 与 WIDTH 的区别只在
+ * 垂直对齐：FILL 贴顶（隐藏栏时从屏幕最顶开始），短页底部自然留白。
  */
 class PageContainer @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -19,7 +20,7 @@ class PageContainer @JvmOverloads constructor(
     companion object {
         const val FIT = 0       // 完整显示整页，宽高都不超过阅读视口
         const val WIDTH = 1     // 页面宽度适配视口，高度可滚动
-        const val FILL = 2      // v29：严格铺满阅读视口，允许横向裁切 + 平移
+        const val FILL = 2      // 页宽铺满视口宽（左右不裁切），贴顶
 
         /**
          * 在给定视口内按原始宽高比取得最大完整页面尺寸。
@@ -40,26 +41,6 @@ class PageContainer @JvmOverloads constructor(
                 h = (w / ratio).roundToInt().coerceAtLeast(1)
             }
             return w.coerceIn(1, availW) to h.coerceIn(1, availH)
-        }
-
-        /** v29：严格 cover 的防御上限，只防异常 ratio，不制造留白。 */
-        const val MAX_FILL_SCALE = 8f
-
-        /**
-         * v29：严格 cover —— 页面至少铺满一个方向，另一方向超出可平移，
-         * 四边永远零留白。用户口径「有栏铺满栏间、隐藏栏铺满整屏」。
-         *
-         * s = max(1, availH·ratio / availW)：
-         *  - A4 竖页 → w = availH·ratio（横向略超出），h = availH（纵向铺满）
-         *  - 细长页   → w = availW（横向铺满），h = availW/ratio（纵向超出可拖）
-         *  - 宽幅页   → h = availH（纵向铺满），横向裁切较多，可切「适应屏幕」
-         */
-        fun fillScaleExact(availW: Int, availH: Int, ratio: Float): Float {
-            if (availW <= 0 || availH <= 0 ||
-                !ratio.isFinite() || ratio <= 0f) return 1f
-            val baseH = availW / ratio
-            if (baseH <= 0f || !baseH.isFinite()) return 1f
-            return maxOf(1f, availH / baseH).coerceAtMost(MAX_FILL_SCALE)
         }
     }
 
@@ -91,12 +72,8 @@ class PageContainer @JvmOverloads constructor(
                 // 按宽度适配；长页面保留完整高度，由阅读视口滚动查看。
             }
             FILL -> {
-                // v29：严格 cover，页高严格等于可用高（有栏=栏间 / 隐藏栏=整屏）。
-                // 与并行提交新增的 fitPageSize(contain) 并存：FIT 仍完整显示整页，
-                // 只有用户要的「铺满屏幕」才裁切 + 平移。
-                val sc = fillScaleExact(availW, availH, safeRatio)
-                w = (availW * sc).roundToInt().coerceAtLeast(1)
-                h = (w / safeRatio).roundToInt().coerceAtLeast(1)
+                // 页宽 = 视口宽，不再按高度放大到视口之外（否则右侧被裁掉）。
+                // 与 WIDTH 同一几何；贴顶对齐由 PageAlignment / PagesAdapter 决定。
             }
             else -> {
                 // FIT 及未知模式：完整显示整页，不裁切（并行提交的 contain 几何）

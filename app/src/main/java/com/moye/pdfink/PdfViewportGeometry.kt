@@ -21,9 +21,8 @@ data class PdfContentInsets(
 
 object PdfViewportGeometry {
     /**
-     * v30：隐藏工具栏后「铺满整屏」不含物理刘海挖孔区 —— 屏幕最顶那条
-     * 属于硬件遮挡，纸页画上去也看不见。hiddenSafeTop 来自
-     * ChromeLayout.metrics().hiddenPagerTop，系统开了「隐藏显示区域」时为 0。
+     * 隐藏工具栏后阅读区顶部取 hiddenSafeTop（来自
+     * ChromeLayout.metrics().hiddenPagerTop，现为 0：纸页从屏幕最顶开始）。
      * 默认值 0 保持原有调用与单测语义不变。
      */
     fun contentInsets(
