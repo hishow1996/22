@@ -48,4 +48,26 @@ class ContinuousMathTest {
         assertEquals(-1, ContinuousMath.indexAtCenter(IntArray(0), IntArray(0), 500, 24))
         assertEquals(-1, ContinuousMath.indexAtCenter(intArrayOf(2000), intArrayOf(3000), 500, 24))
     }
+
+    @Test
+    fun zoomScalesItemHeightFromRoundedBase() {
+        val base = ContinuousMath.itemHeight(1080, 18, 0.707f)
+        assertEquals(Math.round(base * 2f), ContinuousMath.itemHeight(1080, 18, 0.707f, 2f))
+    }
+
+    @Test
+    fun anchoredZoomKeepsFocusPointStill() {
+        val hostW = 1080f
+        val left = 18f
+        val oldS = 1.5f
+        val newS = 2.5f
+        val oldTx = -120f
+        val fx = 700f
+        val c = hostW / 2
+        val oldLeft = c + (left - c) * oldS + oldTx
+        val pageX = (fx - oldLeft) / oldS
+        val newTx = ContinuousMath.anchoredTx(hostW, left, oldS, newS, oldTx, fx)
+        val newLeft = c + (left - c) * newS + newTx
+        assertEquals(fx, newLeft + pageX * newS, 0.01f)
+    }
 }

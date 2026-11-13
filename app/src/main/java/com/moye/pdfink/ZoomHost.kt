@@ -81,6 +81,11 @@ class ZoomHost @JvmOverloads constructor(
      * 1× 时双指上下拖动改为滚动外层列表；不允许缩到 1× 以下；不做双指横滑翻页。
      */
     var continuousScroll = false
+    /** 连续滚动：缩放整列。参数 = 目标倍率、焦点在列表里的 x / y。 */
+    var onListZoomTo: ((Float, Float, Float) -> Unit)? = null
+    /** 连续滚动：整列横向平移（所有页共用同一个 tx）。 */
+    var onListPan: ((Float) -> Unit)? = null
+    private var velocity: android.view.VelocityTracker? = null
     private val lowestScale: Float
         get() = if (continuousScroll) 1f else ZoomTransform.MIN_SCALE
 
@@ -147,6 +152,9 @@ class ZoomHost @JvmOverloads constructor(
      */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        // 连续滚动：列表项高度随整列倍率变化，纵向位移是由高度算出来的固定值，
+        // 尺寸变了就重新夹一次。
+        if (continuousScroll && w > 0 && h > 0) scheduleTransform()
         if (oldw <= 0 || oldh <= 0 || w <= 0 || h <= 0) return
         if (w == oldw && h == oldh) return
         if (baseContentW <= 0 || baseContentH <= 0) return
@@ -178,7 +186,14 @@ class ZoomHost @JvmOverloads constructor(
             // 做题模式：写字时禁止 ViewPager2 抢事件。
             // 浏览模式把拦截权还给它：竖屏 VERTICAL 才能拦到纵向 MOVE
             // 做跨页滚动，横向则不被拦截、由下面补一次离散翻页。
-            parent?.requestDisallowInterceptTouchEvent(!browseMode)
+            // 连续滚动且已放大：横向要平移整列，由本 View 接管全部单指拖动
+            parent?.requestDisallowInterceptTouchEvent(
+                !browseMode || (continuousScroll && scale > 1.01f)
+            )
+            if (browseMode && continuousScroll) {
+                velocity?.recycle()
+                velocity = android.view.VelocityTracker.obtain()
+            }
             singleStartX = ev.x
             singleStartY = ev.y
             lastSingleX = ev.x
@@ -186,6 +201,16 @@ class ZoomHost @JvmOverloads constructor(
             singlePanning = false
             horizontalFlipDone = false
             gestureDeferred = false
+        }
+        if (browseMode && continuousScroll && !zooming) {
+            // 速度按屏幕坐标算：本 View 会随滚动移动，本地坐标会把速度吃掉
+            val v = velocity
+            if (v != null) {
+                val c = MotionEvent.obtain(ev)
+                c.setLocation(ev.rawX, ev.rawY)
+                v.addMovement(c)
+                c.recycle()
+            }
         }
         val multi = ev.pointerCount >= 2
         if (multi && !zooming) {
@@ -228,6 +253,30 @@ class ZoomHost @JvmOverloads constructor(
             // ACTION_CANCEL 后走 UP 分支收尾，跨页滚动交给系统 RecyclerView。
             when (ev.actionMasked) {
                 MotionEvent.ACTION_MOVE -> {
+                    val zoomedList = if (continuousScroll && scale > 1.01f)
+                        parent as? androidx.recyclerview.widget.RecyclerView else null
+                    if (zoomedList != null) {
+                        // 连续滚动且已放大：横向拖动 = 整列平移，纵向拖动 = 滚动列表。
+                        if (!gestureDeferred) {
+                            gestureDeferred = true
+                            onViewportGestureChanged?.invoke(true)
+                        }
+                        if (!singlePanning &&
+                            (abs(ev.x - singleStartX) > dp16 * 0.5f ||
+                                abs(ev.y - singleStartY) > dp16 * 0.5f)) {
+                            singlePanning = true
+                            parent?.requestDisallowInterceptTouchEvent(true)
+                        }
+                        if (singlePanning) {
+                            val ddx = ev.x - lastSingleX
+                            val py = (ev.y - lastSingleY).toInt()
+                            if (ddx != 0f) onListPan?.invoke(ddx)
+                            // 滚动带着本 View 一起移动，残差留在 lastSingleY，不更新它
+                            if (py != 0) zoomedList.scrollBy(0, -py)
+                            lastSingleX = ev.x
+                        }
+                        return true
+                    }
                     val dx = ev.x - lastSingleX
                     val dy = ev.y - lastSingleY
                     val dxAbs = abs(ev.x - singleStartX)
@@ -271,6 +320,17 @@ class ZoomHost @JvmOverloads constructor(
                     lastSingleY = ev.y
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (continuousScroll && singlePanning &&
+                        ev.actionMasked == MotionEvent.ACTION_UP) {
+                        val vt = velocity
+                        val rv = parent as? androidx.recyclerview.widget.RecyclerView
+                        if (vt != null && rv != null) {
+                            vt.computeCurrentVelocity(1000)
+                            rv.fling(0, -vt.yVelocity.toInt())
+                        }
+                    }
+                    velocity?.recycle()
+                    velocity = null
                     if (singlePanning) {
                         flushTransform()
                         singlePanning = false
@@ -375,19 +435,30 @@ class ZoomHost @JvmOverloads constructor(
                 val spreadDelta = abs(d - startDist)
                 // 只有页面在当前视口中确有横向溢出时，双指横滑才用于页内平移；
                 // 页面横向没有超出时仍允许横滑翻页。
-                val list = if (continuousScroll && scale <= 1.01f && spreadDelta <= 3f)
+                val list = if (continuousScroll)
                     parent as? androidx.recyclerview.widget.RecyclerView else null
-                if (!flipDone && !continuousScroll && panLimitX() <= 0.5f && abs(dx) > dp70 &&
+                if (list != null) {
+                    // 连续滚动：缩放 / 平移都作用于整列，不是单页
+                    if (spreadDelta > 3f) {
+                        onListZoomTo?.invoke(
+                            scale * d / startDist, mx + left, my + top
+                        )
+                        // 缩放会改列表项高度并重新定位，本地坐标整体变了：重置起点
+                        startMidX = mx
+                        startMidY = my
+                    } else {
+                        // 横向：整列共用一个 tx；纵向：滚动列表。滚动会带着本 View
+                        // 一起移动，下一次事件的本地坐标已扣掉位移，startMidY 不用改。
+                        if (dx != 0f) onListPan?.invoke(dx)
+                        val px = dy.toInt()
+                        if (px != 0) list.scrollBy(0, -px)
+                        startMidX = mx
+                    }
+                    startDist = d
+                } else if (!flipDone && panLimitX() <= 0.5f && abs(dx) > dp70 &&
                     spreadDelta < dp16 && abs(dx) > abs(dy)) {
                     flipDone = true
                     onFlip?.invoke(if (dx > 0f) -1 else 1)
-                } else if (!flipDone && list != null) {
-                    // 连续滚动：双指拖动 = 滚动整个列表。滚动会带着本 View 一起移动，
-                    // 下一次事件的本地坐标已经扣掉了位移，所以起点 startMidY 不用改。
-                    val px = dy.toInt()
-                    if (px != 0) list.scrollBy(0, -px)
-                    startDist = d
-                    startMidX = mx
                 } else if (!flipDone) {
                     if (spreadDelta > 3f) {
                         scale = (scale * d / startDist).coerceIn(lowestScale, 4f)
@@ -455,6 +526,13 @@ class ZoomHost @JvmOverloads constructor(
 
     private fun translationRangeY(): TranslationRange {
         val bounds = contentBounds() ?: return TranslationRange()
+        if (continuousScroll) {
+            // 连续滚动：列表项高度 = 页高 × 倍率，页面顶对齐。缩放以本 View 中心为原点，
+            // 要让页顶落在 0，纵向位移必须是固定值（范围收成一个点，hasMovement=false）。
+            val c = height * 0.5f
+            val v = -(c + (bounds.top - c) * scale)
+            return TranslationRange(v, v)
+        }
         return ZoomTransform.translationRange(height, bounds.top, bounds.bottom, scale)
     }
 
@@ -491,6 +569,28 @@ class ZoomHost @JvmOverloads constructor(
         target.visTop = mapping.visibleTop
         target.visW = mapping.visibleWidth
         target.visH = mapping.visibleHeight
+        clipToListWindow(target, renderScale)
+    }
+
+    /**
+     * 连续滚动放大后，本 View 高度 = 整页 × 倍率，远超屏幕。只把真正在列表可视范围内
+     * （上下各多留 256px 预取）的那一段当作「可见区」，否则会把整页按放大倍率全部渲染。
+     */
+    private fun clipToListWindow(target: Viewport, renderScale: Float) {
+        if (!continuousScroll || scale <= 1.01f || target.visH <= 0) return
+        val rv = parent as? androidx.recyclerview.widget.RecyclerView ?: return
+        if (rv.height <= 0) return
+        val factor = renderScale / scale
+        if (factor <= 0f || !factor.isFinite()) return
+        val margin = 256f
+        val localTop = maxOf(0f, -top - margin)
+        val localBottom = minOf(height.toFloat(), rv.height - top + margin)
+        if (localBottom <= localTop) {
+            target.visH = 1
+            return
+        }
+        target.visTop += localTop * factor
+        target.visH = kotlin.math.ceil((localBottom - localTop) * factor).toInt().coerceAtLeast(1)
     }
 
     private fun syncViewport(tx0: Float, ty0: Float) {
@@ -576,6 +676,11 @@ class ZoomHost @JvmOverloads constructor(
      * 双击切换阅读倍率。缩放以双击点为锚点，尽量让目标文字留在原位置。
      */
     fun toggleSmartZoom(focusX: Float, focusY: Float) {
+        if (continuousScroll && onListZoomTo != null) {
+            val target = if (scale > 1.05f) 1f else 1.65f
+            onListZoomTo?.invoke(target, focusX + left, focusY + top)
+            return
+        }
         flushTransform()
         if (kotlin.math.abs(scale - 1f) > 0.05f) {
             reset(silent = false, toTop = translationRangeY().hasMovement)
@@ -615,6 +720,22 @@ class ZoomHost @JvmOverloads constructor(
         applyTransform()
         notifyScaleIfNeeded(force = true)
         onViewportSettled?.invoke()
+    }
+
+    /** 连续滚动：整列统一倍率与横向位移（纵向位移由页高算出，不用传）。 */
+    fun setListView(s: Float, px: Float) {
+        flushTransform()
+        pendingResizeViewportState = null
+        scale = s.coerceIn(1f, 4f)
+        tx = px
+        applyTransform()
+        notifyScaleIfNeeded()
+    }
+
+    /** 列表滚动后，可视窗口变了，重算要渲染的区域并重绘。 */
+    fun resyncViewport() {
+        syncViewport(tx, ty)
+        onViewportChanged?.invoke()
     }
 
     /** 会话恢复：还原倍率与旧版像素平移量，兼容 v17 及更早版本。 */

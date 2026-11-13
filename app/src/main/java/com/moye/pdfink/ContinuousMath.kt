@@ -16,10 +16,31 @@ object ContinuousMath {
      * 取整方式与 PageContainer 完全一致（四舍五入），保证列表项刚好装下整页。
      * 宽度或比例无效时返回 -1，调用方退回 match_parent。
      */
-    fun itemHeight(listWidth: Int, sideInsetPx: Int, ratio: Float): Int {
+    fun itemHeight(listWidth: Int, sideInsetPx: Int, ratio: Float, zoom: Float = 1f): Int {
         if (listWidth <= 0 || !ratio.isFinite() || ratio <= 0f) return -1
         val availW = (listWidth - sideInsetPx * 2).coerceAtLeast(1)
-        return (availW / ratio).roundToInt().coerceAtLeast(1)
+        val base = (availW / ratio).roundToInt().coerceAtLeast(1)
+        val z = if (zoom.isFinite() && zoom > 0f) zoom else 1f
+        return (base * z).roundToInt().coerceAtLeast(1)
+    }
+
+    /** 页间细缝高度（dp）。 */
+    const val GAP_DP = 6
+
+    /**
+     * 以焦点为锚点缩放整列时，横向平移量。ZoomHost 以自身中心为缩放原点：
+     * 页面左边显示位置 = hostW/2 + (left - hostW/2)·scale + tx。
+     * 保证焦点下的那一点在缩放前后停在手指下面。
+     */
+    fun anchoredTx(
+        hostW: Float, pageLeft: Float, oldScale: Float, newScale: Float,
+        oldTx: Float, focusX: Float
+    ): Float {
+        if (oldScale <= 0f) return oldTx
+        val c = hostW * 0.5f
+        val oldLeft = c + (pageLeft - c) * oldScale + oldTx
+        val pageX = (focusX - oldLeft) / oldScale
+        return focusX - pageX * newScale - c - (pageLeft - c) * newScale
     }
 
     /**

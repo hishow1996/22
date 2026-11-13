@@ -31,20 +31,111 @@ class PagesAdapter(
 
     /** 竖屏「铺满屏幕」的连续滚动：每页按页宽比例定高，一页接一页往下排。 */
     var continuous = false
+        set(value) {
+            if (field == value) return
+            field = value
+            listZoom = 1f
+            listTx = 0f
+        }
+
+    /** 连续滚动的整列倍率与横向位移：所有页共用，捏合 / 双击 / 拖动都改这两个值。 */
+    var listZoom = 1f
+        private set
+    private var listTx = 0f
     private var recycler: RecyclerView? = null
     private var lastRatio = ContinuousMath.DEFAULT_RATIO
 
     /** 连续滚动时屏幕上同时有好几页，全部按「当前页」优先级渲染。 */
     private fun isActive(position: Int) = continuous || position == activePosition
 
+    /** 列表滚动后，放大状态下每页的「可视窗口」跟着变，重算要渲染的区域。 */
+    private val scrollSync = object : RecyclerView.OnScrollListener() {
+        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            if (continuous && listZoom > 1.01f) {
+                for (h in holders.values) h.zoom.resyncViewport()
+            }
+        }
+    }
+
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
         super.onAttachedToRecyclerView(recyclerView)
         recycler = recyclerView
+        recyclerView.addOnScrollListener(scrollSync)
     }
 
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        recyclerView.removeOnScrollListener(scrollSync)
         if (recycler === recyclerView) recycler = null
         super.onDetachedFromRecyclerView(recyclerView)
+    }
+
+    private fun sideInset(rv: RecyclerView) =
+        rv.resources.getDimensionPixelSize(R.dimen.pdf_page_horizontal_inset)
+
+    /**
+     * 整列缩放：以 (fx, fy) 为焦点（列表坐标）。所有可见页同步改倍率和高度，
+     * 焦点下那一页的相对位置保持不动，横向用同一个 tx。
+     */
+    fun setListZoom(target: Float, fx: Float, fy: Float) {
+        val rv = recycler ?: return
+        if (!continuous) return
+        val newZ = target.coerceIn(1f, 4f)
+        val old = listZoom
+        if (kotlin.math.abs(newZ - old) < 0.002f) return
+        val r = newZ / old
+        val gapPx = (ContinuousMath.GAP_DP * rv.resources.displayMetrics.density).toInt()
+
+        var anchorPos = RecyclerView.NO_POSITION
+        var anchorTop = 0
+        for (i in 0 until rv.childCount) {
+            val c = rv.getChildAt(i)
+            if (fy >= c.top && fy < c.bottom + gapPx) {
+                anchorPos = rv.getChildAdapterPosition(c)
+                anchorTop = c.top
+                break
+            }
+        }
+
+        listTx = ContinuousMath.anchoredTx(
+            rv.width.toFloat(), sideInset(rv).toFloat(), old, newZ, listTx, fx
+        )
+        listZoom = newZ
+        for (h in holders.values) {
+            applyItemHeight(h, h.pageContainer.ratio)
+            h.zoom.setListView(listZoom, listTx)
+        }
+        syncListTx()
+
+        if (anchorPos != RecyclerView.NO_POSITION) {
+            val newTop = (fy - (fy - anchorTop) * r).toInt()
+            (rv.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager)
+                ?.scrollToPositionWithOffset(anchorPos, newTop)
+        }
+        rv.requestLayout()
+        refreshHostBounds()
+        // 布局完成后，窗口范围按新位置再算一次
+        rv.post { if (continuous) for (h in holders.values) h.zoom.resyncViewport() }
+    }
+
+    /** 整列横向平移 dx（本地像素）；左右边界由 ZoomHost 夹住。 */
+    fun panListX(dx: Float) {
+        if (!continuous || listZoom <= 1.01f) return
+        listTx += dx
+        for (h in holders.values) h.zoom.setListView(listZoom, listTx)
+        syncListTx()
+    }
+
+    /** 各页夹位后的 tx 一致，取回来当作整列的 tx，避免越界部分累积。 */
+    private fun syncListTx() {
+        val any = holders.values.firstOrNull() ?: return
+        listTx = any.zoom.panX
+    }
+
+    private fun resetListZoom() {
+        val rv = recycler ?: return
+        setListZoom(1f, rv.width / 2f, rv.height / 2f)
+        listTx = 0f
+        for (h in holders.values) h.zoom.setListView(listZoom, listTx)
     }
 
     /** 列表项高度：连续滚动按页比例，逐页翻页回到铺满。 */
@@ -56,7 +147,7 @@ class PagesAdapter(
             if (rv != null) {
                 val inset = rv.resources.getDimensionPixelSize(R.dimen.pdf_page_horizontal_inset)
                 val ih = ContinuousMath.itemHeight(
-                    rv.width - rv.paddingLeft - rv.paddingRight, inset, ratio
+                    rv.width - rv.paddingLeft - rv.paddingRight, inset, ratio, listZoom
                 )
                 if (ih > 0) want = ih
             }
@@ -142,6 +233,8 @@ class PagesAdapter(
             toTop = fitMode == PageContainer.WIDTH && (!state.landscape || state.pageRotation == 0))
         h.zoom.browseMode = state.browse
         h.zoom.continuousScroll = continuous
+        h.zoom.onListZoomTo = { t, fx, fy -> setListZoom(t, fx, fy) }
+        h.zoom.onListPan = { dx -> panListX(dx) }
         h.zoom.onZoomChange = { value ->
             if (position == activePosition) onZoomChange(value)
         }
@@ -302,6 +395,8 @@ class PagesAdapter(
 
             val remembered = pageViewportProvider?.invoke(p0)
             when {
+                // 连续滚动：所有页共用整列倍率与横向位移，不读单页记忆
+                continuous -> h.zoom.setListView(listZoom, listTx)
                 remembered != null -> h.zoom.setPageViewportState(remembered)
                 position == restorePanAt &&
                     (kotlin.math.abs(initialZoom - 1f) > 0.0001f ||
@@ -454,6 +549,7 @@ class PagesAdapter(
             // 右页或草稿页单独改变尺寸时，也更新该页视口与整组平移边界。
             if (savedViewport != null) h.zoom.setPageViewportState(savedViewport)
             else h.zoom.refreshPageGeometry()
+            if (continuous) h.zoom.setListView(listZoom, listTx)
 
             h.lastHostW = hw
             h.lastHostH = hh
@@ -501,6 +597,10 @@ class PagesAdapter(
     }
 
     fun resetZoom(page: Int) {
+        if (continuous) {
+            resetListZoom()
+            return
+        }
         // v15：所有模式都回 1:1 并回页顶（FIT 下没有额外纵向平移范围）
         holders[page]?.zoom?.reset(toTop = true)
     }

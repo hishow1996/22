@@ -39,7 +39,7 @@ class ReaderPager @JvmOverloads constructor(
     private val list = ScrollList(context)
     private val lm = LinearLayoutManager(context, RecyclerView.VERTICAL, false)
     private val callbacks = ArrayList<ViewPager2.OnPageChangeCallback>()
-    private val gap = (6 * resources.displayMetrics.density).toInt().coerceAtLeast(2)
+    private val gap = (ContinuousMath.GAP_DP * resources.displayMetrics.density).toInt().coerceAtLeast(2)
 
     private var continuousOn = false
     private var cur = 0
