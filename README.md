@@ -1495,3 +1495,49 @@ v32 备份箭头、v31 适应居中、v30 刘海避让等全部原样。
 `verify.sh` 补 2 条（共 100）+ README + 按真实 pathData 栅格化的新旧对照图
 （含 26dp / 20dp 实际尺寸）。真机荣耀 10 打开「更多」看第一行第二个：内圈
 规整不弯、三角一眼是三角形且连着绳子、不在正中、两圈不糊。
+
+## v36 工具按钮：点一下开、再点关回浏览
+
+**问题**：用户反馈「点击套索图标以后不能关闭了，再次点击不能关闭了，套索那一行的
+图标都有一样的问题」。锚点 = 「更多」浮层第一行（图形 / 套索 / 便签 / 荧光笔）
++ 顶栏 6 个绘图按钮；第 5 个灰色 `menuRedo` 是无可重做时的禁用态，一次性动作，
+不属于工具开关。
+
+**两个根因**
+
+- **A 幂等赋值，从来没有关闭分支**：`selectTool(t)` 从初始提交 `04252ae3`
+  起就是 `currentTool = t`。查过 `MainActivity.kt` 全部 41 个提交，从未出现
+  「重复点关闭」逻辑 —— 不是回归，是设计缺失。10 处按钮点击全直接调它，
+  再点一次仍是同一工具、选中态不灭。
+- **B 浮层假亮**：`showMenu()` 写的是 `b.isSelected = currentTool == t`，
+  漏了 `!state.browse`；而顶栏 `refreshTools()` 一直带这个条件。v16 起默认
+  浏览态，用户按 ⇄ 回浏览、再打开「更多」，浮层仍显示上次工具的淡蓝方块底
+  → 看着像「一直关不掉」。
+
+**改动（按用户「全做 + 按推荐」）**
+
+| 项 | 处理 |
+|---|---|
+| P0 | 新增 `toggleTool(t)`：`!state.browse && currentTool == t` 时走关闭，其余仍 `selectTool(t)` |
+| 关闭路径 | 复用 ⇄ 的 `setBrowseMode(true)` —— 偏好落盘、`adapter.setBrowseMode`、`refreshTools`、`refreshTempEraser`、`updatePagerInput` 全自动，不另写状态机 |
+| 套索选区 | 关闭前 `activeViews.values.forEach { it.cancelSelection() }`（推荐口径：清掉，切回做题是干净状态） |
+| 绑定 | **只替换 10 处**：顶栏 `btnPen/btnHighlight/btnShape/btnLasso/btnNote/btnEraser`、浮层 `menuShape/menuLasso/menuNote/menuHighlight` |
+| P1 | 新增 `refreshMenuToolRow(tr)`，选中态 `currentTool == t && !state.browse` 与顶栏同口径；`showMenu()` 初始化与点击后各调一次 |
+| P2 | 顶栏 6 个 `isSelected` 全灭 + alpha 0.4、shapeBar / selectionBar 隐藏、悬浮橡皮复位、竖屏上下滑恢复，均由既有 `setBrowseMode` 链路完成 |
+
+**明确排除（仍直接调 `selectTool`）**：笔迹预设槽 `selectTool(b.brushTool)`、
+悬浮橡皮 `toggleTempEraser()` 的两处、形状条 4 个 `selectTool(Tools.SHAPE)`、
+宽度点 / 粗细行的 `selectTool(lastDrawTool)`、会话恢复。它们不是「点工具按钮」，
+全量替换会误伤。
+
+**视觉零改动**：`tool_bg` 淡蓝方块底保留，v20 的 ⇄ / ★ 图标变蓝、v21 放大镜
+短闪、v35 套索图案、v23 返回栈、v16 默认浏览全部原样；浮层第一行仍是淡蓝
+方块底（用户选「保持」）。`回浏览 ≠ 回首页`，v23 的「做题 → 首页 → 退出」
+返回栈不受影响。
+
+**验收**：静态断言（`toggleTool` 存在且条件正确、恰好 10 处按钮绑定、
+其余 `selectTool` 调用未改、`refreshMenuToolRow` 含 `!state.browse`、
+`tool_bg` / `icon_toggle` / `ic_lasso` 零改动、setBrowseMode 链路完整）+
+`verify.sh` 补 2 条（共 102）+ README + 完成对照图。真机荣耀 10 走：
+点套索 → 开、再点 → 关、再开菜单四个全灭；逐个验浮层 4 个与顶栏 6 个；
+切到别的工具不误关；⇄ 两态仍正常。

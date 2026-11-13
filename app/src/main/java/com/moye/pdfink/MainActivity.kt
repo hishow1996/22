@@ -601,6 +601,25 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTempEraser()
     }
 
+    /**
+     * v36：工具按钮的统一入口 —— 点一下切到做题并选中，再点同一个按钮关回浏览。
+     * 只挂 10 处「工具按钮」点击（顶栏 6 个 + 浮层第一行 4 个）；笔迹预设槽、
+     * 悬浮橡皮切回、形状条、会话恢复仍直接调 selectTool，不受影响。
+     *
+     * 关闭复用 ⇄ 的 setBrowseMode(true)：偏好落盘、adapter.setBrowseMode、
+     * 顶栏刷新、shapeBar/selectionBar 显隐、悬浮橡皮复位、pager 输入恢复全在里头，
+     * 不另写一套状态机。
+     */
+    private fun toggleTool(t: Int) {
+        if (!state.browse && currentTool == t) {
+            // 套索已圈出的选区一并清掉（推荐口径），切回做题时是干净状态。
+            activeViews.values.forEach { it.cancelSelection() }
+            setBrowseMode(true)
+        } else {
+            selectTool(t)
+        }
+    }
+
     /** 默认浏览；点按钮切到做题做笔记，再点回浏览。偏好持久化。 */
     private fun setBrowseMode(v: Boolean) {
         if (state.browse == v) return
@@ -673,12 +692,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
         btnHomeMore.setOnClickListener { showHomeMenu() }
 
-        btnPen.setOnClickListener { selectTool(Tools.PEN) }
-        btnHighlight.setOnClickListener { selectTool(Tools.HIGHLIGHT) }
-        btnShape.setOnClickListener { selectTool(Tools.SHAPE); refreshTools() }
-        btnLasso.setOnClickListener { selectTool(Tools.LASSO); refreshTools() }
-        btnNote.setOnClickListener { selectTool(Tools.NOTE); refreshTools() }
-        btnEraser.setOnClickListener { selectTool(Tools.ERASER) }
+        btnPen.setOnClickListener { toggleTool(Tools.PEN) }
+        btnHighlight.setOnClickListener { toggleTool(Tools.HIGHLIGHT) }
+        btnShape.setOnClickListener { toggleTool(Tools.SHAPE) }
+        btnLasso.setOnClickListener { toggleTool(Tools.LASSO) }
+        btnNote.setOnClickListener { toggleTool(Tools.NOTE) }
+        btnEraser.setOnClickListener { toggleTool(Tools.ERASER) }
         mapOf(
             R.id.btnLine to Shapes.LINE, R.id.btnRect to Shapes.RECT,
             R.id.btnOval to Shapes.OVAL, R.id.btnArrow to Shapes.ARROW
@@ -1885,6 +1904,23 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }) { setPortraitMode(fit = false, fill = true) }
     )
 
+    /**
+     * v36：浮层第一行 4 个工具的选中态与顶栏 refreshTools() 用同一口径。
+     * 旧版写成 currentTool == t，漏了 !state.browse —— 浏览态下仍显示上次工具的
+     * 淡蓝方块底，看着像「一直关不掉」。这里统一补上。
+     */
+    private fun refreshMenuToolRow(tr: LinearLayout) {
+        mapOf(
+            R.id.menuShape to Tools.SHAPE,
+            R.id.menuLasso to Tools.LASSO,
+            R.id.menuNote to Tools.NOTE,
+            R.id.menuHighlight to Tools.HIGHLIGHT
+        ).forEach { (id, t) ->
+            tr.findViewById<ImageButton>(id).isSelected =
+                currentTool == t && !state.browse
+        }
+    }
+
     private fun showMenu() {
         val pv = layoutInflater.inflate(R.layout.popup_menu, null)
         val grid = pv.findViewById<GridLayout>(R.id.menuGrid)
@@ -1897,6 +1933,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         }
         val tr = pv.findViewById<LinearLayout>(R.id.menuToolRow)
+        refreshMenuToolRow(tr)
         mapOf(
             R.id.menuShape to Tools.SHAPE,
             R.id.menuLasso to Tools.LASSO,
@@ -1904,11 +1941,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             R.id.menuHighlight to Tools.HIGHLIGHT
         ).forEach { (id, t) ->
             val b = tr.findViewById<ImageButton>(id)
-            b.isSelected = currentTool == t
             b.setOnClickListener {
                 popup.dismiss()
-                selectTool(t)
-                refreshTools()
+                toggleTool(t)
+                refreshMenuToolRow(tr)
             }
             b.setOnLongClickListener {
                 flash(b.contentDescription?.toString() ?: "")
