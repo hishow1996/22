@@ -469,6 +469,9 @@ class InkView @JvmOverloads constructor(
                 if (hiResCache != null || hiResCacheBroken) dropHiResCache()
                 null
             }
+            // 边擦边消除：笔迹和橡皮轨迹放进同一个离屏层，轨迹用「清除」画笔抠掉笔迹。
+            // 只影响笔迹层（透明底），不会擦到下面的题目底图。
+            val eraseLayer = if (erasing) canvas.saveLayer(null, null) else -1
             if (cached != null) {
                 canvas.drawBitmap(cached, hiResCacheLeft.toFloat(), hiResCacheTop.toFloat(), null)
             }
@@ -476,6 +479,19 @@ class InkView @JvmOverloads constructor(
             canvas.translate(-vp.originX, -vp.originY)
             canvas.scale(displayFactor, displayFactor)
             if (cached == null) drawVisibleMarks(canvas, lw, lh, r, sc)
+            if (eraseLayer >= 0) {
+                // 当前坐标系是逻辑像素，轨迹是页面像素：逻辑 = 页面 × bucket
+                canvas.save()
+                canvas.scale(sc, sc)
+                canvas.drawPath(eraseTrail, clearStroke)
+                canvas.drawLine(eraseKeepX, eraseKeepY, eraseTailX, eraseTailY, clearStroke)
+                canvas.restore()
+                // 收掉离屏层（连同里面的变换），再把原来的变换补回去给后面的绘制用
+                canvas.restoreToCount(eraseLayer)
+                canvas.save()
+                canvas.translate(-vp.originX, -vp.originY)
+                canvas.scale(displayFactor, displayFactor)
+            }
             // 正在写的一笔仍走局部位图，按逻辑画布缩放铺开；抬手并入 marks 后即锐利
             canvas.save()
             canvas.scale(sc, sc)
@@ -866,6 +882,12 @@ class InkView @JvmOverloads constructor(
     private var eraseKeepY = 0f
     private var eraseTailX = 0f
     private var eraseTailY = 0f
+    /**
+     * 橡皮轨迹（页面像素坐标，已按半径 1/4 抽稀）。放大 / 平移状态（hiResMode）下
+     * 屏幕上的笔迹是矢量逐帧画的，baseTiles 里的擦除看不见，所以边擦边把这条轨迹
+     * 用「清除」画笔盖在笔迹上，抬手后再做真正的裁剪。
+     */
+    private val eraseTrail = Path()
 
     private fun startErase(ev: MotionEvent, h: Host) {
         val x = (ev.x / width).coerceIn(0f, 1f)
@@ -877,6 +899,9 @@ class InkView @JvmOverloads constructor(
         eraseStepPx = maxOf(2f, clearStroke.strokeWidth * 0.125f)
         eraseKeepX = x * width; eraseKeepY = y * height
         eraseTailX = eraseKeepX; eraseTailY = eraseKeepY
+        eraseTrail.reset()
+        eraseTrail.moveTo(eraseKeepX, eraseKeepY)
+        eraseTrail.lineTo(eraseKeepX + 0.01f, eraseKeepY)
         if (!baseTiles.ready) return
         val px = x * width
         val py = y * height
@@ -915,6 +940,7 @@ class InkView @JvmOverloads constructor(
             eraseTailX = px; eraseTailY = py
             if (hypot(px - eraseKeepX, py - eraseKeepY) >= eraseStepPx) {
                 erasePts.add(px / width); erasePts.add(py / height)
+                eraseTrail.lineTo(px, py)
                 eraseKeepX = px; eraseKeepY = py
             }
         }
@@ -929,6 +955,7 @@ class InkView @JvmOverloads constructor(
 
     private fun finishErase() {
         erasing = false
+        eraseTrail.reset()
         val h = host ?: return
         // 抬手点一定要在裁剪轨迹里（中途被压缩掉的只是中间点）
         if (hypot(eraseTailX - eraseKeepX, eraseTailY - eraseKeepY) > 0.5f) {
@@ -1217,6 +1244,7 @@ class InkView @JvmOverloads constructor(
 
     private fun cancelGesture() {
         drawing = false; erasing = false; lassoing = false; dragMode = 0
+        eraseTrail.reset()
         liveMark = null
         liveTiles.clear()
         dropHiResCache()
