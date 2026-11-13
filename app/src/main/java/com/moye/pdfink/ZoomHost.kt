@@ -52,6 +52,11 @@ class ZoomHost @JvmOverloads constructor(
     private var tx = 0f
     private var ty = 0f
     private var startDist = 0f
+    // 双指手势先判定是「平移」还是「缩放」再动手：0 未定 / 1 平移 / 2 缩放。
+    // 以前两根手指间距每帧抖动超过 3px 就当缩放，拖着页面上下滑时会一边缩放一边抖。
+    private var pinchMode = 0
+    private var gestureStartDist = 0f
+    private var panAccum = 0f
     private var startMidX = 0f
     private var startMidY = 0f
     private var zooming = false
@@ -423,6 +428,9 @@ class ZoomHost @JvmOverloads constructor(
                     startMidX = midX(ev)
                     startMidY = midY(ev)
                     flipDone = false
+                    pinchMode = 0
+                    gestureStartDist = startDist
+                    panAccum = 0f
                 }
             }
             MotionEvent.ACTION_MOVE -> {
@@ -432,14 +440,22 @@ class ZoomHost @JvmOverloads constructor(
                 val my = midY(ev)
                 val dx = mx - startMidX
                 val dy = my - startMidY
-                val spreadDelta = abs(d - startDist)
-                // 只有页面在当前视口中确有横向溢出时，双指横滑才用于页内平移；
-                // 页面横向没有超出时仍允许横滑翻页。
+                val spreadFrame = abs(d - startDist)
+                // 判定本次手势是平移还是缩放：间距净变化（与平移无关）对比中点累计位移。
+                // 平移时手指间距只会小幅抖动，缩放时间距变化远大于中点位移。
+                if (pinchMode == 0) {
+                    panAccum += abs(dx) + abs(dy)
+                    val spreadNet = abs(d - gestureStartDist)
+                    if (spreadNet > dp16 * 0.8f || panAccum > dp16 * 0.8f) {
+                        pinchMode = if (spreadNet > panAccum) 2 else 1
+                    }
+                }
+                val zoomNow = pinchMode == 2 && spreadFrame > 1f
                 val list = if (continuousScroll)
                     parent as? androidx.recyclerview.widget.RecyclerView else null
                 if (list != null) {
                     // 连续滚动：缩放 / 平移都作用于整列，不是单页
-                    if (spreadDelta > 3f) {
+                    if (zoomNow) {
                         onListZoomTo?.invoke(
                             scale * d / startDist, mx + left, my + top
                         )
@@ -455,12 +471,12 @@ class ZoomHost @JvmOverloads constructor(
                         startMidX = mx
                     }
                     startDist = d
-                } else if (!flipDone && panLimitX() <= 0.5f && abs(dx) > dp70 &&
-                    spreadDelta < dp16 && abs(dx) > abs(dy)) {
+                } else if (!flipDone && pinchMode != 2 && panLimitX() <= 0.5f &&
+                    abs(dx) > dp70 && spreadFrame < dp16 && abs(dx) > abs(dy)) {
                     flipDone = true
                     onFlip?.invoke(if (dx > 0f) -1 else 1)
                 } else if (!flipDone) {
-                    if (spreadDelta > 3f) {
+                    if (zoomNow) {
                         scale = (scale * d / startDist).coerceIn(lowestScale, 4f)
                     }
                     startDist = d
@@ -478,6 +494,7 @@ class ZoomHost @JvmOverloads constructor(
                     scheduleTransform()
                 }
                 startDist = 0f
+                pinchMode = 0
             }
         }
     }
