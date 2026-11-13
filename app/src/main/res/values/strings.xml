@@ -94,4 +94,7 @@
     <string name="sort_recent">最近打开</string>
     <string name="sort_name">按名称</string>
     <string name="sort_star">收藏优先</string>
+    <!-- v39：长按已存的笔刷预设槽弹出的两个操作（标签只走读屏） -->
+    <string name="cd_brush_slot_clear">清空此笔刷预设</string>
+    <string name="cd_brush_slot_overwrite">覆盖为当前设置</string>
 </resources>

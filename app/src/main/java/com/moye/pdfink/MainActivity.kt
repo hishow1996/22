@@ -1153,7 +1153,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /** 竖屏浮层里的调色 / 粗细 / 笔刷槽，功能与主条完全一致。 */
-    private fun buildMenuInkRow(row: LinearLayout) {
+    private fun buildMenuInkRow(row: LinearLayout, popup: PopupWindow? = null) {
         row.removeAllViews()
         val items = ArrayList<Triple<View, String, Int>>()
         fun refresh() {
@@ -1247,10 +1247,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 val idx = i
                 setOnClickListener { applyBrushSlot(idx); refresh() }
                 setOnLongClickListener {
-                    storeBrushSlot(idx)
-                    refresh()
-                    flash("✓")
-                    true
+                    onBrushSlotLongPress(idx, popup) { refresh() }
                 }
             }
             add(v, "b", i)
@@ -2060,7 +2057,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             inkWrap.visibility = View.GONE
         } else {
             inkWrap.visibility = View.VISIBLE
-            buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow))
+            buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow), popup)
         }
         for (a in menuActions()) {
             val b = layoutInflater.inflate(R.layout.item_menu, grid, false) as ImageButton
@@ -2541,7 +2538,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 contentDescription = getString(R.string.cd_brush_slot)
                 isClickable = true
                 setOnClickListener { applyBrushSlot(i) }
-                setOnLongClickListener { storeBrushSlot(i); flash("✓"); true }
+                setOnLongClickListener { onBrushSlotLongPress(i) }
             }
             brushSlots.add(v)
             row.addView(v)
@@ -2583,6 +2580,48 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             layer = state.activeLayer
         ))
         refreshBrushSlots()
+    }
+
+    /**
+     * v39：笔刷预设槽长按的唯一入口，浮层 4 个与顶栏 4 个共用同一份存档。
+     *
+     * · 空槽 → 保持原行为：直接存当前整套配置 + 闪 ✓，圈立刻变成对应颜色。
+     * · 已存槽 → 先收起浮层（避免 PopupWindow 压住 Dialog），再弹操作条：
+     *   取消 / 覆盖为当前设置 / 清空。清空走 SessionRepository.clearBrush，
+     *   圈回到半透明灰。覆盖这一项保留 v11 之后「长按改配置」的能力，不丢功能。
+     */
+    private fun onBrushSlotLongPress(
+        i: Int,
+        popup: PopupWindow? = null,
+        refreshMenu: () -> Unit = {}
+    ): Boolean {
+        if (sessionRepo.brush(i) == null) {
+            storeBrushSlot(i)
+            flash("✓")
+            refreshMenu()
+            return true
+        }
+        popup?.dismiss()
+        val v = layoutInflater.inflate(R.layout.dialog_brush_slot, null)
+        val d = AlertDialog.Builder(this).setView(v).create()
+        v.findViewById<ImageButton>(R.id.btnSlotCancel)
+            .setOnClickListener { d.dismiss() }
+        v.findViewById<ImageButton>(R.id.btnSlotOverwrite).setOnClickListener {
+            d.dismiss()
+            storeBrushSlot(i)
+            flash("✓")
+            refreshMenu()
+        }
+        v.findViewById<ImageButton>(R.id.btnSlotClear).setOnClickListener {
+            d.dismiss()
+            sessionRepo.clearBrush(i)
+            refreshBrushSlots()
+            flash("✓")
+            refreshMenu()
+        }
+        d.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        d.show()
+        return true
     }
 
     /**

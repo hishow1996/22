@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v39：长按「已存过配置的笔刷槽」弹出的操作条。
+     沿用 dialog_confirm / dialog_shelf 的横排 52dp 图形按钮风格，零可见文字，
+     标签只走 contentDescription；破坏性操作放最右。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/brushSlotRoot"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/popup_bg"
+    android:contentDescription="@string/cd_brush_slot"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="12dp">
+
+    <ImageButton
+        android:id="@+id/btnSlotCancel"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_confirm_no"
+        android:src="@drawable/ic_close" />
+
+    <ImageButton
+        android:id="@+id/btnSlotOverwrite"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_brush_slot_overwrite"
+        android:src="@drawable/ic_replace" />
+
+    <ImageButton
+        android:id="@+id/btnSlotClear"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        style="@style/MenuTool"
+        android:contentDescription="@string/cd_brush_slot_clear"
+        android:src="@drawable/ic_trash" />
+
+</LinearLayout>

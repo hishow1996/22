@@ -1665,3 +1665,41 @@ scheme `content` / `file`，mime `application/pdf` / `image/*` / `text/*` ——
 README + 完成对照图。**无 Android SDK / JUnit，未实机编译**：外部 intent 的
 mime 匹配、FileProvider 授权、PrintManager 回调、`${applicationId}` 占位符替换
 都必须真机确认。
+
+## v39 · 长按已存的笔刷预设槽 → 弹出清空
+
+用户问「五个档位右边那 4 个灰圈是干嘛的」，确认是笔刷预设槽后，选了「长按已存的槽
+弹出清空」这一项（**只做这一项**，没加空槽的 + 提示）。
+
+### 行为
+
+| 场景 | 行为 |
+|---|---|
+| 长按**空槽** | 保持原样：直接存当前整套配置 + 闪 ✓，圈立刻变成对应颜色 |
+| 长按**已存槽** | 先收起「更多」浮层，再弹操作条：**取消 / 覆盖为当前设置 / 清空** |
+
+- **清空** → `SessionRepository.clearBrush(i)` + `refreshBrushSlots()`，圈回到半透明灰；
+  底层本来就有 `clearBrush()`，v39 只是把它接上 UI。
+- **覆盖** → 保留 v11 以来「长按改配置」的能力，不因为加了清空而丢功能。
+- 弹窗沿用 `dialog_confirm` / `dialog_shelf` 的横排 52dp 图形按钮风格：
+  `ic_close` / `ic_replace` / `ic_trash`，**零可见文字**，标签只走 contentDescription；
+  破坏性操作放最右，背景透明。
+- 浮层 4 个槽（`buildMenuInkRow`）与顶栏 4 个槽（`buildBrushSlots`）共用同一个
+  `onBrushSlotLongPress()`，共用同一份 `brush_0..3` 存档，两处行为完全一致。
+
+### 一个实现判断
+
+已存槽长按会先 `popup.dismiss()` 再弹 Dialog —— 避免 focusable PopupWindow 压住
+Dialog。代价是清空后浮层里的圈要下次打开才刷新；顶栏 4 个槽会即时变灰，
+另有 ✓ 反馈。空槽长按不收起浮层，圈当场变色。
+
+### 未做
+
+- 空槽的「+」提示（用户只选了第一项）。
+- 清空后不自动切回默认工具：清的是「预设存档」，不是当前正在用的笔，符合直觉。
+- 零改动：v38 B 全部、v37 解耦、v36 工具按钮、v35 套索图案、依赖清单。
+
+**验收**：静态断言 20 条（XML 全解析 / Kotlin 平衡 / 资源引用无缺失 / 弹窗布局 /
+两处长按 / 旧逻辑清零 / v37–v38 回归）+ `verify.sh` 补 1 条（共 113）+ README +
+对照图。**无 Android SDK，未实机编译**：PopupWindow 与 Dialog 的层级、长按时长、
+读屏标签需真机确认。
