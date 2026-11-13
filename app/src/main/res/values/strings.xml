@@ -89,7 +89,7 @@
     <string name="cd_share_page">分享当前页</string>
     <string name="cd_print_page">打印当前页</string>
     <string name="cd_search">搜索书架</string>
-    <string name="cd_sort">切换排序</string>
+    <string name="cd_sort">选择排序方式</string>
     <string name="cd_star">收藏</string>
     <string name="sort_recent">最近打开</string>
     <string name="sort_name">按名称</string>

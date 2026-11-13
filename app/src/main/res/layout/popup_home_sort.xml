@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v40：首页排序从「点一下盲切一档」改为「弹面板一次列出三档直选」。
+     沿用首页「更多」的 PopupWindow + popup_bg 骨架；这是全 App 第一处可见文字
+     选项列表（三档文案沿用 v38 B③ 的 sort_recent / sort_name / sort_star）。
+     当前档由代码高亮文字 + 显示 ic_check；点任意一档即生效并关闭。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/homeSortRoot"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:minWidth="148dp"
+    android:background="@drawable/popup_bg"
+    android:contentDescription="@string/cd_sort"
+    android:orientation="vertical"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:id="@+id/sortRow0"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/sortLabel0"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:text="@string/sort_recent"
+            android:textColor="@color/icon"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/sortCheck0"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="10dp"
+            android:contentDescription="@string/cd_sort"
+            android:src="@drawable/ic_check"
+            android:tint="@color/accent"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/sortRow1"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/sortLabel1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:text="@string/sort_name"
+            android:textColor="@color/icon"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/sortCheck1"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="10dp"
+            android:contentDescription="@string/cd_sort"
+            android:src="@drawable/ic_check"
+            android:tint="@color/accent"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/sortRow2"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/sortLabel2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:text="@string/sort_star"
+            android:textColor="@color/icon"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/sortCheck2"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="10dp"
+            android:contentDescription="@string/cd_sort"
+            android:src="@drawable/ic_check"
+            android:tint="@color/accent"
+            android:visibility="gone" />
+    </LinearLayout>
+
+</LinearLayout>

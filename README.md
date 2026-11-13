@@ -1703,3 +1703,50 @@ Dialog。代价是清空后浮层里的圈要下次打开才刷新；顶栏 4 �
 两处长按 / 旧逻辑清零 / v37–v38 回归）+ `verify.sh` 补 1 条（共 113）+ README +
 对照图。**无 Android SDK，未实机编译**：PopupWindow 与 Dialog 的层级、长按时长、
 读屏标签需真机确认。
+
+## v40 · 首页排序改为「弹出面板选择」
+
+计划阶段的三个推荐全部落地：**竖排三档文字 + 当前档打勾** / **锚定排序按钮下方** /
+**不记住档位**（冷启动仍回「最近打开」，保持现状）。
+
+### 修复前 → 修复后
+
+| | 修复前 | 修复后 |
+|---|---|---|
+| 点击行为 | 盲切到下一档 + 闪一句短提示 | 弹面板一次列出三档，点一档即生效并关闭 |
+| 当前档 | 提示一闪就没，看不出在第几档 | 文字变蓝 + 淡蓝行底 + 右侧 `ic_check` |
+| 从收藏优先回最近打开 | 要连点 2 次 | 点一次直达 |
+
+### 实现
+
+- 新增 `popup_home_sort.xml`：竖排 3 行，每行 `TextView`（沿用 v38 B③ 的
+  `sort_recent` / `sort_name` / `sort_star`）+ 默认 `gone` 的 `ic_check`。
+  沿用 `popup_bg` / `MenuTool` 之外的既有弹窗骨架，透明背景 + elevation。
+- 新增 `showHomeSortMenu()`：复用首页「更多」的 `PopupWindow` 写法，锚点换成
+  `btnHomeSort`。当前档高亮 + 打勾；点任意一档 → `dismiss()` → 赋值
+  `homeSortMode` → `renderHomeShelf()`；点已选中的档只关闭、不重复刷新。
+- **删掉** onCreate 里的 `(homeSortMode + 1) % 3` 盲循环和
+  `flash(getString(sort_xxx))` 短提示 —— 面板里已经看得见，重复了。
+- `cd_sort` 读屏文案从「切换排序」改为「选择排序方式」。
+
+### 两个实现判断
+
+1. **右缘对齐**：排序按钮贴屏幕右侧，`showAsDropDown` 默认左对齐会把 148dp 宽的
+   面板裁掉约 100dp。先 `pv.measure(UNSPECIFIED)`，再用
+   `xoff = btnHomeSort.width - pv.measuredWidth` 让面板右缘对齐按钮右缘。
+2. **这是全 App 第一处可见文字选项列表**：此前所有弹窗都是「图形按钮 + 读屏标签」，
+   全树查不到 `setSingleChoiceItems` / `ArrayAdapter` / `RadioButton`。按用户选的
+   推荐项引入文字，其余弹窗风格一律不动。
+
+### 未做 / 边界
+
+- `homeSortMode`、`renderHomeShelf()` 的三档 comparator、搜索先过滤再排序、
+  两态判定、卡片 ★ 收藏 —— **一行未改**，只换了「谁给变量赋值」。
+- 档位**不持久化**，冷启动仍回「最近打开」；没擅自扩大。
+- 空书架时 header 隐藏，排序按钮本来就点不到。
+- 首页「更多」的 PopupWindow、文档「更多」、v39 笔刷槽长按清空、v38 B 全部原样。
+
+**验收**：静态断言 26 条（XML 全解析 / Kotlin 平衡 / 资源引用无缺失 / 面板结构 /
+新旧逻辑 / 右缘对齐 / v37–v39 回归）+ `verify.sh` 补 2 条（共 115）+ README +
+对照图。**无 Android SDK，未实机编译**：`PopupWindow` 在贴边按钮下的
+`showAsDropDown` 偏移、`android:tint` 在 minSdk 26 的表现需真机确认。

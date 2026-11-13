@@ -387,15 +387,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 homeSearch.clearFocus(); true
             } else false
         }
-        btnHomeSort.setOnClickListener {
-            homeSortMode = (homeSortMode + 1) % 3
-            flash(getString(when (homeSortMode) {
-                1 -> R.string.sort_name
-                2 -> R.string.sort_star
-                else -> R.string.sort_recent
-            }))
-            renderHomeShelf()
-        }
+        // v40：不再盲循环切档 + 闪短提示，改弹三档选择面板
+        btnHomeSort.setOnClickListener { showHomeSortMenu() }
         colorRow = findViewById(R.id.colorRow)
         widthRow = findViewById(R.id.widthRow)
         brushRow = findViewById(R.id.brushRow)
@@ -1561,6 +1554,49 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /** 首页「更多」：只放不依赖当前卷子的全局动作，避免点了没反应。 */
+    /**
+     * v40：首页排序的唯一入口。三档一次列全，点哪一档就切到哪一档并关闭，
+     * 不再需要连点、也不再靠一闪而过的短提示告诉用户切到了哪儿。
+     *
+     * 复用首页「更多」的 PopupWindow 骨架（popup_bg / 透明背景 / elevation），
+     * 锚点换成 btnHomeSort。排序结果仍由 renderHomeShelf() 的既有 comparator 决定，
+     * 这里只负责给 homeSortMode 赋值 —— P2 要求的「逻辑一行不改」。
+     */
+    private fun showHomeSortMenu() {
+        val pv = layoutInflater.inflate(R.layout.popup_home_sort, null)
+        val popup = PopupWindow(pv, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+            isOutsideTouchable = true
+            elevation = dp(8).toFloat()
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        }
+        val on = ContextCompat.getColor(this, R.color.accent)
+        val off = ContextCompat.getColor(this, R.color.icon)
+        val rows = intArrayOf(R.id.sortRow0, R.id.sortRow1, R.id.sortRow2)
+        val labels = intArrayOf(R.id.sortLabel0, R.id.sortLabel1, R.id.sortLabel2)
+        val checks = intArrayOf(R.id.sortCheck0, R.id.sortCheck1, R.id.sortCheck2)
+        rows.forEachIndexed { i, rowId ->
+            val row = pv.findViewById<View>(rowId)
+            val sel = i == homeSortMode
+            row.setBackgroundColor(if (sel) 0x142F6FED else Color.TRANSPARENT)
+            pv.findViewById<TextView>(labels[i]).setTextColor(if (sel) on else off)
+            pv.findViewById<View>(checks[i]).visibility =
+                if (sel) View.VISIBLE else View.GONE
+            row.setOnClickListener {
+                popup.dismiss()
+                if (homeSortMode != i) {
+                    homeSortMode = i
+                    renderHomeShelf()
+                }
+            }
+        }
+        pv.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        // 排序按钮贴屏幕右侧：让面板右缘对齐按钮右缘，避免 148dp 宽被屏幕裁掉
+        popup.showAsDropDown(btnHomeSort, btnHomeSort.width - pv.measuredWidth, dp(6))
+    }
+
     private fun showHomeMenu() {
         val grid = GridLayout(this).apply {
             columnCount = 4
