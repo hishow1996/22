@@ -249,6 +249,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         selectionBar.visibility = if (active && !barsHidden && !state.browse) View.VISIBLE
         else View.GONE
     }
+    // v41：只在「一条都没选中」时出现，瞬时提示，不是常驻小字
+    override fun onLassoNoHit() { flash(getString(R.string.lasso_no_hit)) }
+    override fun onLassoHiddenLayer() { flash(getString(R.string.lasso_hidden_layer)) }
     override fun onRequestNote(x: Float, y: Float, existing: String?, cb: (String?) -> Unit) {
         val et = EditText(this).apply {
             setText(existing ?: "")

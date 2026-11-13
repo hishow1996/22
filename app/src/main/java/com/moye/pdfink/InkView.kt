@@ -54,6 +54,10 @@ class InkView @JvmOverloads constructor(
         fun onCommit(key: String, before: List<Mark>, after: List<Mark>)
         fun onSelectionChanged(active: Boolean)
         fun onRequestNote(x: Float, y: Float, existing: String?, cb: (String?) -> Unit)
+        /** v41：圈了一条都没选中时给轻反馈，不再静默取消。 */
+        fun onLassoNoHit() {}
+        /** v41：圈到了但笔迹在隐藏图层时说明一句。 */
+        fun onLassoHiddenLayer() {}
     }
 
     private data class Selection(
@@ -137,6 +141,13 @@ class InkView @JvmOverloads constructor(
     private val liveWs = FloatBuffer(64)
     private val erasePts = FloatBuffer(64)
     private val lassoPts = FloatBuffer(128)
+    /**
+     * v41：套索虚线改用「原始屏幕坐标」绘制，与判定用的「页面归一化坐标」解耦。
+     * 放大 / 平移态下 canvas 会做 translate+scale，贴进 liveTiles 的虚线会跟手错位；
+     * 直接记屏幕像素、在 onDraw 变换前画，虚线永远跟着手指，判定则始终与笔迹同坐标系。
+     */
+    private val lassoScreenPts = FloatBuffer(128)
+    private val lassoScreenPath = Path()
     private val liveShapePoints = FloatArray(4)
     private val liveShapeWidths = floatArrayOf(1f, 1f)
     private var liveMark: Mark? = null
@@ -457,6 +468,9 @@ class InkView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        // v41：套索虚线是屏幕坐标，必须在任何 canvas 变换之前画，
+        // 这样 1× / 放大 / 平移 / 高分辨率重绘分支下都严格跟着手指。
+        if (lassoing) canvas.drawPath(lassoScreenPath, boxPaint)
         val vp = viewport
         if (hiResMode && vp != null && vp.lw > 0 && vp.lh > 0) {
             // 与题目底图共用同一组 ZoomHost 下发的逻辑坐标，像素级对齐
@@ -570,6 +584,24 @@ class InkView @JvmOverloads constructor(
         if (!baseTiles.ready) {
             ensureBuffers()
             if (baseTiles.ready) drawAllBase()
+        }
+        // v41：用未经 viewport 逆映射的原始事件坐标记录套索轨迹，专供虚线绘制。
+        // 判定仍用 mapped 事件的页面归一化坐标（与 Mark.pts 同坐标系），两者互不干扰。
+        if (h.tool == Tools.LASSO) {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lassoScreenPts.clear()
+                    lassoScreenPts.add(ev.x); lassoScreenPts.add(ev.y)
+                }
+                MotionEvent.ACTION_MOVE -> if (lassoing) {
+                    for (i in 0 until ev.historySize) {
+                        lassoScreenPts.add(ev.getHistoricalX(i))
+                        lassoScreenPts.add(ev.getHistoricalY(i))
+                    }
+                    lassoScreenPts.add(ev.x); lassoScreenPts.add(ev.y)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> lassoScreenPts.clear()
+            }
         }
         val vp = viewport
         val needsViewportMap = vp != null && vp.scale > 0f &&
@@ -1011,6 +1043,7 @@ class InkView @JvmOverloads constructor(
         lassoPts.clear(); lassoPts.add(x); lassoPts.add(y)
         lastX = x; lastY = y
         lassoing = true
+        lassoScreenPath.reset()
         liveTiles.clear()
         liveDirty = null
     }
@@ -1030,45 +1063,51 @@ class InkView @JvmOverloads constructor(
         drawLassoLive()
     }
 
+    /** v41：虚线用屏幕坐标；≥3 点时 close() 把首末补的那条弦也画出来（判定同口径）。 */
     private fun drawLassoLive() {
-        if (!liveTiles.ready) return
-        liveTiles.wipe()
-        liveDirty = null
-        val poly = lassoPts.toFloatArray()
-        if (poly.size >= 4) {
-            scratch.reset()
-            scratch.moveTo(poly[0] * width, poly[1] * height)
+        lassoScreenPath.reset()
+        val p = lassoScreenPts.toFloatArray()
+        if (p.size >= 4) {
+            lassoScreenPath.moveTo(p[0], p[1])
             var i = 2
-            while (i + 1 < poly.size) {
-                scratch.lineTo(poly[i] * width, poly[i + 1] * height)
+            while (i + 1 < p.size) {
+                lassoScreenPath.lineTo(p[i], p[i + 1])
                 i += 2
             }
-            scratch.close()
-            val b = GeometryCore.bounds(poly)
-            val pad = boxPaint.strokeWidth + 4f * density
-            liveTiles.paint(
-                b[0] * width - pad, b[1] * height - pad,
-                b[2] * width + pad, b[3] * height + pad
-            ) { c -> c.drawPath(scratch, boxPaint) }
+            if (p.size >= 6) lassoScreenPath.close()
         }
         invalidate()
     }
 
     private fun finishLasso() {
         lassoing = false
-        val poly = lassoPts.toFloatArray()
+        lassoScreenPts.clear()
+        lassoScreenPath.reset()
+        val raw = lassoPts.toFloatArray()
         val h = host ?: return
-        if (poly.size < 6) { cancelGesture(); return }
+        if (raw.size < 2) { h.onLassoNoHit(); cancelGesture(); return }
+        // v41：2.5dp 的擦边容差，按两个方向分别归一化（width≠height 不被拉伸）
+        val padPx = 2.5f * density
+        val padX = padPx / width.toFloat().coerceAtLeast(1f)
+        val padY = padPx / height.toFloat().coerceAtLeast(1f)
+        // 圈点不足时补成合法多边形；≥3 点原样，射线法与虚线 close() 共用同一条补弦
+        val poly = GeometryCore.lassoHitPolygon(raw, padX, padY)
         val idx = ArrayList<Int>()
         val orig = ArrayList<Mark>()
+        var hiddenOnly = false
         for (i in marks.indices) {
             val m = marks[i]
-            if (m.layer in h.visibleLayers && GeometryCore.markInside(m, poly)) {
-                idx.add(i); orig.add(m)
-            }
+            if (!GeometryCore.markHitsLasso(m, poly, padX, padY)) continue
+            // 图层过滤后置：能区分「真没圈到」和「圈到了但图层隐藏」
+            if (m.layer in h.visibleLayers) { idx.add(i); orig.add(m) }
+            else hiddenOnly = true
         }
-        if (orig.isEmpty()) { cancelGesture(); return }
-        val b = GeometryCore.bounds(poly)
+        if (orig.isEmpty()) {
+            if (hiddenOnly) h.onLassoHiddenLayer() else h.onLassoNoHit()
+            cancelGesture()
+            return
+        }
+        val b = GeometryCore.bounds(raw)
         val cx = (b[0] + b[2]) * 0.5f
         val cy = (b[1] + b[3]) * 0.5f
         for (i in idx.asReversed()) marks.removeAt(i)
@@ -1251,6 +1290,8 @@ class InkView @JvmOverloads constructor(
 
     private fun cancelGesture() {
         drawing = false; erasing = false; lassoing = false; dragMode = 0
+        lassoScreenPts.clear()
+        lassoScreenPath.reset()
         eraseTrail.reset()
         liveMark = null
         liveTiles.clear()

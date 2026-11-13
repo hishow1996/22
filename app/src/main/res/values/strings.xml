@@ -97,4 +97,7 @@
     <!-- v39：长按已存的笔刷预设槽弹出的两个操作（标签只走读屏） -->
     <string name="cd_brush_slot_clear">清空此笔刷预设</string>
     <string name="cd_brush_slot_overwrite">覆盖为当前设置</string>
+    <!-- v41：套索「一条都没选中」时的瞬时反馈（不是常驻文字） -->
+    <string name="lasso_no_hit">没有圈中笔迹</string>
+    <string name="lasso_hidden_layer">圈中的笔迹在隐藏图层</string>
 </resources>
