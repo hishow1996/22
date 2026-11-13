@@ -212,6 +212,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val browseMode: Boolean get() = state.browse
     override val stylusOnly: Boolean get() = state.stylusOnly
     override val palmGuard: Boolean get() = state.palmGuard
+    override val topEdgeGuardPx: Int
+        get() {
+            val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+            val bar = if (id > 0) resources.getDimensionPixelSize(id) else 0
+            // 状态栏高度即系统判定「从顶边下拉」的起手区；至少 24dp
+            return maxOf(bar, (24 * resources.displayMetrics.density).toInt())
+        }
     override val activeLayer: Int get() = state.activeLayer
     override val visibleLayers: Set<Int> get() = state.visibleLayers
     override val store: InkStore get() = inkStore

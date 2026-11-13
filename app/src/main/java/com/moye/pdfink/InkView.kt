@@ -40,6 +40,12 @@ class InkView @JvmOverloads constructor(
         val browseMode: Boolean
         val stylusOnly: Boolean
         val palmGuard: Boolean
+        /**
+         * 屏幕最上沿这么高（像素，屏幕坐标）以内不接受落笔。
+         * 系统的「顶边下拉呼出状态栏」只看手指是不是从顶边起手，应用拦不住；
+         * 落笔避开这条边，在页面顶部圈圈画画就不会把状态栏拉出来。
+         */
+        val topEdgeGuardPx: Int get() = 0
         val activeLayer: Int
         val visibleLayers: Set<Int>
         val store: InkStore
@@ -547,6 +553,7 @@ class InkView @JvmOverloads constructor(
     private fun blocked(ev: MotionEvent): Boolean {
         val h = host ?: return false
         if (h.stylusOnly && ev.getToolType(0) != MotionEvent.TOOL_TYPE_STYLUS) return true
+        if (h.topEdgeGuardPx > 0 && ev.rawY < h.topEdgeGuardPx) return true
         if (h.palmGuard && isPalm(ev, 0)) return true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
             ev.classification == CLASSIFICATION_PALM
