@@ -1541,3 +1541,61 @@ v32 备份箭头、v31 适应居中、v30 刘海避让等全部原样。
 `verify.sh` 补 2 条（共 102）+ README + 完成对照图。真机荣耀 10 走：
 点套索 → 开、再点 → 关、再开菜单四个全灭；逐个验浮层 4 个与顶栏 6 个；
 切到别的工具不误关；⇄ 两态仍正常。
+
+## v37 书写模式与套索解耦
+
+**用户反馈**：「切换到书写模式时套索功能就自动打开了，我点击套索图标关闭套索
+功能时会自动关闭书写模式切换到浏览模式」。这是两个独立问题，一条是 v36 的
+设计副作用，一条是状态残留。
+
+### 问题 A：切进书写模式自动进套索
+
+`currentTool` 是 `MainViewModel.brushTool`，进程内一直保留；`finishOpenUri()`
+还会从会话读回 `session.brushTool`（`currentTool = session.brushTool.coerceIn`）。
+只要上次用过套索，这个残留值就是 `Tools.LASSO`。
+
+而 `InkView.Host.tool` 直接返回 `currentTool`，`InkView` 在 `ACTION_DOWN`
+见 `h.tool == Tools.LASSO` 就 `startLassoOrDrag()`；`refreshTools()` 同时把
+`btnLasso.isSelected` 点亮。`setBrowseMode(false)`（⇄ 切进做题）本身**不改**
+`currentTool` —— 于是按 ⇄ 从浏览切到书写，直接就是圈选状态。冷启动若上次
+停在做题 + 套索，打开文件也一样。
+
+### 问题 B：点套索关功能却退出了书写模式
+
+v36 把 10 个工具按钮的「第二下」统一做成 `setBrowseMode(true)`（当时的推荐
+口径：复用 ⇄ 链路关回浏览）。对套索来说太重了：用户只想关掉圈选，结果整个
+书写模式被退回浏览、顶栏 6 个按钮一起变灰。
+
+### 改动（直接修复）
+
+| 位置 | 处理 |
+|---|---|
+| 新增 `ToolModeRules.kt` | 纯 JVM：`entryTool(saved)` 把 LASSO 归一化为 PEN，其余原样；`closeFallback()` 返回 PEN |
+| `setBrowseMode(v)` | `v=false` 时 `currentTool = ToolModeRules.entryTool(currentTool)` |
+| `finishOpenUri()` | 会话恢复也走 `entryTool(session.brushTool.coerceIn(0, Tools.NOTE))` |
+| `toggleTool(t)` | 第二下由 `setBrowseMode(true)` 改为 `selectTool(ToolModeRules.closeFallback())`，**不再碰 `state.browse`** |
+
+**关键顺序保证**：`selectTool(t)` 的结构是「`if (state.browse) setBrowseMode(false)`
+→ `currentTool = t`」。归一化发生在前半段，用户**主动点套索按钮**时后半段会把
+`currentTool = LASSO` 覆盖回来，所以「主动进套索」完全不受影响；只有 ⇄ 进入
+和冷启动恢复这两条「自动」路径会被归一到默认笔。
+
+**职责边界**：退出书写模式现在**只由 ⇄ (`btnBrowse`) 负责**；工具按钮第二下
+只切工具、留在做题态。`selectTool(PEN)` 自带 `refreshTools` /
+`refreshTempEraser` / `tempEraserActive=false`，套索选区在关闭分支里先
+`cancelSelection()` 清掉，链路完整，不另写状态机。
+
+**已知取舍**：关闭后 `selectTool(PEN)` 会把 `lastDrawTool` 也更新成笔；若上次
+用的是荧光笔，关套索后悬浮橡皮切回会回到笔而不是荧光笔。按「关掉套索 = 回到
+普通书写」的直觉取固定 PEN，不做额外记忆。默认笔本身没有「关闭态」，第二下
+点笔是幂等的（保持选中），属预期。
+
+**零改动**：v36 的 10 处按钮绑定、`refreshMenuToolRow`、`tool_bg` 淡蓝方块底、
+`icon_toggle`、v35 套索图案、两个布局文件、v16 默认浏览、v23 返回栈。
+
+**验收**：静态断言（`entryTool` 只拦 LASSO、两处入口都调用、`toggleTool` 不再
+含 `setBrowseMode(true)`、⇄ 仍是唯一 `setBrowseMode(!state.browse)`、
+其余 8 处 `selectTool` 调用未改、v36 资源零改动）+ `verify.sh` 修订 101 并补
+2 条（共 104）+ 新增 `ToolModeRulesTest` 5 条 + README + 完成对照图。真机荣耀 10
+走：上次套索退出 → 重开按 ⇄ 应拿笔不圈选 → 点套索进圈选 → 再点套索回笔且
+仍在做题 → 按 ⇄ 才回浏览；再验 cold start 恢复与主动点套索两条路径。

@@ -602,19 +602,21 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /**
-     * v36：工具按钮的统一入口 —— 点一下切到做题并选中，再点同一个按钮关回浏览。
+     * v36 工具按钮统一入口，v37 修订关闭语义：
+     * 点一下切到做题并选中，再点同一个按钮只「关掉这个工具」回到默认笔。
+     *
+     * v36 曾让第二下走 setBrowseMode(true) 关整个书写模式，用户反馈点套索想关
+     * 套索、结果连书写模式一起退回了浏览。现在退出书写模式只由 ⇄ 负责，工具按钮
+     * 不越权改 state.browse；selectTool 内部自带刷新、悬浮橡皮复位、偏好同步。
+     *
      * 只挂 10 处「工具按钮」点击（顶栏 6 个 + 浮层第一行 4 个）；笔迹预设槽、
      * 悬浮橡皮切回、形状条、会话恢复仍直接调 selectTool，不受影响。
-     *
-     * 关闭复用 ⇄ 的 setBrowseMode(true)：偏好落盘、adapter.setBrowseMode、
-     * 顶栏刷新、shapeBar/selectionBar 显隐、悬浮橡皮复位、pager 输入恢复全在里头，
-     * 不另写一套状态机。
      */
     private fun toggleTool(t: Int) {
         if (!state.browse && currentTool == t) {
-            // 套索已圈出的选区一并清掉（推荐口径），切回做题时是干净状态。
+            // 套索已圈出的选区一并清掉，回到默认笔时是干净状态。
             activeViews.values.forEach { it.cancelSelection() }
-            setBrowseMode(true)
+            selectTool(ToolModeRules.closeFallback())
         } else {
             selectTool(t)
         }
@@ -624,6 +626,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun setBrowseMode(v: Boolean) {
         if (state.browse == v) return
         state.browse = v
+        // v37：⇄ 切进书写模式时，不把上次残留的套索自动带进来。
+        // 用户主动点套索按钮走 selectTool：本函数先归一化、随后 currentTool = t
+        // 会覆盖回来，所以仍可正常主动进入套索。
+        if (!v) currentTool = ToolModeRules.entryTool(currentTool)
         if (v && tempEraserActive) {
             // 浏览态不能擦，先把悬浮橡皮的切换态复位
             tempEraserActive = false
@@ -1635,7 +1641,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // 页面宽高信息放到后台读取，首屏不因打开第一页而等待 PdfRenderer。 
         val autoRotateCandidate = !state.landscape && session.rotation == 0
         state.showCorrection = session.showCorrection
-        currentTool = session.brushTool.coerceIn(0, Tools.NOTE)
+        // v37：旧会话若在套索里退出，冷启动恢复不该自动打开套索。
+        currentTool = ToolModeRules.entryTool(session.brushTool.coerceIn(0, Tools.NOTE))
         state.displayMode = session.displayMode
         // v27：用户未主动选择过显示方式时，首次打开任何文件默认完整页适配 ——
         // 不让旧会话里残留的 FIT 状态影响新默认值；手动选过（modeChosen=true）仍尊重选择。
