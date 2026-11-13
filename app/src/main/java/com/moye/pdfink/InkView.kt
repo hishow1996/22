@@ -860,6 +860,13 @@ class InkView @JvmOverloads constructor(
     }
 
     // ---------- 橡皮 ----------
+    /** 记进最终裁剪轨迹的点间距：半径的 1/4，既不丢覆盖又把几千个点压到几百个。 */
+    private var eraseStepPx = 2f
+    private var eraseKeepX = 0f
+    private var eraseKeepY = 0f
+    private var eraseTailX = 0f
+    private var eraseTailY = 0f
+
     private fun startErase(ev: MotionEvent, h: Host) {
         val x = (ev.x / width).coerceIn(0f, 1f)
         val y = (ev.y / height).coerceIn(0f, 1f)
@@ -867,6 +874,9 @@ class InkView @JvmOverloads constructor(
         erasePts.clear(); erasePts.add(x); erasePts.add(y)
         erasing = true; drawing = false
         clearStroke.strokeWidth = h.eraserWidth * unit
+        eraseStepPx = maxOf(2f, clearStroke.strokeWidth * 0.125f)
+        eraseKeepX = x * width; eraseKeepY = y * height
+        eraseTailX = eraseKeepX; eraseTailY = eraseKeepY
         if (!baseTiles.ready) return
         val px = x * width
         val py = y * height
@@ -875,41 +885,55 @@ class InkView @JvmOverloads constructor(
         baseTiles.paint(px - pad, py - pad, px + pad, py + pad, create = false) { c ->
             c.drawPoint(px, py, clearStroke)
         }
-        invalidate()
+        invalidateBounds(px - pad, py - pad, px + pad, py + pad)
     }
 
     private fun erasePoints(ev: MotionEvent) {
         if (!baseTiles.ready) return
-        fun take(x: Float, y: Float) {
-            val nx = (x / width).coerceIn(0f, 1f)
-            val ny = (y / height).coerceIn(0f, 1f)
-            if (hypot((nx - lastX) * width, (ny - lastY) * height) < 1.2f) return
-            val x0 = lastX * width
-            val y0 = lastY * height
-            val x1 = nx * width
-            val y1 = ny * height
-            scratch.reset()
-            scratch.moveTo(x0, y0)
-            scratch.lineTo(x1, y1)
-            val pad = clearStroke.strokeWidth * 0.5f + 2f * density
-            baseTiles.paint(
-                minOf(x0, x1) - pad, minOf(y0, y1) - pad,
-                maxOf(x0, x1) + pad, maxOf(y0, y1) + pad,
-                create = false
-            ) { c -> c.drawPath(scratch, clearStroke) }
-            erasePts.add(nx); erasePts.add(ny)
-            lastX = nx; lastY = ny
+        // 一次事件里的所有历史点合成一条折线、只画一次、只刷新一个矩形；
+        // 以前每个历史点各画一次并整个 View 重绘，横屏大页面上很吃力。
+        var cx = lastX * width
+        var cy = lastY * height
+        var l = cx; var t = cy; var r = cx; var b = cy
+        var moved = false
+        scratch.reset()
+        scratch.moveTo(cx, cy)
+        val hs = ev.historySize
+        for (i in 0..hs) {
+            val rx = if (i < hs) ev.getHistoricalX(i) else ev.x
+            val ry = if (i < hs) ev.getHistoricalY(i) else ev.y
+            val px = rx.coerceIn(0f, width.toFloat())
+            val py = ry.coerceIn(0f, height.toFloat())
+            if (hypot(px - cx, py - cy) < 1.2f) continue
+            scratch.lineTo(px, py)
+            if (px < l) l = px
+            if (px > r) r = px
+            if (py < t) t = py
+            if (py > b) b = py
+            cx = px; cy = py
+            moved = true
+            eraseTailX = px; eraseTailY = py
+            if (hypot(px - eraseKeepX, py - eraseKeepY) >= eraseStepPx) {
+                erasePts.add(px / width); erasePts.add(py / height)
+                eraseKeepX = px; eraseKeepY = py
+            }
         }
-        for (i in 0 until ev.historySize) {
-            take(ev.getHistoricalX(i), ev.getHistoricalY(i))
+        if (!moved) return
+        val pad = clearStroke.strokeWidth * 0.5f + 2f * density
+        baseTiles.paint(l - pad, t - pad, r + pad, b + pad, create = false) { c ->
+            c.drawPath(scratch, clearStroke)
         }
-        take(ev.x, ev.y)
-        invalidate()
+        lastX = cx / width; lastY = cy / height
+        invalidateBounds(l - pad, t - pad, r + pad, b + pad)
     }
 
     private fun finishErase() {
         erasing = false
         val h = host ?: return
+        // 抬手点一定要在裁剪轨迹里（中途被压缩掉的只是中间点）
+        if (hypot(eraseTailX - eraseKeepX, eraseTailY - eraseKeepY) > 0.5f) {
+            erasePts.add(eraseTailX / width); erasePts.add(eraseTailY / height)
+        }
         val norm = erasePts.toFloatArray()
         val px = FloatArray(norm.size) { i ->
             if (i % 2 == 0) norm[i] * width else norm[i] * height

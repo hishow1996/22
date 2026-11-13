@@ -107,14 +107,27 @@ object GeometryCore {
                 if (!hit) out.add(m)
                 continue
             }
+            // 先用包围盒挡掉绝大多数没碰到的笔迹：橡皮轨迹长、笔迹多时，
+            // 逐点对逐段的距离计算是平方级，抬手会明显卡一下。
+            val reach = radiusPx + m.width * unit * 0.5f
+            val box = eraseBounds(erasePx, reach)
+            if (box[2] >= box[0]) {
+                val mb = bounds(m.pts)
+                val mbPx = floatArrayOf(mb[0] * w, mb[1] * h, mb[2] * w, mb[3] * h)
+                if (!overlaps(mbPx, box)) {
+                    out.add(m)
+                    continue
+                }
+            }
             val runPts = ArrayList<Float>()
             val runWs = ArrayList<Float>()
             var touched = false
             for (i in 0 until n) {
-                val hit = nearErase(
-                    m.pts[2 * i] * w, m.pts[2 * i + 1] * h,
-                    erasePx, radiusPx + m.width * unit * 0.5f
-                )
+                val px = m.pts[2 * i] * w
+                val py = m.pts[2 * i + 1] * h
+                // 点在轨迹包围盒（已外扩 reach）之外，必然没被擦到
+                val hit = px >= box[0] && px <= box[2] && py >= box[1] && py <= box[3] &&
+                    nearErase(px, py, erasePx, reach)
                 if (hit) {
                     touched = true
                     if (runPts.size >= 2) {
