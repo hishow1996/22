@@ -12,12 +12,21 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
 import android.provider.MediaStore
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -41,6 +50,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -54,6 +64,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity(), InkView.Host {
@@ -173,6 +185,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var homeHero: View
     private lateinit var homeScroll: View
     private lateinit var btnHomeMore: ImageButton
+    // v38 B③：书架搜索与排序，只影响首页卡片列表，不写进会话
+    private lateinit var homeSearch: EditText
+    private lateinit var btnHomeSort: ImageButton
+    private var homeQuery = ""
+    private var homeSortMode = 0   // 0 最近打开 / 1 按名称 / 2 收藏优先
     private lateinit var homeShelf: LinearLayout
     private lateinit var colorRow: LinearLayout
     private lateinit var widthRow: LinearLayout
@@ -355,6 +372,30 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         homeScroll = findViewById(R.id.homeScroll)
         btnHomeMore = findViewById(R.id.btnHomeMore)
         homeShelf = findViewById(R.id.homeShelf)
+        homeSearch = findViewById(R.id.homeSearch)
+        btnHomeSort = findViewById(R.id.btnHomeSort)
+        homeSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                homeQuery = s?.toString()?.trim().orEmpty()
+                renderHomeShelf()
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+        homeSearch.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                homeSearch.clearFocus(); true
+            } else false
+        }
+        btnHomeSort.setOnClickListener {
+            homeSortMode = (homeSortMode + 1) % 3
+            flash(getString(when (homeSortMode) {
+                1 -> R.string.sort_name
+                2 -> R.string.sort_star
+                else -> R.string.sort_recent
+            }))
+            renderHomeShelf()
+        }
         colorRow = findViewById(R.id.colorRow)
         widthRow = findViewById(R.id.widthRow)
         brushRow = findViewById(R.id.brushRow)
@@ -403,20 +444,46 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
         })
 
-        val saved = prefs().getString("uri", null)
-        // 冷启动且已有历史卷子 → 先落在书架首页；点卡片才回卷子，会话照旧恢复。
-        // 系统重建 Activity（savedInstanceState 非空）或还没有历史时，直接回上一份卷子。
-        val direct = savedInstanceState != null || recents.all().isEmpty()
-        if (saved != null && direct) {
-            val u = Uri.parse(saved)
-            val k = FileType.from(
-                try { recents.displayName(u) } catch (e: Exception) { "" },
-                recents.mimeOf(u))
-            // 外部类型冷启动留在书架，避免一启动就跳到别的 App。
-            if (k.embedded) {
-                try { openAny(u) } catch (e: Exception) { showHome() }
+        // v38 B①：外部「用墨页打开」优先于冷启动恢复。只接管内嵌格式，
+        // 持久授权拿不到时按普通外部来源处理，不写脏记录。
+        val incoming = if (savedInstanceState == null &&
+            intent?.action == Intent.ACTION_VIEW) intent?.data else null
+        if (incoming != null) {
+            consumeExternalOpen(incoming)
+        } else {
+            val saved = prefs().getString("uri", null)
+            // 冷启动且已有历史卷子 → 先落在书架首页；点卡片才回卷子，会话照旧恢复。
+            // 系统重建 Activity（savedInstanceState 非空）或还没有历史时，直接回上一份卷子。
+            val direct = savedInstanceState != null || recents.all().isEmpty()
+            if (saved != null && direct) {
+                val u = Uri.parse(saved)
+                val k = FileType.from(
+                    try { recents.displayName(u) } catch (e: Exception) { "" },
+                    recents.mimeOf(u))
+                // 外部类型冷启动留在书架，避免一启动就跳到别的 App。
+                if (k.embedded) {
+                    try { openAny(u) } catch (e: Exception) { showHome() }
+                } else showHome()
             } else showHome()
-        } else showHome()
+        }
+    }
+
+    /** v38 B①：从微信 / 文件管理器 / 浏览器 VIEW 进来，复用首页那套 openAny 链路。 */
+    private fun consumeExternalOpen(uri: Uri) {
+        try {
+            contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: Exception) { /* 部分来源不带可持久授权，按临时 Uri 正常打开 */ }
+        try { if (!openAny(uri)) showHome() }
+        catch (e: Exception) { showHome() }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == Intent.ACTION_VIEW) {
+            intent.data?.let { consumeExternalOpen(it) }
+        }
     }
 
     // ----- prefs -----
@@ -616,7 +683,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         if (!state.browse && currentTool == t) {
             // 套索已圈出的选区一并清掉，回到默认笔时是干净状态。
             activeViews.values.forEach { it.cancelSelection() }
-            selectTool(ToolModeRules.closeFallback())
+            selectTool(ToolModeRules.closeFallback(lastDrawTool))
         } else {
             selectTool(t)
         }
@@ -1390,10 +1457,22 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      */
     private fun renderHomeShelf() {
         homeShelf.removeAllViews()
-        val items = recents.all()
+        val all = recents.all()
+        // v38 B③：搜索只匹配文件名；排序三档，收藏优先档把星标排在前面但不改时间。
+        val matched = all.filter {
+            homeQuery.isEmpty() || it.name.contains(homeQuery, ignoreCase = true)
+        }
+        val items = when (homeSortMode) {
+            1 -> matched.sortedBy { it.name.lowercase() }
+            2 -> matched.sortedWith(
+                compareByDescending<Recents.Item> { it.star }
+                    .thenByDescending<Recents.Item> { it.time })
+            else -> matched
+        }
         val stage = homeStage.layoutParams as LinearLayout.LayoutParams
         val scroll = homeScroll.layoutParams as LinearLayout.LayoutParams
-        if (items.isEmpty()) {
+        // 两态只由「有没有记录」决定：搜索无结果仍是书架，不会误显示居中导入图标
+        if (all.isEmpty()) {
             homeHeader.visibility = View.GONE
             homeHero.visibility = View.VISIBLE
             homeScroll.visibility = View.GONE
@@ -1464,6 +1543,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             card.findViewById<View>(R.id.cardInkDot).visibility =
                 if (InkStore.hasAnyInk(this, item.fp)) View.VISIBLE else View.GONE
 
+            // v38 B③：文件级收藏，点一下切换；不冒泡到整张卡片
+            val star = card.findViewById<TextView>(R.id.cardStar)
+            star.alpha = if (item.star) 1f else 0.22f
+            star.setOnClickListener {
+                recents.toggleStar(item.fp)
+                renderHomeShelf()
+            }
+
             // 点开 = 打开这份 PDF，并按内容指纹恢复页码 / 缩放 / 工具 / 模式 / 平移
             card.setOnClickListener {
                 if (!openAny(u)) flash("!")
@@ -1508,6 +1595,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun homeMenuActions() = listOf(
+        // v38 B②：分享 / 系统打印，与「导出到文件」并列但互不复用 SAF 落盘
+        MenuAction(R.drawable.ic_share, getString(R.string.cd_share_page), { false }) {
+            shareCurrentPage()
+        },
+        MenuAction(R.drawable.ic_print, getString(R.string.cd_print_page), { false }) {
+            printCurrentPage()
+        },
         MenuAction(R.drawable.ic_backup, getString(R.string.cd_backup), { false }) {
             createBackup.launch("moye-backup.moye")
         },
@@ -2179,6 +2273,126 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         a.recycle()
         b.recycle()
         return out
+    }
+
+    /** v38 B②：把当前页合成 PNG 放进 cache，借 FileProvider 以 content:// 分享。 */
+    private fun shareCurrentPage() {
+        val r = repo ?: return
+        val p = currentPage()
+        workScope.launch {
+            val (w, h) = try { pageSize(p) } catch (e: Exception) { return@launch }
+            val bmp = try {
+                if (state.effectiveMode == DisplayMode.DOUBLE && p + 1 < r.count) {
+                    composeTwoPages(r, p, w, h)
+                } else {
+                    PageComposer.compose(r, inkStore, p, w, h, state.tint,
+                        state.brightness, state.visibleLayers, state.effectiveSpread,
+                        state.pageRotation)
+                }
+            } catch (e: Exception) { null } ?: return@launch
+            val dir = File(cacheDir, "share").apply { mkdirs() }
+            val f = File(dir, "moye_page.png")
+            val ok = try {
+                FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                true
+            } catch (e: Exception) { false }
+            bmp.recycle()
+            if (!ok) {
+                withContext(Dispatchers.Main) { flash("!") }
+                return@launch
+            }
+            withContext(Dispatchers.Main) {
+                if (isFinishing || isDestroyed) return@withContext
+                val uri = try {
+                    FileProvider.getUriForFile(
+                        this@MainActivity, "$packageName.fileprovider", f)
+                } catch (e: Exception) { flash("!"); return@withContext }
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    startActivity(Intent.createChooser(
+                        send, getString(R.string.cd_share_page)))
+                } catch (e: Exception) { flash("!") }
+            }
+        }
+    }
+
+    /** v38 B②：系统打印当前页，PrintManager + PdfDocument，不加第三方依赖。 */
+    private fun printCurrentPage() {
+        val r = repo ?: return
+        val p = currentPage()
+        workScope.launch {
+            val (w, h) = try { pageSize(p) } catch (e: Exception) { return@launch }
+            val bmp = try {
+                if (state.effectiveMode == DisplayMode.DOUBLE && p + 1 < r.count) {
+                    composeTwoPages(r, p, w, h)
+                } else {
+                    PageComposer.compose(r, inkStore, p, w, h, state.tint,
+                        state.brightness, state.visibleLayers, state.effectiveSpread,
+                        state.pageRotation)
+                }
+            } catch (e: Exception) { null } ?: return@launch
+            withContext(Dispatchers.Main) {
+                if (isFinishing || isDestroyed) { bmp.recycle(); return@withContext }
+                val pm = getSystemService(Context.PRINT_SERVICE) as PrintManager
+                val bmpW = bmp.width
+                val bmpH = bmp.height
+                val doc = object : PrintDocumentAdapter() {
+                    override fun onLayout(
+                        oldAttributes: PrintAttributes?,
+                        newAttributes: PrintAttributes?,
+                        cancellationSignal: CancellationSignal?,
+                        callback: PrintDocumentAdapter.LayoutResultCallback,
+                        extras: Bundle?
+                    ) {
+                        if (cancellationSignal?.isCanceled == true) {
+                            callback.onLayoutCancelled(); return
+                        }
+                        val info = PrintDocumentInfo.Builder("MoYe_${p + 1}.pdf")
+                            .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                            .setPageCount(1).build()
+                        callback.onLayoutFinished(info, newAttributes == oldAttributes)
+                    }
+
+                    override fun onWrite(
+                        pages: Array<out android.print.PageRange>?,
+                        destination: ParcelFileDescriptor?,
+                        cancellationSignal: CancellationSignal?,
+                        callback: PrintDocumentAdapter.WriteResultCallback
+                    ) {
+                        if (destination == null) {
+                            callback.onWriteFailed("!"); return
+                        }
+                        val pdf = PdfDocument()
+                        try {
+                            val pi = PdfDocument.PageInfo.Builder(bmpW, bmpH, 1).create()
+                            val page = pdf.startPage(pi)
+                            page.canvas.drawBitmap(bmp, 0f, 0f, null)
+                            pdf.finishPage(page)
+                            FileOutputStream(destination.fileDescriptor).use { pdf.writeTo(it) }
+                            callback.onWriteFinished(
+                                arrayOf(android.print.PageRange.ALL_PAGES))
+                        } catch (e: Exception) {
+                            callback.onWriteFailed("!")
+                        } finally {
+                            pdf.close()
+                        }
+                    }
+
+                    override fun onFinish() {
+                        if (!bmp.isRecycled) bmp.recycle()
+                    }
+                }
+                try { pm.print("MoYe 第 ${p + 1} 页", doc, null) }
+                catch (e: Exception) {
+                    if (!bmp.isRecycled) bmp.recycle()
+                    flash("!")
+                }
+            }
+        }
     }
 
     private fun exportCurrentPngInternal() {

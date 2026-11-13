@@ -62,12 +62,26 @@
 
     </LinearLayout>
 
+    <!-- v38 B③：文件级收藏，点一下切换；与「按页书签」是两回事 -->
+    <TextView
+        android:id="@+id/cardStar"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_gravity="center_vertical"
+        android:layout_marginStart="4dp"
+        android:contentDescription="@string/cd_star"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:text="★"
+        android:textColor="#FFF2A03D"
+        android:textSize="17sp" />
+
     <View
         android:id="@+id/cardInkDot"
         android:layout_width="8dp"
         android:layout_height="8dp"
         android:layout_gravity="center_vertical"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="4dp"
         android:background="@drawable/home_dot"
         android:visibility="gone" />
 

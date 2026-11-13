@@ -13,13 +13,16 @@ import org.json.JSONObject
  * custom 标记手动改过名，重新导入 / 点开同一份时不再把用户命名覆盖掉。
  * v28：加 kind / mime 支持任意文件类型；老记录按文件名后缀自动回填类型，
  * 不丢记录、也不需要用户重新导入一次。
+ * v38 B③：加 star 文件级收藏；重新打开 / touch 都保留收藏态。
  */
 class Recents(ctx: Context) {
     data class Item(
         val uri: String, val name: String, val time: Long, val fp: String,
         val pages: Int = 0, val custom: Boolean = false,
         val sizeBytes: Long = -1L,
-        val kind: String = "", val mime: String = ""
+        val kind: String = "", val mime: String = "",
+        // v38 B③：文件级收藏。与「按页书签」是两回事；老记录默认 false，不丢记录。
+        val star: Boolean = false
     )
 
     private val app = ctx.applicationContext
@@ -105,7 +108,7 @@ class Recents(ctx: Context) {
             .toMutableList()
         list.add(0, Item(uri.toString(), finalName, System.currentTimeMillis(),
             key, pages, existing?.custom == true, readSizeBytes(uri) ?: -1L,
-            FileType.key(kind), mime))
+            FileType.key(kind), mime, existing?.star == true))
         save(list.take(12))
     }
 
@@ -149,9 +152,15 @@ class Recents(ctx: Context) {
             }
             Item(u, name, o.optLong("t"), fp,
                 o.optInt("g", 0), o.optBoolean("c", false),
-                o.optLong("s", -1L), k, o.optString("m", ""))
+                o.optLong("s", -1L), k, o.optString("m", ""),
+                o.optBoolean("st", false))
         }
     } catch (e: Exception) { emptyList() }
+
+    /** v38 B③：切换文件级收藏，不改时间、不重排、不覆盖用户命名。 */
+    fun toggleStar(fp: String) {
+        save(all().map { if (it.fp == fp) it.copy(star = !it.star) else it })
+    }
 
     fun remove(fp: String) { save(all().filter { it.fp != fp }) }
 
@@ -170,7 +179,8 @@ class Recents(ctx: Context) {
                 .put("t", it.time).put("f", it.fp)
                 .put("g", it.pages).put("c", it.custom)
                 .put("s", it.sizeBytes)
-                .put("k", it.kind).put("m", it.mime))
+                .put("k", it.kind).put("m", it.mime)
+                .put("st", it.star))
         }
         p.edit().putString("list", a.toString()).apply()
     }

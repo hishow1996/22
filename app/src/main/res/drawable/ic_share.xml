@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v38 B② 分享：三个节点 + 两条连线，闭合填充、不用 stroke -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FF000000" android:pathData="M17,3.2 C18.5,3.2 19.7,4.4 19.7,5.9 C19.7,7.4 18.5,8.6 17,8.6 C15.5,8.6 14.3,7.4 14.3,5.9 C14.3,4.4 15.5,3.2 17,3.2 Z M7,10 C8.5,10 9.7,11.2 9.7,12.7 C9.7,14.2 8.5,15.4 7,15.4 C5.5,15.4 4.3,14.2 4.3,12.7 C4.3,11.2 5.5,10 7,10 Z M17,16.8 C18.5,16.8 19.7,18 19.7,19.5 C19.7,21 18.5,22.2 17,22.2 C15.5,22.2 14.3,21 14.3,19.5 C14.3,18 15.5,16.8 17,16.8 Z" />
+    <path android:fillColor="#FF000000" android:pathData="M8.9,11.5 L15.3,7.1 L16.4,8.8 L10,13.2 Z M8.9,13.9 L15.3,18.3 L16.4,16.6 L10,12.2 Z" />
+</vector>

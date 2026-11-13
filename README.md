@@ -1599,3 +1599,69 @@ v36 把 10 个工具按钮的「第二下」统一做成 `setBrowseMode(true)`�
 2 条（共 104）+ 新增 `ToolModeRulesTest` 5 条 + README + 完成对照图。真机荣耀 10
 走：上次套索退出 → 重开按 ⇄ 应拿笔不圈选 → 点套索进圈选 → 再点套索回笔且
 仍在做题 → 按 ⇄ 才回浏览；再验 cold start 恢复与主动点套索两条路径。
+
+## v38 · 只做 B（还债 + 清旧账）
+
+范围按用户「只做 B」：**A 真机验证地基、C 新能力（C1/C2/C3）都不做**。
+B 主体三项 + 顺带清旧账 5 条（其中第 ⑤ 条取「明确接受、不做」）。
+
+### B① 外部「用墨页打开」
+
+`AndroidManifest.xml` 增加第二个 intent-filter：`ACTION_VIEW` + DEFAULT/BROWSABLE，
+scheme `content` / `file`，mime `application/pdf` / `image/*` / `text/*` —— **只接管内嵌
+格式，不抢 Office / 压缩包等转交类型**。
+
+`MainActivity.onCreate` 把外部 intent 放在冷启动恢复之前优先处理；新增
+`consumeExternalOpen(uri)`：先试 `takePersistableUriPermission`（部分来源不带可持久
+授权时吞掉异常按临时 Uri 走），再复用首页那套 `openAny(uri)` —— 按指纹去重、
+进浏览记录、会话照旧恢复。`onNewIntent` 同样处理，Activity 被复用时不丢。
+
+### B② 分享 + 系统打印
+
+「更多」里新增两项，与「导出到文件」并列但不复用 SAF 落盘：
+
+- **分享当前页**：`PageComposer.compose` 出 bitmap → 写 `cacheDir/share/moye_page.png`
+  → `FileProvider.getUriForFile` 拿 content Uri → `ACTION_SEND` + `FLAG_GRANT_READ_URI_PERMISSION`
+  → `createChooser`。Manifest 注册 `androidx.core.content.FileProvider`，
+  `res/xml/file_paths.xml` **只暴露 `cache-path`，不暴露 filesDir / 外部存储**。
+- **打印当前页**：`PrintManager.print` + 自定义 `PrintDocumentAdapter`，`onWrite`
+  用系统 `PdfDocument` 把该页 bitmap 画成一页 PDF。双页并排时与单页导出一致，
+  走 `composeTwoPages`。
+
+两者都复用既有 `pageSize` / `PageComposer` / `state.visibleLayers`，**零第三方库、
+零新增 gradle 依赖**（`androidx.core` 本来就有）。
+
+### B③ 书架搜索 / 排序 / 收藏
+
+- `Recents.Item` 加 `star`（文件级收藏），`save`/`all` 读写 `st` 字段；老记录
+  默认 false、不丢记录；`add()` 与 `touch()` 都保留收藏态。新增 `toggleStar(fp)`。
+- 首页 header 加一个 `EditText`（只按文件名过滤）与排序按钮，三档循环：
+  最近打开 / 按名称 / 收藏优先。两态只由「有没有记录」决定 —— **搜索无结果仍是
+  书架，不会误显示居中的导入图标**。
+- 卡片右侧加 ★（未收藏 0.22 alpha、已收藏 1.0），点一下切换，不冒泡到整张卡片。
+  与「按页书签」是两回事。
+
+### 清旧账（B 附带）
+
+| # | 处理 |
+|---|---|
+| ① | `ic_zoom_reset.xml` 加号 → **减号**（横条同长同厚，去掉竖条）；圆环与手柄逐字符未动。缩放复位不再画成「放大」 |
+| ② | 3 处 tint 对比度：便签白横线改**反向子路径挖空**（任何 tint 下露出背景）；PDF 纸底 0.42 / 折角 0.18 / 字 1.0 靠 alpha 三层；`ic_next_ink` 纸底 0.32、波浪 stroke 改中性黑，不再依赖固定蓝 |
+| ③ | 删除 3 个零引用死资源 `ic_chevron_down` / `ic_mode_browse` / `ic_mode_write`，全树零残留引用 |
+| ④ | `ToolModeRules.closeFallback(lastDrawTool)`：v37 关套索固定回 PEN 会连 `lastDrawTool` 一起覆盖，现在回到**进入套索之前**那支（荧光笔/形状都保留）；单测 6 条 |
+| ⑤ | Android 14+ 预测式返回观感：按计划取「**明确接受、不做**」，不接 OnBackInvokedCallback 进度动画，行为不受影响 |
+
+### 未做（如实说明）
+
+- **A 地基**：真机编译 / instrumented 冒烟 / cover 下笔迹落点复核 —— 本轮没做，
+  37 版积累的「静态通过」仍是静态通过。
+- **C 新能力**：白边裁切、阅读计时、压感、PDF 文本层评估、OCR / Office 内嵌等
+  全部没碰。
+- 零改动：v37 书写模式与套索解耦、v36 工具按钮、v35 套索图案、v31 三态对齐、
+  v30 刘海避让、依赖清单（build.gradle.kts 一字未动）。
+
+**验收**：静态断言 32 条（XML 全解析 / Kotlin 平衡 / 资源引用无缺失 / Manifest /
+分享打印 / 书架 / 清旧账 ①–④ / v35–v37 回归）+ `verify.sh` 补 8 条（共 112）+
+README + 完成对照图。**无 Android SDK / JUnit，未实机编译**：外部 intent 的
+mime 匹配、FileProvider 授权、PrintManager 回调、`${applicationId}` 占位符替换
+都必须真机确认。

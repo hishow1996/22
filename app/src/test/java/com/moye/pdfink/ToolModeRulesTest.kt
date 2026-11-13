@@ -27,9 +27,19 @@ class ToolModeRulesTest {
     }
 
     @Test
-    fun closeFallbackIsTheDefaultPenAndNotLasso() {
-        assertEquals(Tools.PEN, ToolModeRules.closeFallback())
-        assertNotEquals(Tools.LASSO, ToolModeRules.closeFallback())
+    fun closeReturnsToPreviousDrawTool() {
+        // v38：不再固定回 PEN，荧光笔/形状进入套索后关闭应回到原来那支
+        assertEquals(Tools.HIGHLIGHT, ToolModeRules.closeFallback(Tools.HIGHLIGHT))
+        assertEquals(Tools.SHAPE, ToolModeRules.closeFallback(Tools.SHAPE))
+        assertEquals(Tools.PEN, ToolModeRules.closeFallback(Tools.PEN))
+    }
+
+    @Test
+    fun closeFallbackRejectsNonDrawTools() {
+        for (t in listOf(Tools.LASSO, Tools.ERASER, Tools.NOTE)) {
+            assertEquals(Tools.PEN, ToolModeRules.closeFallback(t))
+            assertNotEquals(t, ToolModeRules.closeFallback(t))
+        }
     }
 
     @Test

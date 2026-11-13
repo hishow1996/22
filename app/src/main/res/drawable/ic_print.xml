@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v38 B② 打印：机身 + 出纸口 + 纸张，nonZero 反向挖空，不用 A -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FF000000" android:pathData="M6,8 L18,8 L18,12 L21,12 L21,18 L18,18 L18,21 L6,21 L6,18 L3,18 L3,12 L6,12 Z M6,13 L4.5,13 L4.5,16.5 L6,16.5 Z M19.5,13 L18,13 L18,16.5 L19.5,16.5 Z M8,17 L16,17 L16,19.5 L8,19.5 Z" />
+    <path android:fillColor="#FF000000" android:pathData="M7,2 L17,2 L17,7 L7,7 Z" />
+</vector>

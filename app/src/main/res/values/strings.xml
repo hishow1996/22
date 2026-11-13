@@ -85,4 +85,13 @@
     <string name="cd_double_page">双页并排</string>
     <!-- v23：首页/返回上一界面后第一次侧滑的唯一提示，2 秒内再滑一次退出 -->
     <string name="back_exit_hint">再侧滑一次退出墨页</string>
+    <!-- v38 B：外部打开 / 分享 / 打印 / 书架搜索排序收藏 -->
+    <string name="cd_share_page">分享当前页</string>
+    <string name="cd_print_page">打印当前页</string>
+    <string name="cd_search">搜索书架</string>
+    <string name="cd_sort">切换排序</string>
+    <string name="cd_star">收藏</string>
+    <string name="sort_recent">最近打开</string>
+    <string name="sort_name">按名称</string>
+    <string name="sort_star">收藏优先</string>
 </resources>

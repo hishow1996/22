@@ -430,10 +430,38 @@
                     android:src="@drawable/ic_more"
                     android:tint="@color/icon" />
 
-                <View
+                <!-- v38 B③：书架内搜索，只过滤卡片标题，不引入说明性小字 -->
+                <EditText
+                    android:id="@+id/homeSearch"
                     android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                    android:layout_height="32dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="6dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:contentDescription="@string/cd_search"
+                    android:hint="@string/cd_search"
+                    android:imeOptions="actionDone"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:textColor="@color/icon"
+                    android:textColorHint="@color/page_text"
+                    android:textSize="14sp" />
+
+                <ImageButton
+                    android:id="@+id/btnHomeSort"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@null"
+                    android:contentDescription="@string/cd_sort"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_sort"
+                    android:tint="@color/icon" />
 
                 <ImageButton
                     android:id="@+id/btnHomeOpen"

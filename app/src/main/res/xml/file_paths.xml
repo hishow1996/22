@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 只暴露分享用的临时目录，不暴露 filesDir / 外部存储 -->
+    <cache-path name="share" path="share/" />
+</paths>

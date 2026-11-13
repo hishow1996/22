@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v38 B③ 排序：三条递减横线，纯填充 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FF000000" android:pathData="M4,5 L20,5 L20,6.8 L4,6.8 Z M4,10.6 L16,10.6 L16,12.4 L4,12.4 Z M4,16.2 L12,16.2 L12,18 L4,18 Z" />
+</vector>
