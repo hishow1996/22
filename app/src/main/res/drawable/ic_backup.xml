@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 备份批注（导出）：文件夹连通不再断成两截；内外框反向挖空；
-     箭头改为朝上，完全落在挖空区内部，既不再被顶盖吞掉，
-     也与「恢复备份」的向下箭头一眼区分。
+<!-- 备份批注：按用户口径箭头朝下（存到本地 = 下载/落盘）。
+     与「导入批注」的向上箭头对调，两者一眼可分。
+     保留上一版修好的构图：文件夹连通不断成两截、内外框反向挖空、
+     箭头完全落在挖空区内部，不被顶盖吞掉、不跨三区叠压。
      只用直线与 nonZero，不用圆弧命令与填充类型属性，兼容 EMUI 8.1。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
@@ -11,5 +12,5 @@
     <path android:fillColor="#FF000000"
         android:pathData="M4,5H10L12,7H20V20H4V5Z M6,9V18H18V9H6Z" />
     <path android:fillColor="#FF000000"
-        android:pathData="M11,17.2H13V13.6H15.6L12,9.8L8.4,13.6H11V17.2Z" />
+        android:pathData="M11,9.8H13V13.6H15.6L12,17.2L8.4,13.6H11V9.8Z" />
 </vector>
