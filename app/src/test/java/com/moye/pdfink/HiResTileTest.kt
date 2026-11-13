@@ -9,14 +9,36 @@ class HiResTileTest {
 
     @Test fun `zoom buckets include zoom out`() {
         assertEquals(0.5f, TiledPageView.bucket(0.5f), 0f)
-        assertEquals(0.67f, TiledPageView.bucket(0.7f), 0f)
-        assertEquals(0.8f, TiledPageView.bucket(0.85f), 0f)
+        assertEquals(0.68f, TiledPageView.bucket(0.7f), 0f)
+        assertEquals(0.85f, TiledPageView.bucket(0.85f), 0f)
         assertEquals(1f, TiledPageView.bucket(1f), 0f)
-        assertEquals(1f, TiledPageView.bucket(1.2f), 0f)
-        assertEquals(1.5f, TiledPageView.bucket(1.4f), 0f)
+        assertEquals(1.19f, TiledPageView.bucket(1.2f), 0f)
+        assertEquals(1.42f, TiledPageView.bucket(1.4f), 0f)
         assertEquals(2f, TiledPageView.bucket(2f), 0f)
-        assertEquals(3f, TiledPageView.bucket(3.2f), 0f)
+        assertEquals(3.18f, TiledPageView.bucket(3.2f), 0f)
         assertEquals(4f, TiledPageView.bucket(4f), 0f)
+        assertEquals(4f, TiledPageView.bucket(5f), 0f)
+    }
+
+    @Test fun `bucket is never stretched more than three percent`() {
+        // 文字发糊的根因：旧档位最宽差 25%（1.7× 用 1.5× 的图拉大）。
+        var s = 0.5f
+        while (s <= 4f) {
+            val b = TiledPageView.bucket(s)
+            assertTrue("scale $s -> bucket $b", s / b <= 1.0301f)
+            s += 0.01f
+        }
+    }
+
+    @Test fun `bucket never goes down when scale goes up`() {
+        var last = 0f
+        var s = 0.5f
+        while (s <= 4f) {
+            val b = TiledPageView.bucket(s)
+            assertTrue(b >= last)
+            last = b
+            s += 0.01f
+        }
     }
 
     @Test fun `preview transform remains continuous across render buckets`() {

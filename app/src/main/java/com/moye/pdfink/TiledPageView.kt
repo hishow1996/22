@@ -10,6 +10,7 @@ import android.util.AttributeSet
 import android.widget.ImageView
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.floor
 
 /** PDF 分块缓存只是统一位图缓存的命名空间，并提供失效代数。 */
@@ -49,16 +50,25 @@ class TiledPageView @JvmOverloads constructor(
         fun previewToRenderFactor(renderBucket: Float): Float =
             renderBucket.coerceAtLeast(PREVIEW_BUCKET) / PREVIEW_BUCKET
 
+        /**
+         * 栅格档位，相邻约 6%。档位越贴近实际倍数，位图被拉伸得越少、文字越清楚
+         * （旧版档位最宽差 25%，1.7× 只用 1.5× 的图硬拉大，所以发糊）。
+         * 图块位图始终是 TILE_H×TILE_H 像素，档位变细不增加单块内存。
+         */
+        private val BUCKETS = floatArrayOf(
+            0.50f, 0.53f, 0.56f, 0.60f, 0.64f, 0.68f, 0.72f, 0.76f, 0.80f, 0.85f,
+            0.90f, 0.95f, 1.00f, 1.06f, 1.12f, 1.19f, 1.26f, 1.34f, 1.42f, 1.50f,
+            1.59f, 1.69f, 1.79f, 1.90f, 2.00f, 2.12f, 2.25f, 2.38f, 2.52f, 2.67f,
+            2.83f, 3.00f, 3.18f, 3.37f, 3.57f, 3.78f, 4.00f
+        )
+
+        /** 最多容许多拉伸 3%（肉眼不可见），其余一律取不小于实际倍数的下一档。 */
+        private const val BUCKET_SLACK = 1.03f
+
         /** 栅格分辨率档位不再决定页面实际显示倍率。 */
-        fun bucket(s: Float): Float = when {
-            s < 0.60f -> 0.5f
-            s < 0.74f -> 0.67f
-            s < 0.89f -> 0.8f
-            s < 1.25f -> 1f
-            s < 1.75f -> 1.5f
-            s < 2.5f -> 2f
-            s < 3.5f -> 3f
-            else -> 4f
+        fun bucket(s: Float): Float {
+            for (b in BUCKETS) if (b * BUCKET_SLACK >= s) return b
+            return BUCKETS[BUCKETS.size - 1]
         }
 
         /** 覆盖完整可见范围与一圈预取范围，横屏不按固定块数截断。 */
@@ -141,6 +151,13 @@ class TiledPageView @JvmOverloads constructor(
     private var transitionBaseW = 0
     private var transitionBaseH = 0
     private var renderPlan: RenderPlan? = null
+    /**
+     * 最近一次「当前档位可见图块全部就绪」时的档位和画布尺寸。换档（缩放）后新图块
+     * 还没渲染好时，先拿这一档的清晰图拉伸顶上，而不是直接掉回 0.5× 缩略图。
+     */
+    private var settledBucket = 0f
+    private var settledW = 0
+    private var settledH = 0
     private val missingPreview = ArrayList<TileSpec>()
     private val missingCurrent = ArrayList<TileSpec>()
     private val tileOrder = Comparator<TileSpec> { a, b ->
@@ -184,6 +201,7 @@ class TiledPageView @JvmOverloads constructor(
             transitionPreviewGrid = emptyList()
             transitionBaseW = 0
             transitionBaseH = 0
+            clearSettled()
         }
 
         PdfTileScheduler.cancelOwner(ownerId)
@@ -234,11 +252,44 @@ class TiledPageView @JvmOverloads constructor(
         transitionPreviewGrid = emptyList()
         transitionBaseW = 0
         transitionBaseH = 0
+        clearSettled()
         renderPlan = null
         missingPreview.clear()
         missingCurrent.clear()
         deferHighResolution = false
         repo = null
+    }
+
+    private fun clearSettled() {
+        settledBucket = 0f
+        settledW = 0
+        settledH = 0
+    }
+
+    /** 当前档位图块没到齐时，用上一档已缓存的清晰图拉伸垫底（只读缓存，不发渲染请求）。 */
+    private fun drawSettledFallback(
+        canvas: Canvas, logicalW: Int, logicalH: Int,
+        left: Float, top: Float, visW: Int, visH: Int
+    ) {
+        val sx = logicalW.toFloat() / settledW
+        val sy = logicalH.toFloat() / settledH
+        if (!sx.isFinite() || !sy.isFinite() || sx <= 0f || sy <= 0f) return
+        val cols = tileRange(settledW, left / sx, ceil(visW / sx).toInt().coerceAtLeast(1))
+        val rows = tileRange(settledH, top / sy, ceil(visH / sy).toInt().coerceAtLeast(1))
+        if (cols.isEmpty() || rows.isEmpty() || cols.count() * rows.count() > 160) return
+        canvas.save()
+        canvas.scale(sx, sy)
+        for (row in rows) {
+            for (col in cols) {
+                val bitmap = TileCache.get(
+                    cacheKey(col, row, settledBucket, settledW, settledH)
+                ) ?: continue
+                canvas.drawBitmap(
+                    bitmap, (col * TILE_H).toFloat(), (row * TILE_H).toFloat(), paint
+                )
+            }
+        }
+        canvas.restore()
     }
 
     private fun cacheKey(
@@ -438,6 +489,7 @@ class TiledPageView @JvmOverloads constructor(
             transitionPreviewGrid = emptyList()
             transitionBaseW = 0
             transitionBaseH = 0
+            clearSettled()
             renderPlan = null
             missingPreview.clear()
             missingCurrent.clear()
@@ -554,6 +606,11 @@ class TiledPageView @JvmOverloads constructor(
                 }
             }
             currentCovers = anyVisible && allReady
+            if (currentCovers) {
+                settledBucket = bucket
+                settledW = logicalW
+                settledH = logicalH
+            }
         }
 
         if (!currentCovers) {
@@ -588,6 +645,12 @@ class TiledPageView @JvmOverloads constructor(
             }
         }
         canvas.restore()
+
+        if (!currentCovers && !sameAsPreview && settledW > 0 && settledH > 0 &&
+            (settledBucket != bucket || settledW != logicalW || settledH != logicalH)
+        ) {
+            drawSettledFallback(canvas, logicalW, logicalH, left, top, visW, visH)
+        }
 
         if (!sameAsPreview) {
             for (spec in plan.specs) {
