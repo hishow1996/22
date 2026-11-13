@@ -25,10 +25,12 @@ object ContinuousMath {
     /**
      * 当前页 = 盖住列表垂直中线的那一页。tops / bottoms 是各可见列表项相对列表顶
      * 的上下边（不含页间缝），gap 是页间缝高度。返回下标，没有命中返回 -1。
+     * 从后往前找：中线碰到某页 top 时立即归该页；落在页间缝里（没有页 top 命中）
+     * 才由上一页的 gap 扩展区接住，保证任何位置都有当前页。
      */
     fun indexAtCenter(tops: IntArray, bottoms: IntArray, center: Int, gap: Int): Int {
         val n = minOf(tops.size, bottoms.size)
-        for (i in 0 until n) {
+        for (i in n - 1 downTo 0) {
             if (tops[i] <= center && bottoms[i] + gap > center) return i
         }
         return -1
