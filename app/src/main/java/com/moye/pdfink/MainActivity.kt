@@ -1906,7 +1906,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_export, getString(R.string.cd_export), { false }) {
             exportCurrentPng()
         },
-        MenuAction(R.drawable.ic_pdf, getString(R.string.cd_pdf_all), { false }) {
+        MenuAction(R.drawable.ic_pdf_all, getString(R.string.cd_pdf_all), { false }) {
             val r = repo
             if (r != null) exportPdf((0 until r.count).toList(), "全本")
         },

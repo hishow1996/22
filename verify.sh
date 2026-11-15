@@ -126,3 +126,7 @@ echo "  115. v40：排序逻辑与 renderHomeShelf 三档 comparator 一行未�
 echo "  116. v40.1：清理重复的 dialog_home_sort.xml（其 cd_home_sort_panel / cd_sort_selected 未定义，会卡 aapt）；仅保留 popup_home_sort.xml 一套实现"
 echo "  117. v41：套索命中从「所有采样点都在圈内」改为「碰到就中」——点在内/压线容差/线段穿过圈/形状包围盒相交，包围盒先粗筛；GeometryCore 新增纯 JVM 判定，LassoHitTest 13 条"
 echo "  118. v41：圈点不足(1/2 点)补成方框/胶囊、自动补闭合弦并画出；虚线改屏幕坐标在 canvas 变换前绘制，放大平移态跟手；空选给瞬时反馈并区分隐藏图层，v35–v40 回归"
+echo "  119. v42 P0：手掌抑制=手掌+斜杠、左右手切换=竖中线+左右箭头（不再画手）、仅触控笔=笔尖+禁止圈；三枚与纯笔尖两两 IoU<0.55"
+echo "  120. v42 P1：导出整本/选中页用 ic_pdf_all（一叠纸），当前页仍用 ic_pdf；覆盖此笔刷预设用 ic_brush_overwrite，覆盖导入仍用 ic_replace"
+echo "  121. v42 P2+P3：备份↓/导入↑ 方向不变但换容器（实心文件+U托盘 / 空心文件+平托盘）；纸页族按纸上内容分工，对开=左题右草、双页=打开的书"
+echo "  122. v42 P4：护眼底色改半月色块与隐藏层划掉的眼分开；常亮保留 v33 太阳、亮度保留 8 光芒，全部新图标组内 IoU<0.55 且零 A/Q/S/T/相对命令（手掌沿用路径除外）"

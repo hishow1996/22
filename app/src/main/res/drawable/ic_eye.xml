@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v42 P4 护眼底色：半月色块。外圆正向 + 左半反向挖空，
+     代表明暗/纸色两档；隐藏订正层仍用「划掉的眼」，两枚不再共用同一只眼。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M12,5C7,5 2.7,8.1 1,12C2.7,15.9 7,19 12,19C17,19 21.3,15.9 23,12C21.3,8.1 17,5 12,5Z M12,16.5A4.5,4.5 0 1 1 12,7.5A4.5,4.5 0 1 1 12,16.5Z" />
-    <path android:fillColor="#FF000000" android:pathData="M12,9.5A2.5,2.5 0 1 1 12,14.5A2.5,2.5 0 1 1 12,9.5Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M12,3C17,3 21,7 21,12C21,17 17,21 12,21C7,21 3,17 3,12C3,7 7,3 12,3Z M12,3C7,3 3,7 3,12C3,17 7,21 12,21V3Z" />
 </vector>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v42 P1 覆盖此笔刷预设：方形槽位 + 向下压入的箭头。
+     与「覆盖导入」的右箭头各用一枚独立图标。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FF000000"
+        android:pathData="M3,10H21V21H3V10Z M5,12V19H19V12H5Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M10,2H14V7H16.5L12,11L7.5,7H10V2Z" />
+</vector>

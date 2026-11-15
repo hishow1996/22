@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v42 P1 导出整本 PDF / 导出选中的页：三张错位空心页叠成一摞。
+     与「导出当前页」的单页框不再共用同一张图。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FF000000"
+        android:pathData="M2.5,8H16.5V22H2.5V8Z M4.5,10V20H14.5V10H4.5Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M5.5,5H19.5V19H5.5V5Z M7.5,7V17H17.5V7H7.5Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M8.5,2H22.5V16H8.5V2Z M10.5,4V14H20.5V4H10.5Z" />
+</vector>

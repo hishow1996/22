@@ -26,7 +26,7 @@
         android:layout_height="52dp"
         style="@style/MenuTool"
         android:contentDescription="@string/cd_brush_slot_overwrite"
-        android:src="@drawable/ic_replace" />
+        android:src="@drawable/ic_brush_overwrite" />
 
     <ImageButton
         android:id="@+id/btnSlotClear"

@@ -28,7 +28,7 @@
             android:layout_height="34dp"
             style="@style/ShapeTool"
             android:contentDescription="@string/cd_export_selected"
-            android:src="@drawable/ic_pdf"
+            android:src="@drawable/ic_pdf_all"
             android:visibility="gone" />
 
         <ImageButton

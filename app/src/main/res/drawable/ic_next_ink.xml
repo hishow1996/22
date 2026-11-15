@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v42 P3 下一处有笔迹的页：左侧窄纸（两条笔迹横线）+ 占右半的穿出箭头。
+     不再和便签 / 导出 PDF 共用「纸 + 折角」轮廓。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- v38 B·清旧账②：纸底降到 0.32、波浪保持 1.0，tint 后仍一眼可见；
-         stroke 改中性黑，避免「固定蓝被染灰」的观感落差 -->
-    <path android:fillColor="#FF000000" android:pathData="M4,3H14L18,7V21H4V3Z M14,3V7H18V8H13V3H14Z" android:fillAlpha="0.32" />
-    <path android:fillColor="#FF000000" android:pathData="M7,12C9,10 11,15 14,12C16,10 17,13 17,13" android:fillAlpha="0" android:strokeColor="#FF000000" android:strokeWidth="1.6" android:strokeLineCap="round" />
+    <path android:fillColor="#FF000000" android:fillAlpha="0.32"
+        android:pathData="M2.5,6H10V18H2.5V6Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M4,9H8.6V10.1H4V9Z M4,12.4H7.6V13.5H4V12.4Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M10,10H18V7.6L23,12L18,16.4V14H10V10Z" />
 </vector>

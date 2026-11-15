@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v38 B② 打印：机身 + 出纸口 + 纸张，nonZero 反向挖空，不用 A -->
+<!-- v42 P3 打印当前页：三段式（顶部进纸 / 空心机身 / 底部出纸口）。
+     与纸页族从轮廓上分开。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M6,8 L18,8 L18,12 L21,12 L21,18 L18,18 L18,21 L6,21 L6,18 L3,18 L3,12 L6,12 Z M6,13 L4.5,13 L4.5,16.5 L6,16.5 Z M19.5,13 L18,13 L18,16.5 L19.5,16.5 Z M8,17 L16,17 L16,19.5 L8,19.5 Z" />
-    <path android:fillColor="#FF000000" android:pathData="M7,2 L17,2 L17,7 L7,7 Z" />
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FF000000"
+        android:pathData="M7,2H17V8H7V2Z M9,4V5H15V4H9Z M9,6V7H15V6H9Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M4,9H20V18H4V9Z M6,11V16H18V11H6Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M7,18H17V22H7V18Z M9,19.5V20.5H15V19.5H9Z" />
 </vector>

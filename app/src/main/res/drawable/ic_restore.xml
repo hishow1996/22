@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 导入批注：箭头朝上（从本地取回 = 上传/读回），与「备份批注」向下
-     成对；文件夹连通、内外框反向挖空、箭头完整落在挖空区内。
-     只用直线与 nonZero，不用圆弧命令与填充类型属性，兼容 EMUI 8.1。 -->
+<!-- v42 P2 导入批注：方向仍为向上（取回）。上方空心文件 + 向上箭头 + 平底座托盘。
+     与备份的文件实心 / U 形托盘成对但不同。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M4,5H10L12,7H20V20H4V5Z M6,9V18H18V9H6Z" />
-    <path android:fillColor="#FF000000" android:pathData="M11,17.2H13V13.6H15.6L12,9.8L8.4,13.6H11V17.2Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M7,2H15L17,4V8H7V2Z M9,4V7H15V4H9Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M10.4,16.5H13.6V13.4H15.6L12,9.8L8.4,13.4H10.4V16.5Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M3,18H21V20.6H3V18Z" />
 </vector>

@@ -1,16 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 备份批注：按用户口径箭头朝下（存到本地 = 下载/落盘）。
-     与「导入批注」的向上箭头对调，两者一眼可分。
-     保留上一版修好的构图：文件夹连通不断成两截、内外框反向挖空、
-     箭头完全落在挖空区内部，不被顶盖吞掉、不跨三区叠压。
-     只用直线与 nonZero，不用圆弧命令与填充类型属性，兼容 EMUI 8.1。 -->
+<!-- v42 P2 备份批注：方向仍为向下（落盘）。上方实心文件 + 向下箭头 + U 形托盘。
+     换容器后不再只靠箭头尖与导入区分。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M4,5H10L12,7H20V20H4V5Z M6,9V18H18V9H6Z" />
+        android:pathData="M7,2H14L17,5V11H7V2Z" />
     <path android:fillColor="#FF000000"
-        android:pathData="M11,9.8H13V13.6H15.6L12,17.2L8.4,13.6H11V9.8Z" />
+        android:pathData="M10.4,11.5H13.6V14.4H15.6L12,18L8.4,14.4H10.4V11.5Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M3,18.5H21V21.5H3V18.5Z M4.8,16H6.4V20H4.8V16Z M17.6,16H19.2V20H17.6V16Z" />
 </vector>

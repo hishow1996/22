@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v42 P3 双页并排：打开的书（左右梯形页 + 书脊）。
+     与矩形并排的「题目与草稿对开」不再撞脸。 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp"
-    android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M2,4h9v16H2V4Z M4,6v12h5V6H4Z" />
-    <path android:fillColor="#FF000000" android:pathData="M13,4h9v16h-9V4Z M15,6v12h5V6h-5Z" />
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FF000000"
+        android:pathData="M2,5.5L11,7.5V19L2,17V5.5Z M4,8V15L9,16.5V9L4,8Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M22,5.5V17L13,19V7.5L22,5.5Z M20,8L15,9V16.5L20,15V8Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M11,7.5H13V19H11V7.5Z" />
 </vector>
