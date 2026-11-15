@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v42 P3 双页并排：打开的书（左右梯形页 + 书脊）。
-     与矩形并排的「题目与草稿对开」不再撞脸。 -->
+<!-- v43: Material Symbols outlined w500 [book]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M2,5.5L11,7.5V19L2,17V5.5Z M4,8V15L9,16.5V9L4,8Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M22,5.5V17L13,19V7.5L22,5.5Z M20,8L15,9V16.5L20,15V8Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M11,7.5H13V19H11V7.5Z" />
+        android:pathData="M 5.554,22.149 q -0.69,0 -1.196,-0.507 -0.507,-0.507 -0.507,-1.196 v -16.893 q 0,-0.693 0.507,-1.201 0.507,-0.508 1.196,-0.508 h 12.893 q 0.693,0 1.201,0.508 0.508,0.508 0.508,1.201 v 16.893 q 0,0.69 -0.508,1.196 -0.508,0.507 -1.201,0.507 h -12.893 Z m 0,-1.703 h 12.893 v -16.893 h -1.434 v 6.65 l -2.425,-1.4 -2.425,1.4 v -6.65 H 5.554 v 16.893 Z m 0,0 v -16.893 16.893 Z m 6.608,-10.242 2.425,-1.4 2.425,1.4 -2.425,-1.4 -2.425,1.4 Z" />
 </vector>

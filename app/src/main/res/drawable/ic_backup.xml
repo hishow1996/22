@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v42 P2 备份批注：方向仍为向下（落盘）。上方实心文件 + 向下箭头 + U 形托盘。
-     换容器后不再只靠箭头尖与导入区分。 -->
+<!-- v43: Material Symbols outlined w500 [download]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M7,2H14L17,5V11H7V2Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M10.4,11.5H13.6V14.4H15.6L12,18L8.4,14.4H10.4V11.5Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M3,18.5H21V21.5H3V18.5Z M4.8,16H6.4V20H4.8V16Z M17.6,16H19.2V20H17.6V16Z" />
+        android:pathData="M 12,16.121 6.96,11.081 l 1.224,-1.212 L 11.148,12.832 v -8.988 h 1.704 v 8.988 l 2.964,-2.964 1.224,1.212 L 12,16.121 Z M 5.554,20.149 q -0.69,0 -1.196,-0.507 -0.507,-0.507 -0.507,-1.196 v -3.575 h 1.703 v 3.575 h 12.893 v -3.575 h 1.709 v 3.575 q 0,0.69 -0.508,1.196 -0.508,0.507 -1.201,0.507 h -12.893 Z" />
 </vector>

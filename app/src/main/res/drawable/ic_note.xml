@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v43: Material Symbols outlined w500 [edit_note]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- v38 B·清旧账②：两条横线改成反向子路径挖空，任何 tint 下都露出背景，不再与纸同色 -->
-    <path android:fillColor="#FF000000" android:fillAlpha="0.75"
-        android:pathData="M5,3H15L19,7V21H5V3Z M8,11V12.5H16V11Z M8,14.5V16H14V14.5Z" />
-    <path android:fillColor="#FF000000" android:pathData="M15,3V7H19V8.5H13.5V3H15Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M 3.851,14.079 v -1.703 h 7.769 v 1.703 H 3.851 Z m 0,-4.263 v -1.703 h 11.953 v 1.703 H 3.851 Z m 0,-4.263 v -1.709 h 11.953 v 1.709 H 3.851 Z m 9.125,14.596 v -3.201 L 18.525,11.425 q 0.238,-0.241 0.528,-0.348 0.29,-0.107 0.588,-0.107 0.312,0 0.605,0.122 T 20.776,11.45 l 0.925,0.925 q 0.236,0.237 0.346,0.528 0.11,0.291 0.11,0.582 0,0.299 -0.122,0.601 -0.122,0.302 -0.356,0.539 L 16.177,20.149 H 12.976 Z m 7.59,-6.665 -0.925,-0.925 0.925,0.925 Z m -6,5.075 h 0.95 l 3.007,-3.031 -0.45,-0.475 -0.475,-0.451 -3.032,3.006 v 0.952 Z m 3.507,-3.507 -0.475,-0.45 0.925,0.925 -0.45,-0.475 Z" />
 </vector>

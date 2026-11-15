@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v43: Material Symbols outlined w500 [folder]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M10,4H4C2.9,4 2.01,4.9 2.01,6L2,18C2,19.1 2.9,20 4,20H20C21.1,20 22,19.1 22,18V8C22,6.9 21.1,6 20,6H12L10,4Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M 3.554,20.149 q -0.69,0 -1.196,-0.519 -0.507,-0.519 -0.507,-1.184 v -12.893 q 0,-0.667 0.507,-1.188 0.507,-0.521 1.196,-0.521 h 6.906 L 12.025,5.416 h 8.421 q 0.667,0 1.188,0.519 0.521,0.519 0.521,1.184 v 11.327 q 0,0.665 -0.521,1.184 -0.521,0.519 -1.188,0.519 h -16.893 Z m 0,-1.703 h 16.893 v -11.327 h -9.13 l -1.566,-1.566 H 3.554 v 12.893 Z m 0,0 v -12.893 12.893 Z" />
 </vector>

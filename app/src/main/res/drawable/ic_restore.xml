@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v42 P2 导入批注：方向仍为向上（取回）。上方空心文件 + 向上箭头 + 平底座托盘。
-     与备份的文件实心 / U 形托盘成对但不同。 -->
+<!-- v43: Material Symbols outlined w500 [upload]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M7,2H15L17,4V8H7V2Z M9,4V7H15V4H9Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M10.4,16.5H13.6V13.4H15.6L12,9.8L8.4,13.4H10.4V16.5Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M3,18H21V20.6H3V18Z" />
+        android:pathData="M 11.148,16.121 v -8.988 l -2.964,2.97 -1.224,-1.219 L 12,3.844 l 5.04,5.04 -1.224,1.219 -2.964,-2.97 v 8.988 h -1.704 Z M 5.554,20.149 q -0.69,0 -1.196,-0.507 -0.507,-0.507 -0.507,-1.196 v -3.575 h 1.703 v 3.575 h 12.893 v -3.575 h 1.709 v 3.575 q 0,0.69 -0.508,1.196 -0.508,0.507 -1.201,0.507 h -12.893 Z" />
 </vector>

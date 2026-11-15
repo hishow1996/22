@@ -1868,3 +1868,49 @@ v40 实际只使用 `popup_home_sort.xml`（三档文案全部复用现成 `sort
 - **无 Android SDK，未实机编译**：XML 全解析、资源引用零缺失、
   Kotlin/布局括号校验、IoU 与命令集静态断言通过；26dp 同排扫读
   需真机确认（尤其 tint 下 `ic_pdf_all` 三层空心页的交错观感）。
+
+## v43 图标全库统一 Material Symbols（风格根治）
+
+### 范围与基准
+
+- 用户拍板 A 方案：全库 **60 个功能图标**统一到 Google Material Symbols（outlined / weight 500）基准，
+  根治 v42 诊断出的「实心填充与细线条混用」风格分裂；`ic_launcher*` 三件不动。
+- 素材来源：npm `@material-symbols/svg-500@0.49.0` 官方包（960 网格 SVG），
+  转换器仿射 `x' = x/40, y' = (y+960)/40` 到 24 网格，纯黑单 path。
+- 转换器关键修复：SVG 规范 path 首命令小写 `m` 按**绝对**处理——漏掉会整链错位
+  （pen/layers/eye_off/edge/chevron_right 五例实证，已修）。
+- **58 个官方符号 + 2 个自定义**：
+  `ic_temp_eraser_on`（ink_eraser + 右上实心角标点 = 激活态）、
+  `ic_spread`（左右双页框 = 题目|草稿对开，与 double_page 书本造型区分）。
+
+### 语义映射（v42 描述行为的重定义）
+
+| 墨页图标 | v43 实现 | 说明 |
+|---|---|---|
+| ic_palm | do_not_touch | 手+斜杠，v42 实心手掌退役 |
+| ic_hand | swap_horiz | 双向箭头 |
+| ic_stylus | draw | 波浪墨线+笔尖，v42「禁止圈+笔」路锥感退役 |
+| ic_backup / ic_restore | download / upload | 箭头+托盘，三层堆叠简化 |
+| ic_pdf / ic_pdf_all | picture_as_pdf / library_books | 单页/整本族内区分 |
+| ic_export / ic_brush_overwrite | image / save_as | 图片导出；覆盖预设 |
+| ic_next_ink | palette | 调色盘，语义直观 |
+| ic_spread / ic_double_page | 双页框(自定义) / book | 左右分栏 vs 打开的书 |
+| ic_eye / ic_eye_off | tonality / visibility_off | 护眼半月 / 隐藏订正 |
+| ic_edge / ic_swap | keyboard_double_arrow_right / stylus_note | 边缘翻页 / 做题模式 |
+| ic_awake / ic_sun | wb_sunny / light_mode | v42 保留原样的 6 个本次一并统一 |
+| ic_pen / ic_note / ic_replace | ink_pen / edit_note / find_replace | 同上 |
+
+v42 README「按推荐保留原样」的 6 个（sun/awake/pen/eye_off/note/replace）本次随全库统一；
+逐文件独立，真机不满意可按单图标 revert。
+
+### 自检三件套（已过眼）
+
+- 新旧 13 图并排、全库 60 图 96px、**真机 24px 糊度**、深底白 icon 四张拼图全部过审；
+  工具脚本沉淀 `tools/render_icons.py`（拼图）+ `icon_work/render_review.py`（自检线）。
+- v42 的 IoU<0.55 与「零相对/曲线命令」规范针对**手写 path 防错**；v43 官方素材
+  保留原样 path（含相对/曲线命令），以渲染自检替代该断言，特此说明。
+
+### 边界
+
+- 只改 drawable XML + verify.sh/README 追加；**文件名全保留，零代码引用改动**。
+- **只提交不编译**（用户指令）：单测/编译待令；26dp tint 下扫读观感需真机确认。

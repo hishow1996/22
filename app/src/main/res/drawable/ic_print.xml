@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v42 P3 打印当前页：三段式（顶部进纸 / 空心机身 / 底部出纸口）。
-     与纸页族从轮廓上分开。 -->
+<!-- v43: Material Symbols outlined w500 [print]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M7,2H17V8H7V2Z M9,4V5H15V4H9Z M9,6V7H15V6H9Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M4,9H20V18H4V9Z M6,11V16H18V11H6Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M7,18H17V22H7V18Z M9,19.5V20.5H15V19.5H9Z" />
+        android:pathData="M 16.396,7.644 v -3.091 h -8.793 v 3.091 h -1.703 v -4.8 h 12.205 v 4.8 h -1.709 Z m -12.843,1.709 h 16.893 -16.893 Z m 14.822,2.513 q 0.333,0 0.576,-0.242 0.243,-0.242 0.243,-0.574 0,-0.33 -0.242,-0.576 -0.242,-0.246 -0.577,-0.246 -0.333,0 -0.576,0.246 t -0.243,0.576 q 0,0.33 0.243,0.573 0.243,0.243 0.576,0.243 Z m -1.98,7.688 v -4.453 h -8.793 v 4.453 h 8.793 Z m 1.709,1.673 h -12.205 v -4.502 h -4.05 V 10.45 q 0,-1.184 0.803,-1.994 0.802,-0.811 1.985,-0.811 h 14.724 q 1.187,0 1.99,0.811 0.803,0.811 0.803,1.994 v 6.276 h -4.05 v 4.502 Z m 2.341,-6.211 v -4.583 q 0,-0.467 -0.312,-0.773 -0.312,-0.306 -0.772,-0.306 H 4.638 q -0.457,0 -0.77,0.316 -0.314,0.316 -0.314,0.78 v 4.566 h 2.347 v -1.625 h 12.205 v 1.625 h 2.341 Z" />
 </vector>

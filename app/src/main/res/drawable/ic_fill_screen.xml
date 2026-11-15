@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 铺满屏幕：四角外扩的取景框，与 ic_fit_screen / ic_fit_width 同重 -->
+<!-- v43: Material Symbols outlined w500 [fullscreen]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FF000000" android:pathData="M3,9V3H9V4.8H4.8V9Z" />
-    <path android:fillColor="#FF000000" android:pathData="M15,3H21V9H19.2V4.8H15Z" />
-    <path android:fillColor="#FF000000" android:pathData="M21,15V21H15V19.2H19.2V15Z" />
-    <path android:fillColor="#FF000000" android:pathData="M9,21H3V15H4.8V19.2H9Z" />
-    <path android:fillColor="#FF000000" android:pathData="M7,11H17V13H7Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M 2.85,21.149 v -5.094 h 1.703 v 3.391 h 3.391 v 1.703 H 2.85 Z m 13.211,0 v -1.703 h 3.385 v -3.391 h 1.709 v 5.094 H 16.062 Z M 2.85,7.938 v -5.094 h 5.094 v 1.709 H 4.554 v 3.385 h -1.703 Z m 16.596,0 v -3.385 H 16.062 v -1.709 h 5.094 v 5.094 h -1.709 Z" />
 </vector>

@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v42 P1 导出整本 PDF / 导出选中的页：三张错位空心页叠成一摞。
-     与「导出当前页」的单页框不再共用同一张图。 -->
+<!-- v43: Material Symbols outlined w500 [library_books]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M2.5,8H16.5V22H2.5V8Z M4.5,10V20H14.5V10H4.5Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M5.5,5H19.5V19H5.5V5Z M7.5,7V17H17.5V7H7.5Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M8.5,2H22.5V16H8.5V2Z M10.5,4V14H20.5V4H10.5Z" />
+        android:pathData="M 8.605,13.476 h 5.697 v -1.554 H 8.605 v 1.554 Z m 0,-2.304 h 10.024 v -1.554 H 8.605 v 1.554 Z m 0,-2.304 h 10.024 v -1.554 H 8.605 v 1.554 Z m -1.95,10.179 q -0.69,0 -1.197,-0.507 -0.507,-0.507 -0.507,-1.197 v -13.892 q 0,-0.693 0.507,-1.201 0.507,-0.508 1.197,-0.508 h 13.892 q 0.693,0 1.201,0.508 0.508,0.508 0.508,1.201 v 13.892 q 0,0.69 -0.508,1.197 -0.508,0.507 -1.201,0.507 H 6.656 Z m 0,-1.703 h 13.892 v -13.892 H 6.656 v 13.892 Z M 3.452,22.257 q -0.693,0 -1.201,-0.508 -0.508,-0.508 -0.508,-1.201 v -15.596 h 1.709 v 15.596 h 15.596 v 1.709 H 3.452 Z m 3.203,-18.805 v 13.892 -13.892 Z" />
 </vector>
