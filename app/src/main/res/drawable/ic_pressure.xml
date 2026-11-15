@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 三条由细到粗的横线，直接表意「笔压 -> 粗细」 -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M4,4.6 L20,4.6 L20,5.6 L4,5.6 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M4,10.4 L20,10.4 L20,12.4 L4,12.4 Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M4,16.6 L20,16.6 L20,19.6 L4,19.6 Z" />
+</vector>

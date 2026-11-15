@@ -40,6 +40,8 @@ class InkView @JvmOverloads constructor(
         val browseMode: Boolean
         val stylusOnly: Boolean
         val palmGuard: Boolean
+        /** v43：触控笔压感档位，默认标准；不实现的实现者保持旧手感。 */
+        val pressureLevel: Int get() = PressureCurve.DEFAULT
         /**
          * 屏幕最上沿这么高（像素，屏幕坐标）以内不接受落笔。
          * 系统的「顶边下拉呼出状态栏」只看手指是不是从顶边起手，应用拦不住；
@@ -687,7 +689,12 @@ class InkView @JvmOverloads constructor(
         liveLayer = h.activeLayer
         livePts.clear(); liveWs.clear()
         liveMark = if (liveShape == Shapes.FREE) {
-            livePts.add(x); livePts.add(y); liveWs.add(1f)
+            // v43：起笔点也按 DOWN 的压力定宽，不再固定 1f。
+            val p0 = PressureCurve.startFactor(
+                h.pressureLevel, ev.pressure,
+                ev.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS)
+            livePts.add(x); livePts.add(y); liveWs.add(p0)
+            lastW = p0
             null
         } else {
             liveShapePoints[0] = x
@@ -741,8 +748,9 @@ class InkView @JvmOverloads constructor(
                 speed > 1.6f -> 0.82f
                 else -> 1.15f - (speed - 0.15f) * 0.227f
             }
-            val pressF = if (stylus) (0.65f + 0.5f * pressure).coerceIn(0.7f, 1.3f) else 1f
-            val wv = 0.65f * lastW + 0.35f * (speedF * pressF)
+            // v43：四档可调；OFF / 手指恒 1f，速度调制单独乘进来。
+            val pressF = PressureCurve.factor(h.pressureLevel, pressure, stylus)
+            val wv = PressureCurve.smooth(lastW, speedF * pressF)
             livePts.add(nx); livePts.add(ny); liveWs.add(wv)
             lastX = nx; lastY = ny; lastT = t; lastW = wv
         }

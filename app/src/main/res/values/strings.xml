@@ -100,4 +100,25 @@
     <!-- v41：套索「一条都没选中」时的瞬时反馈（不是常驻文字） -->
     <string name="lasso_no_hit">没有圈中笔迹</string>
     <string name="lasso_hidden_layer">圈中的笔迹在隐藏图层</string>
+    <!-- v43：多标签 / 全文搜索 / 页面文字复制 / 压感 -->
+    <string name="cd_tabs">多标签</string>
+    <string name="cd_tab_add">新增标签</string>
+    <string name="cd_tab_close">关闭此标签</string>
+    <string name="cd_doc_search">全文搜索</string>
+    <string name="cd_doc_copy_page">复制本页文字</string>
+    <string name="cd_doc_copy_all">复制全文文字</string>
+    <string name="cd_pressure">压感档位</string>
+    <string name="pressure_off">压感：关</string>
+    <string name="pressure_soft">压感：弱</string>
+    <string name="pressure_normal">压感：标准</string>
+    <string name="pressure_strong">压感：强</string>
+    <string name="doc_search_hint">输入关键词</string>
+    <string name="doc_search_idle">输入关键词后点放大镜，跨页搜索当前文档</string>
+    <string name="doc_search_loading">正在提取文字层…</string>
+    <string name="doc_search_none">没有找到，或该文档没有文字层</string>
+    <string name="doc_search_count">找到 %1$d 处</string>
+    <string name="doc_no_text">本页没有可复制的文字（扫描件或不支持的编码）</string>
+    <string name="doc_no_text_all">该文档没有可复制的文字（扫描件或加密 PDF）</string>
+    <string name="doc_copy_done">已复制到剪贴板</string>
+    <string name="doc_copy_all_done">全文已复制到剪贴板</string>
 </resources>

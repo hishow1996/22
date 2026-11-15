@@ -1914,3 +1914,63 @@ v42 README「按推荐保留原样」的 6 个（sun/awake/pen/eye_off/note/repl
 
 - 只改 drawable XML + verify.sh/README 追加；**文件名全保留，零代码引用改动**。
 - **只提交不编译**（用户指令）：单测/编译待令；26dp tint 下扫读观感需真机确认。
+
+## v43·B：多标签 / 全文搜索 / 页面文字复制 / 触控笔压感
+
+承接上一节「图标全库统一 Material Symbols」；四项一起落地，**零新增第三方依赖**：PDF 文字层用 JDK 自带
+`InflaterInputStream` 解 `/FlateDecode`，自己扫对象流与 `Tj/TJ`、
+解析 `/ToUnicode` CMap，不引 PDF 解析库。
+
+### 多标签
+
+- `TabModels` / `TabStripController`：标签只记 `Uri / 名称 / 类型`，
+  **同一时刻只实例一个 PageSource**；会话与笔迹按内容指纹隔离，
+  切回来自动续读，内存不随标签数翻倍（上限 8）
+- 标签条 `item_tab.xml`：>1 个标签且处于文档态、工具栏未隐藏时才占位
+  32dp；`applyChrome` 用 `toolbarTop = barTop + tabH` 让阅读区避开，
+  形状条 / 选区条同步下移
+- 单文档 / 沉浸 / 首页界面与 v42 完全一致；v23 返回栈零改动
+
+### 全文搜索与文字复制
+
+- `PageSource` 加 `pageText(page)` / `extractAllText()`；
+  `PdfRepo` 走 `PdfTextExtractor`，`TextPageSource` 直接给纯文本
+- 图片页、扫描件、加密 PDF 如实提示无文字层，不假装能搜
+- `DocumentSearch.find()` 大小写不敏感、折叠空白、返回命中页与上下文片段；
+  结果点一下 `goToPage()` 跳过去
+- 「复制本页文字」「复制全文」走 `ClipboardManager`；
+  文字提取统一放 IO 线程，回主线程前校验 `repo !== r`，
+  避免多标签切换把旧文档结果贴到新文档上
+
+### 压感
+
+- `PressureCurve` 纯 JVM：关 / 弱 / 标准 / 强四档，**只对触控笔生效**；
+  手指与 OFF 恒 1f
+- 起笔点也吃 `ACTION_DOWN` 的 `getPressure()`，不再固定 1f；
+  历史点延续既有 `Mark.ws` 格式，笔迹数据结构零改动
+- 标准档逐点等价 v42 旧曲线；速度调制单独乘入，压感只改宽度系数
+
+### 图标（按「简洁」口径）
+
+并行提交已把**既有 60 枚**统一为 Material Symbols outlined w500，本轮完整保留；
+下面 **5 枚新增**仍为极简几何、未并入官方素材，风格一致性待真机确认。
+
+5 枚新图标全部 ≤3 条 path、≤26 个绘图命令，只用 `M/L/H/V/C/Z`、
+零文字、24dp / viewport 24：`ic_tabs`（前后两枚标签）、
+`ic_tab_add`（框+加号）、`ic_doc_search`（放大镜+圆内一条文字线，
+与书架搜索的空放大镜区分）、`ic_copy_text`（折角纸+两条文字线）、
+`ic_pressure`（三条由细到粗的横线）。
+
+### 验收与边界
+
+- `verify.sh` 第 128–131 条（图标统一版占 123–127，本轮顺延）；新增 4 组纯 JVM 单测共 27 条
+  （TabModels 8 / PdfTextExtractor 7 / DocumentSearch 6 / PressureCurve 6）
+- 本地静态核对：110 个 XML 全解析、string/drawable/layout/id 引用零缺失、
+  83 个 Kotlin 文件括号平衡、v38 `ACTION_VIEW` 未回退
+- **并行改动零回退**：远端「60 枚图标统一 Material Symbols」提交完整保留；
+  `TiledPageView.kt` / `HiResTileTest.kt` /
+  `ZoomTransformTest.kt`（栅格档位细分到 ~6% 那次提交）同步回本地，
+  与远端逐字节一致后再叠加本轮改动
+- **无 Android SDK，未实机编译**：文字层对 CID 子集字体、栏位排版与
+  精确阅读顺序不作保证；压感需真机触控笔确认；多标签切页后的
+  分块缓存复用与会话恢复需真机回归。

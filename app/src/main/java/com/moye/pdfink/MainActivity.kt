@@ -209,6 +209,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var btnBrowse: ImageButton
     private lateinit var btnBookmark: ImageButton
     private lateinit var btnZoomReset: ImageButton
+    // v43：多标签条、待登记标签、压感档位
+    private lateinit var tabScroller: HorizontalScrollView
+    private lateinit var tabStrip: LinearLayout
+    private lateinit var tabs: TabStripController
+    private var pendingTab: Triple<String, String, String>? = null
 
     /** v21：点击短闪 180ms 后回原色并恢复 1× 的淡显；带销毁检查，不空跑。 */
     private val zoomResetOff = Runnable {
@@ -229,6 +234,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val browseMode: Boolean get() = state.browse
     override val stylusOnly: Boolean get() = state.stylusOnly
     override val palmGuard: Boolean get() = state.palmGuard
+    override val pressureLevel: Int get() = state.pressureLevel
     override val topEdgeGuardPx: Int
         get() {
             val id = resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -410,6 +416,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnBrowse = findViewById(R.id.btnBrowse)
         btnBookmark = findViewById(R.id.btnBookmark)
         btnZoomReset = findViewById(R.id.btnZoomReset)
+        tabScroller = findViewById(R.id.tabScroller)
+        tabStrip = findViewById(R.id.tabStrip)
+        tabs = TabStripController(
+            this, tabScroller, tabStrip,
+            onActivate = { item -> if (!openAny(Uri.parse(item.uri))) flash("!") },
+            onAdd = { openDoc.launch(arrayOf("*/*")) },
+            onEmpty = { goHome() }
+        )
 
         buildDots()
         buildBrushSlots()
@@ -537,6 +551,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
+        state.pressureLevel = PressureCurve.coerce(
+            p.getInt("pressure", PressureCurve.DEFAULT))
         state.edgeFlip = p.getBoolean("edge", true)
         state.activeLayer = p.getInt("layer", Layers.ANSWER).coerceIn(0, 1)
         state.showCorrection = p.getBoolean("showCorrection", true)
@@ -561,6 +577,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("fillMigrated", true)
             putBoolean("fillV29Migrated", true)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
+            putInt("pressure", state.pressureLevel)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
             putBoolean("showCorrection", state.showCorrection)
@@ -1005,6 +1022,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val barBottom = cm.barBottom
         val cutBottom = cm.cutBottom               // v11 悬浮按钮沿用
         val homeCutTop = cm.cutTop                // 首页 header 同一份刘海避让
+        val inDoc = repo != null && pager.visibility == View.VISIBLE
+        // v43：多于一个标签、文档态、栏未隐藏时，标签条占顶栏下沿 32dp；
+        // 单文档或沉浸态完全不占位，界面与 v42 一致。
+        val showTabs = inDoc && !barsHidden &&
+            ::tabs.isInitialized && tabs.visible()
+        val tabH = if (showTabs) dp(32) else 0
 
         val lpTop = topBar.layoutParams as FrameLayout.LayoutParams
         lpTop.height = barTop
@@ -1024,7 +1047,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             barsHidden = barsHidden,
             safeLeft = safeL,
             safeRight = safeR,
-            toolbarTop = barTop,
+            toolbarTop = barTop + tabH,
             toolbarBottom = barBottom,
             hiddenSafeTop = cm.hiddenPagerTop
         )
@@ -1036,12 +1059,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         pager.layoutParams = pagerLp
         pager.setPadding(0, 0, 0, 0)
         pager.clipToPadding = true
-        val inDoc = repo != null && pager.visibility == View.VISIBLE
         val barVis = if (barsHidden || !inDoc) View.GONE else View.VISIBLE
         topBar.visibility = barVis
         bottomBar.visibility = barVis
         btnShow.visibility =
             if (barsHidden && inDoc) View.VISIBLE else View.GONE
+        // v43：标签条贴在顶栏下沿，左右与阅读区同避让；显示时阅读区
+        // 已通过 toolbarTop = barTop + tabH 让出高度，不遮纸页。
+        val tl = tabScroller.layoutParams as FrameLayout.LayoutParams
+        tl.topMargin = barTop
+        tl.leftMargin = viewportInsets.left
+        tl.rightMargin = viewportInsets.right
+        tabScroller.layoutParams = tl
+        tabScroller.visibility = if (showTabs) View.VISIBLE else View.GONE
         // v11：barsHidden 不参与，隐藏栏后右下角仍常驻橡皮
         refreshTempEraser()
         emptyState.setPadding(safeL, 0, safeR, safeB)
@@ -1056,7 +1086,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         for (v in listOf(shapeBar, selectionBar)) {
             val lp = v.layoutParams as FrameLayout.LayoutParams
-            lp.topMargin = barTop + dp(2)
+            lp.topMargin = barTop + tabH + dp(2)
             v.layoutParams = lp
         }
 
@@ -1440,6 +1470,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTempEraser()
         edgeLeft.visibility = View.GONE
         edgeRight.visibility = View.GONE
+        tabScroller.visibility = View.GONE
         emptyState.setPadding(safeL, 0, safeR, safeB)
         renderHomeShelf()
     }
@@ -1677,10 +1708,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val mime = recents.mimeOf(uri)
         val kind = FileType.from(name, mime)
         if (!kind.embedded) return openExternal(uri, name, kind, mime)
-        return openUri(uri, kind) { fp, src ->
+        // v43：外部转交类型不进标签条，只有内嵌格式才登记。
+        pendingTab = Triple(uri.toString(), name, kind.toString())
+        val ok = openUri(uri, kind) { fp, src ->
             recents.add(uri, name, fp, src.count, kind, mime)
             prefs().edit().putString("uri", uri.toString()).apply()
         }
+        if (!ok) pendingTab = null
+        return ok
     }
 
     /** 非内嵌类型：交给系统 App，回来仍是一条完整浏览记录，不写脏数据。 */
@@ -1863,6 +1898,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
         }
 
+        // v43：打开成功后登记标签；>1 个标签时标签条才占位，
+        // 阅读区由 applyChrome() 的 toolbarTop 同步让出 tabH。
+        pendingTab?.let { (u, n, k) -> tabs.opened(u, n, k) }
+        pendingTab = null
+        applyChrome()
+
     }
 
     // ----- 全局时间轴 -----
@@ -1927,6 +1968,24 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_nav, getString(R.string.cd_nav), { false }) {
             showNav()
+        },
+        MenuAction(R.drawable.ic_doc_search, getString(R.string.cd_doc_search), { false }) {
+            showDocSearch()
+        },
+        MenuAction(R.drawable.ic_copy_text, getString(R.string.cd_doc_copy_page), { false }) {
+            copyPageText()
+        },
+        MenuAction(R.drawable.ic_tabs, getString(R.string.cd_tabs), {
+            ::tabs.isInitialized && tabs.visible()
+        }) {
+            // 再开一份内嵌文档即出现第二个标签，标签条自动占位；
+            // 标签之间的切换、关闭都在标签条上完成。
+            openDoc.launch(arrayOf("*/*"))
+        },
+        MenuAction(R.drawable.ic_pressure, getString(R.string.cd_pressure), {
+            state.pressureLevel != PressureCurve.OFF
+        }) {
+            cyclePressure()
         },
         MenuAction(R.drawable.ic_eye, getString(R.string.cd_tint), { state.tint != 0 }) {
             state.tint = (state.tint + 1) % 3
@@ -2233,6 +2292,116 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.WHITE))
         dialog.show()
         dialog.window?.setLayout(dp(480), dp(420))
+    }
+
+    // ----- v43：全文搜索 / 页面文字复制 / 压感档位 -----
+
+    /**
+     * 文字层可能要读几十 MB 并解压内容流，统一放 IO；回主线程前再确认
+     * 当前文档没被切走（多标签切换时避免把旧文档结果贴到新文档上）。
+     */
+    private fun withAllText(block: (List<String>) -> Unit) {
+        val r = repo
+        if (r == null) { flash(getString(R.string.doc_no_text_all)); return }
+        flash(getString(R.string.doc_search_loading))
+        workScope.launch(Dispatchers.IO) {
+            val pages = try { r.extractAllText() } catch (e: Exception) { emptyList() }
+            withContext(Dispatchers.Main) {
+                if (isFinishing || isDestroyed || repo !== r) return@withContext
+                block(pages)
+            }
+        }
+    }
+
+    private fun copyToClipboard(text: String, label: String) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE)
+            as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
+    }
+
+    private fun copyPageText() {
+        val page = currentPage()
+        withAllText { pages ->
+            val t = pages.getOrNull(page)?.takeIf { it.isNotBlank() }
+            if (t == null) flash(getString(R.string.doc_no_text))
+            else {
+                copyToClipboard(t, "墨页 第 ${page + 1} 页")
+                flash(getString(R.string.doc_copy_done))
+            }
+        }
+    }
+
+    private fun showDocSearch() {
+        val v = layoutInflater.inflate(R.layout.dialog_doc_search, null)
+        val dialog = AlertDialog.Builder(this).setView(v).create()
+        val input = v.findViewById<EditText>(R.id.docSearchInput)
+        val status = v.findViewById<TextView>(R.id.docSearchStatus)
+        val results = v.findViewById<LinearLayout>(R.id.docSearchResults)
+
+        fun runSearch() {
+            val q = input.text?.toString().orEmpty().trim()
+            if (q.isEmpty()) return
+            results.removeAllViews()
+            status.text = getString(R.string.doc_search_loading)
+            withAllText { pages ->
+                val hits = DocumentSearch.find(pages, q)
+                if (hits.isEmpty()) {
+                    status.text = getString(R.string.doc_search_none)
+                    return@withAllText
+                }
+                status.text = getString(R.string.doc_search_count, hits.size)
+                for (h in hits) {
+                    val row = TextView(this@MainActivity).apply {
+                        text = "P${h.page + 1}  ${h.snippet}"
+                        textSize = 12f
+                        setTextColor(ContextCompat.getColor(
+                            this@MainActivity, R.color.icon))
+                        setPadding(dp(6), dp(9), dp(6), dp(9))
+                        setOnClickListener {
+                            goToPage(h.page)
+                            dialog.dismiss()
+                        }
+                    }
+                    results.addView(row, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT))
+                }
+            }
+        }
+
+        v.findViewById<ImageButton>(R.id.docSearchGo)
+            .setOnClickListener { runSearch() }
+        input.imeOptions = EditorInfo.IME_ACTION_SEARCH
+        input.setOnEditorActionListener { _, action, _ ->
+            if (action == EditorInfo.IME_ACTION_SEARCH) { runSearch(); true }
+            else false
+        }
+        v.findViewById<ImageButton>(R.id.docSearchClose)
+            .setOnClickListener { dialog.dismiss() }
+        v.findViewById<ImageButton>(R.id.docSearchCopyAll).setOnClickListener {
+            withAllText { pages ->
+                val all = DocumentSearch.allText(pages)
+                if (all.isEmpty()) flash(getString(R.string.doc_no_text_all))
+                else {
+                    copyToClipboard(all, "墨页 全文")
+                    flash(getString(R.string.doc_copy_all_done))
+                }
+            }
+        }
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.WHITE))
+        dialog.show()
+        dialog.window?.setLayout(dp(460), dp(440))
+    }
+
+    private fun cyclePressure() {
+        state.pressureLevel = PressureCurve.next(state.pressureLevel)
+        savePrefs()
+        flash(getString(when (state.pressureLevel) {
+            PressureCurve.OFF -> R.string.pressure_off
+            PressureCurve.SOFT -> R.string.pressure_soft
+            PressureCurve.STRONG -> R.string.pressure_strong
+            else -> R.string.pressure_normal
+        }))
     }
 
     // ----- 导出 -----

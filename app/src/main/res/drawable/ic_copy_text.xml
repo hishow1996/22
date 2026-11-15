@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- 单页纸：折角外轮廓 + 内框反向挖空 -->
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M4,3 L16,3 L20,7 L20,21 L4,21 Z M5.6,4.6 L5.6,19.4 L18.4,19.4 L18.4,7.7 L15.3,4.6 Z" />
+
+    <!-- 两条文字线 -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M7.5,9.2 L16,9.2 L16,10.3 L7.5,10.3 Z M7.5,12.8 L14,12.8 L14,13.9 L7.5,13.9 Z" />
+</vector>

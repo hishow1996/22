@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/paper"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/docSearchInput"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/round_btn"
+            android:hint="@string/doc_search_hint"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:textColor="@color/icon"
+            android:textColorHint="@color/divider"
+            android:textSize="13sp" />
+
+        <ImageButton
+            android:id="@+id/docSearchGo"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:background="@null"
+            android:contentDescription="@string/cd_doc_search"
+            android:padding="6dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_doc_search"
+            android:tint="@color/icon" />
+
+        <ImageButton
+            android:id="@+id/docSearchClose"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@null"
+            android:contentDescription="@string/cd_close"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_close"
+            android:tint="@color/icon" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/docSearchStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/doc_search_idle"
+        android:textColor="@color/divider"
+        android:textSize="11sp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1"
+        android:minHeight="120dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/docSearchResults"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+    </ScrollView>
+
+    <ImageButton
+        android:id="@+id/docSearchCopyAll"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="end"
+        android:layout_marginTop="6dp"
+        android:background="@null"
+        android:contentDescription="@string/cd_doc_copy_all"
+        android:padding="7dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_copy_text"
+        android:tint="@color/icon" />
+
+</LinearLayout>

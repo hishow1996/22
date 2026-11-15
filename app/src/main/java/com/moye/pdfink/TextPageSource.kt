@@ -50,6 +50,12 @@ class TextPageSource(ctx: Context, uri: Uri) : RasterPageSource() {
 
     override fun ratio(page: Int): Float = TextLayout.BASE_W / TextLayout.CANVAS_H
 
+    // v43：纯文本本来就持有每页的行，搜索 / 复制无需再解析。
+    override fun pageText(page: Int): String? =
+        pages.getOrElse(page) { emptyList() }.joinToString("\n").takeIf { it.isNotBlank() }
+
+    override fun extractAllText(): List<String> = pages.map { it.joinToString("\n") }
+
     override fun drawTile(
         page: Int, cw: Int, ch: Int, left: Int, top: Int, tw: Int, th: Int
     ): Bitmap {

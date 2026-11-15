@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /** 系统 PdfRenderer 封装：串行访问 + raw 页缓存 + 滤镜与旋转输出。 */
-class PdfRepo(private val ctx: Context, uri: Uri) : PageSource {
+class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
 
     private val pfd: ParcelFileDescriptor =
         ctx.contentResolver.openFileDescriptor(uri, "r")
@@ -34,6 +34,36 @@ class PdfRepo(private val ctx: Context, uri: Uri) : PageSource {
     }
 
     override val count: Int get() = renderer.pageCount
+
+    // v43：文字层按需抽一次并缓存；扫描件 / 加密 PDF 得到空列表，
+    // pageText 返回 null，由 UI 如实提示「本页没有可复制的文字」。
+    @Volatile private var textPages: List<String>? = null
+
+    private fun ensureText(): List<String> {
+        textPages?.let { return it }
+        val data = try {
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                val buf = java.io.ByteArrayOutputStream()
+                val tmp = ByteArray(65536)
+                var left = PdfTextExtractor.MAX_SOURCE_BYTES
+                while (left > 0) {
+                    val n = input.read(tmp, 0, minOf(tmp.size, left))
+                    if (n <= 0) break
+                    buf.write(tmp, 0, n)
+                    left -= n
+                }
+                buf.toByteArray()
+            } ?: ByteArray(0)
+        } catch (e: Exception) { ByteArray(0) }
+        val pages = PdfTextExtractor.extract(data)
+        textPages = pages
+        return pages
+    }
+
+    override fun pageText(page: Int): String? =
+        ensureText().getOrNull(page)?.takeIf { it.isNotBlank() }
+
+    override fun extractAllText(): List<String> = ensureText()
 
     private fun closeTileRenderPageLocked() {
         val opened = tileRenderPage

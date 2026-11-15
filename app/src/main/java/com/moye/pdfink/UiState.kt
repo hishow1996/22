@@ -22,6 +22,8 @@ class UiState {
     @Volatile var browse = true
     @Volatile var stylusOnly = false
     @Volatile var palmGuard = true
+    // v43：压感档位 0 关 / 1 弱 / 2 标准 / 3 强，只对触控笔生效
+    @Volatile var pressureLevel = PressureCurve.DEFAULT
     @Volatile var edgeFlip = true
     @Volatile var activeLayer = Layers.ANSWER
     @Volatile var showCorrection = true

@@ -32,6 +32,16 @@ interface PageSource : Closeable {
 
     fun prefetch(page: Int, w: Int, h: Int)
     fun thumb(page: Int, w: Int): Bitmap
+
+    /**
+     * v43：页面文字层，供全文搜索与「复制本页文字」使用。
+     * 图片页 / 扫描件 / 加密 PDF / 不支持的编码返回 null；默认实现即 null，
+     * 已有页源（含 ImagePageSource）不必改动。
+     */
+    fun pageText(page: Int): String? = null
+
+    /** 一次性抽出全部页文字；可能读几十 MB 并解压，主线程不要调。 */
+    fun extractAllText(): List<String> = emptyList()
 }
 
 /**
