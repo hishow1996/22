@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v43: 临时橡皮激活态 = ink_eraser + 右上实心角标点（toggle on 标记） -->
+<!-- v43: Material Symbols outlined w500 [ink_eraser-fill]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path android:fillColor="#FF000000"
-        android:pathData="M 17.195,18.446 h 5.075 v 1.703 H 15.486 l 1.709,-1.703 Z m -12.887,1.703 -2.037,-2.106 q -0.511,-0.491 -0.495,-1.181 0.016,-0.69 0.476,-1.175 l 11.408,-12.36 q 0.46,-0.485 1.158,-0.482 0.698,0.003 1.185,0.488 L 21.032,8.613 q 0.491,0.491 0.516,1.196 0.025,0.706 -0.466,1.191 l -8.549,9.15 H 4.308 Z M 11.875,18.446 l 8.058,-8.734 -5.085,-5.335 -11.321,12.479 1.534,1.59 H 11.875 Z M 12,12 Z" />
-    <path android:fillColor="#FF000000"
-        android:pathData="M 17.5,4.6 a 2.1,2.1 0 1 0 4.2,0 a 2.1,2.1 0 1 0 -4.2,0 Z" />
+        android:pathData="M 17.195,18.446 h 5.075 v 1.703 H 15.486 l 1.709,-1.703 Z m -12.887,1.703 -2.037,-2.106 q -0.51,-0.491 -0.495,-1.181 0.015,-0.69 0.475,-1.175 l 11.408,-12.36 q 0.46,-0.485 1.156,-0.482 0.696,0.003 1.187,0.488 L 21.032,8.613 q 0.491,0.491 0.516,1.196 t -0.466,1.19 l -8.549,9.15 H 4.308 Z" />
 </vector>

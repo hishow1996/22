@@ -1,18 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v43: Material Symbols outlined w500 [content_copy]，960 网格 -> 24 网格 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-
-    <!-- 单页纸：折角外轮廓 + 内框反向挖空 -->
-    <path
-        android:fillColor="#FF000000"
-        android:fillType="evenOdd"
-        android:pathData="M4,3 L16,3 L20,7 L20,21 L4,21 Z M5.6,4.6 L5.6,19.4 L18.4,19.4 L18.4,7.7 L15.3,4.6 Z" />
-
-    <!-- 两条文字线 -->
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M7.5,9.2 L16,9.2 L16,10.3 L7.5,10.3 Z M7.5,12.8 L14,12.8 L14,13.9 L7.5,13.9 Z" />
+    <path android:fillColor="#FF000000"
+        android:pathData="M 7.656,19.048 q -0.69,0 -1.197,-0.507 -0.507,-0.507 -0.507,-1.197 v -13.892 q 0,-0.693 0.507,-1.201 0.507,-0.508 1.197,-0.508 h 10.892 q 0.693,0 1.201,0.508 0.508,0.508 0.508,1.201 v 13.892 q 0,0.69 -0.508,1.197 -0.508,0.507 -1.201,0.507 H 7.656 Z m 0,-1.703 h 10.892 v -13.892 H 7.656 v 13.892 Z M 4.452,22.257 q -0.693,0 -1.201,-0.508 -0.508,-0.508 -0.508,-1.201 v -15.596 h 1.709 v 15.596 h 12.595 v 1.709 H 4.452 Z m 3.203,-4.912 v -13.892 13.892 Z" />
 </vector>

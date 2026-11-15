@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v43·B 精修：触控笔压感 = 斜笔 + 由细到粗连续渐变笔迹（力度改变线宽） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-
-    <!-- 三条由细到粗的横线，直接表意「笔压 -> 粗细」 -->
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M4,4.6 L20,4.6 L20,5.6 L4,5.6 Z" />
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M4,10.4 L20,10.4 L20,12.4 L4,12.4 Z" />
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M4,16.6 L20,16.6 L20,19.6 L4,19.6 Z" />
+    <!-- 斜笔杆 + 笔尖 -->
+    <path android:fillColor="#FF000000"
+        android:pathData="M16.1,2.9 l5,5 -8.6,8.6 -5,-5 Z M6.2,12.8 l5,5 -6.9,1.9 Z" />
+    <!-- 由细到粗的笔迹（连续楔形：左端 0.7dp 渐变到右端 3dp） -->
+    <path android:fillColor="#FF000000"
+        android:pathData="M3.4,19.15 L15.9,17.7 L15.9,20.3 L3.4,19.85 Z" />
 </vector>
