@@ -40,6 +40,9 @@ interface PageSource : Closeable {
      */
     fun pageText(page: Int): String? = null
 
+    /** 带每个字位置的文字层（页内长按选字用）。耗时，须在后台线程调用；没有文字层返回 null。 */
+    fun pageTextLayout(page: Int): PageTextLayout? = null
+
     /** 一次性抽出全部页文字；可能读几十 MB 并解压，主线程不要调。 */
     fun extractAllText(): List<String> = emptyList()
 }

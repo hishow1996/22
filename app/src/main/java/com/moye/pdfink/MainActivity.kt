@@ -1849,6 +1849,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 pageViewports.remove(oldest)
             }
         }
+        ad.onTextCopied = { flash(getString(R.string.doc_copy_done)) }
+        ad.onTextNotReady = { flash(getString(R.string.sel_text_loading)) }
         ad.fitMode = currentFitMode()
         ad.doublePage = state.effectiveMode == DisplayMode.DOUBLE
         ad.onPanChange = { px, py -> currentPanX = px; currentPanY = py }
@@ -1971,9 +1973,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_doc_search, getString(R.string.cd_doc_search), { false }) {
             showDocSearch()
-        },
-        MenuAction(R.drawable.ic_copy_text, getString(R.string.cd_doc_copy_page), { false }) {
-            openPageTextPreview()
         },
         MenuAction(R.drawable.ic_tabs, getString(R.string.cd_tabs), {
             ::tabs.isInitialized && tabs.visible()
@@ -2339,15 +2338,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         dialog.show()
         // 荣耀 10 竖屏约 360dp 宽，340dp 留边不被裁
         dialog.window?.setLayout(dp(340), dp(480))
-    }
-
-    private fun openPageTextPreview() {
-        val page = currentPage()
-        withAllText { pages ->
-            val t = pages.getOrNull(page)?.takeIf { it.isNotBlank() }
-            if (t == null) flash(getString(R.string.doc_no_text))
-            else showTextPreview(getString(R.string.text_preview_page, page + 1), t)
-        }
     }
 
     private fun showDocSearch() {

@@ -178,6 +178,8 @@ class PagesAdapter(
     var onPanChange: ((Float, Float) -> Unit)? = null
     /** 只有恢复会话的那一页用 initialPan，翻到的其它页回到页顶，不串平移量。 */
     var restorePanAt: Int = -1
+    var onTextCopied: ((String) -> Unit)? = null
+    var onTextNotReady: (() -> Unit)? = null
 
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val zoom: ZoomHost = v as ZoomHost
@@ -190,6 +192,8 @@ class PagesAdapter(
         val ink: InkView = v.findViewById(R.id.inkView)
         val secondInk: InkView = v.findViewById(R.id.secondInk)
         val draftInk: InkView = v.findViewById(R.id.draftInk)
+        val textOverlay: PageTextOverlay = v.findViewById(R.id.textOverlay)
+        val secondTextOverlay: PageTextOverlay = v.findViewById(R.id.secondTextOverlay)
         var renderToken = 0
         var ratioJob: Job? = null
         val ratioFailures = HashSet<Int>()
@@ -260,6 +264,9 @@ class PagesAdapter(
             }
             if (h.image.isShown) h.image.invalidate()
             if (h.secondImage.isShown) h.secondImage.invalidate()
+            if (h.textOverlay.hasSelection) h.textOverlay.invalidate()
+            if (h.secondTextOverlay.hasSelection) h.secondTextOverlay.invalidate()
+            h.zoom.onSelectionViewportChanged()
         }
         h.zoom.onViewportGestureChanged = { active ->
             h.image.deferHighResolution = active
@@ -281,6 +288,24 @@ class PagesAdapter(
         h.secondImage.viewport = h.zoom.secondViewport
         h.secondInk.viewport = h.zoom.secondViewport
         h.draftInk.viewport = h.zoom.draftViewport
+
+        // 页内长按选字：文字层在后台线程读取，读到之前 layout 为 null
+        h.zoom.clearTextSelection()
+        h.textOverlay.viewport = h.zoom.viewport
+        h.secondTextOverlay.viewport = h.zoom.secondViewport
+        h.textOverlay.layout = null
+        h.secondTextOverlay.layout = null
+        h.textOverlay.loader = { loadTextLayout(h, h.textOverlay, p0, token, position) }
+        h.secondTextOverlay.loader = { loadTextLayout(h, h.secondTextOverlay, p1, token, position) }
+        h.secondTextOverlay.visibility = if (showSecond) View.VISIBLE else View.GONE
+        h.zoom.textOverlays =
+            if (showSecond) listOf(h.textOverlay, h.secondTextOverlay) else listOf(h.textOverlay)
+        h.zoom.textGate = { ev ->
+            state.browse ||
+                (state.stylusOnly && ev.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_FINGER)
+        }
+        h.zoom.onTextCopied = { t -> onTextCopied?.invoke(t) }
+        h.zoom.onTextNotReady = { onTextNotReady?.invoke() }
 
         // v31：三态对齐表。v29 的「非 FIT 一律顶部对齐」把「适应宽度」也
         // 贴到栏下、底部堆出约 455px 空白；现在 FIT / WIDTH 回垂直居中，
@@ -428,6 +453,23 @@ class PagesAdapter(
                 }
             }
             // 相邻页的少量预加载任务由全局队列排在当前页后面。
+        }
+    }
+
+    private val loadingText = HashSet<PageTextOverlay>()
+
+    /** 后台读取一页的文字层，回到主线程时确认这个 holder 还绑着同一页。 */
+    private fun loadTextLayout(h: VH, o: PageTextOverlay, page: Int, token: Int, position: Int) {
+        if (o.layout != null || !loadingText.add(o)) return
+        val rot = state.pageRotation
+        scope.launch(Dispatchers.IO) {
+            val l = runCatching { repo.pageTextLayout(page)?.rotated(rot) }.getOrNull()
+            withContext(Dispatchers.Main) {
+                loadingText.remove(o)
+                if (h.renderToken == token && h.bindingAdapterPosition == position) {
+                    o.layout = l ?: PageTextLayout.EMPTY
+                }
+            }
         }
     }
 

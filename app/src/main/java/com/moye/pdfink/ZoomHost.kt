@@ -1,10 +1,19 @@
 package com.moye.pdfink
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.RectF
+import android.os.SystemClock
 import android.util.AttributeSet
+import android.view.ActionMode
 import android.view.GestureDetector
+import android.view.HapticFeedbackConstants
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -113,6 +122,23 @@ class ZoomHost @JvmOverloads constructor(
     // DOWN 后首次 MOVE 即切 0.5x 预览网格，不等 16dp 判定，起步即跟手。
     private var horizontalFlipDone = false
     private var gestureDeferred = false
+
+    // ---- 页内选字（长按选词 / 拖把手 / 系统浮动菜单复制）----
+    /** 本页（含双页时的右页）的选字层，由 PagesAdapter 绑定时设置。 */
+    var textOverlays: List<PageTextOverlay> = emptyList()
+    /** 本次触摸允许长按选字吗：浏览模式、或「仅手写笔」下的手指。 */
+    var textGate: ((MotionEvent) -> Boolean)? = null
+    var onTextCopied: ((String) -> Unit)? = null
+    /** 文字层还在后台读取时长按，提示一下。 */
+    var onTextNotReady: (() -> Unit)? = null
+    private var selTarget: PageTextOverlay? = null
+    private var selMode = SEL_NONE
+    private var selHandle = 0
+    private var selYOffset = 0f
+    private var selDownX = 0f
+    private var selDownY = 0f
+    private var selActionMode: ActionMode? = null
+    private val selLongPress = Runnable { fireTextLongPress() }
     private var transformFramePosted = false
     private var transformDirty = false
     private val transformFrame = Runnable {
@@ -175,7 +201,201 @@ class ZoomHost @JvmOverloads constructor(
         return saved
     }
 
+
+    // ------------------------------------------------------------------
+    // 页内选字
+    // ------------------------------------------------------------------
+
+    private fun overlayFrame(o: PageTextOverlay): PageFrame? = pageFrameFor(o.parent as? View)
+
+    private fun cancelTextLongPress() {
+        removeCallbacks(selLongPress)
+        if (selMode == SEL_PENDING) selMode = SEL_NONE
+    }
+
+    /** 取消选区并收起系统菜单。 */
+    fun clearTextSelection() {
+        cancelTextLongPress()
+        val t = selTarget
+        selTarget = null
+        selMode = SEL_NONE
+        for (o in textOverlays) o.clear()
+        t?.clear()
+        val m = selActionMode
+        selActionMode = null
+        m?.finish()
+    }
+
+    /** 缩放 / 平移后：选区层重画，系统菜单跟着挪。 */
+    fun onSelectionViewportChanged() {
+        val t = selTarget ?: return
+        t.invalidate()
+        selActionMode?.invalidateContentRect()
+    }
+
+    /** 返回 true = 本次事件已被选字逻辑吃掉。 */
+    private fun handleTextTouch(ev: MotionEvent): Boolean {
+        val act = ev.actionMasked
+        // 正在拖把手 / 长按后手指还没抬：吞掉整段手势
+        if (selMode == SEL_DRAG || selMode == SEL_HOLD) {
+            val t = selTarget
+            val f = t?.let { overlayFrame(it) }
+            if (ev.pointerCount == 1 && t != null && f != null &&
+                (act == MotionEvent.ACTION_MOVE || act == MotionEvent.ACTION_UP)
+            ) {
+                val h = if (selMode == SEL_DRAG) selHandle else PageTextOverlay.HANDLE_END
+                t.dragTo(h, ev.x - f.left, ev.y - f.top, if (selMode == SEL_DRAG) selYOffset else 0f)
+            }
+            if (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) {
+                selMode = SEL_NONE
+                parent?.requestDisallowInterceptTouchEvent(!browseMode)
+                if (act == MotionEvent.ACTION_CANCEL) clearTextSelection() else showSelectionMenu()
+            } else if (act == MotionEvent.ACTION_MOVE) {
+                selActionMode?.invalidateContentRect()
+            }
+            return true
+        }
+        if (zooming || doubleTapActive) {
+            cancelTextLongPress()
+            return false
+        }
+        when (act) {
+            MotionEvent.ACTION_DOWN -> {
+                cancelTextLongPress()
+                val t = selTarget
+                if (t != null && t.hasSelection) {
+                    val f = overlayFrame(t)
+                    val hit = if (f != null) t.hitHandle(ev.x - f.left, ev.y - f.top) else 0
+                    if (hit != 0 && f != null) {
+                        selMode = SEL_DRAG
+                        selHandle = hit
+                        selYOffset = t.beginDrag(hit, ev.y - f.top)
+                        selActionMode?.hide(ActionMode.DEFAULT_HIDE_DURATION.toLong())
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                        return true
+                    }
+                    clearTextSelection()   // 点到别处：取消选区，这次触摸照常处理
+                }
+                if (ev.pointerCount == 1 && textOverlays.isNotEmpty() &&
+                    (textGate?.invoke(ev) ?: browseMode)
+                ) {
+                    selDownX = ev.x
+                    selDownY = ev.y
+                    selMode = SEL_PENDING
+                    for (o in textOverlays) if (o.layout == null) o.loader?.invoke()
+                    postDelayed(selLongPress, ViewConfiguration.getLongPressTimeout().toLong())
+                }
+            }
+            MotionEvent.ACTION_MOVE -> if (selMode == SEL_PENDING) {
+                val slop = minOf(ViewConfiguration.get(context).scaledTouchSlop.toFloat(), dp16 * 0.5f)
+                if (ev.pointerCount > 1 ||
+                    abs(ev.x - selDownX) > slop || abs(ev.y - selDownY) > slop
+                ) cancelTextLongPress()
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                cancelTextLongPress()
+        }
+        return false
+    }
+
+    private fun fireTextLongPress() {
+        if (selMode != SEL_PENDING) return
+        selMode = SEL_NONE
+        var found: PageTextOverlay? = null
+        var loading = false
+        for (o in textOverlays) {
+            val f = overlayFrame(o) ?: continue
+            if (o.layout == null) { loading = true; continue }
+            if (o.selectWordAt(selDownX - f.left, selDownY - f.top)) { found = o; break }
+        }
+        if (found == null) {
+            if (loading) onTextNotReady?.invoke()
+            return
+        }
+        for (o in textOverlays) if (o !== found) o.clear()
+        selTarget = found
+        selMode = SEL_HOLD
+        // 浏览手势在 DOWN 后可能已进入「暂停高清补渲染」，这里收尾，否则页面会一直糊着
+        if (gestureDeferred) {
+            gestureDeferred = false
+            onViewportGestureChanged?.invoke(false)
+        }
+        velocity?.recycle()
+        velocity = null
+        singlePanning = false
+        val c = MotionEvent.obtain(
+            SystemClock.uptimeMillis(), SystemClock.uptimeMillis(),
+            MotionEvent.ACTION_CANCEL, selDownX, selDownY, 0
+        )
+        try { doubleTapDetector.onTouchEvent(c) } finally { c.recycle() }
+        parent?.requestDisallowInterceptTouchEvent(true)
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    private fun showSelectionMenu() {
+        val m = selActionMode
+        if (m != null) {
+            m.invalidateContentRect()
+            m.hide(0)
+            return
+        }
+        selActionMode = startActionMode(selMenuCallback, ActionMode.TYPE_FLOATING)
+    }
+
+    private val selMenuCallback = object : ActionMode.Callback2() {
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+            menu.add(Menu.NONE, SEL_ID_COPY, 0, context.getString(R.string.sel_copy))
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(Menu.NONE, SEL_ID_ALL, 1, context.getString(R.string.sel_select_all))
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            return true
+        }
+
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = false
+
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+            val t = selTarget ?: return false
+            when (item.itemId) {
+                SEL_ID_COPY -> {
+                    val text = t.selectedText()
+                    if (text.isNotEmpty()) {
+                        (context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)
+                            ?.setPrimaryClip(ClipData.newPlainText("text", text))
+                        onTextCopied?.invoke(text)
+                    }
+                    mode.finish()
+                }
+                SEL_ID_ALL -> {
+                    t.selectAll()
+                    mode.invalidateContentRect()
+                }
+                else -> return false
+            }
+            return true
+        }
+
+        override fun onDestroyActionMode(mode: ActionMode) {
+            if (selActionMode === mode) selActionMode = null
+            selTarget?.clear()
+            selTarget = null
+            if (selMode != SEL_DRAG && selMode != SEL_HOLD) selMode = SEL_NONE
+        }
+
+        override fun onGetContentRect(mode: ActionMode, view: View, outRect: android.graphics.Rect) {
+            val t = selTarget
+            val f = t?.let { overlayFrame(it) }
+            val b = RectF()
+            if (t != null && f != null && t.selectionBounds(b)) {
+                outRect.set(
+                    (b.left + f.left).toInt(), (b.top + f.top).toInt(),
+                    (b.right + f.left).toInt() + 1, (b.bottom + f.top).toInt() + 1
+                )
+            } else outRect.set(0, 0, 1, 1)
+        }
+    }
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (textOverlays.isNotEmpty() && handleTextTouch(ev)) return true
         if (browseMode) doubleTapDetector.onTouchEvent(ev)
         if (doubleTapActive) {
             if (ev.actionMasked == MotionEvent.ACTION_UP ||
@@ -780,4 +1000,13 @@ class ZoomHost @JvmOverloads constructor(
     }
 
     fun refreshPanBounds() { refreshPageGeometry() }
+
+    private companion object {
+        const val SEL_NONE = 0
+        const val SEL_PENDING = 1
+        const val SEL_HOLD = 2
+        const val SEL_DRAG = 3
+        const val SEL_ID_COPY = 0x7f0f0001
+        const val SEL_ID_ALL = 0x7f0f0002
+    }
 }

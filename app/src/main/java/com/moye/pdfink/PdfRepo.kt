@@ -39,25 +39,54 @@ class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
     // pageText 返回 null，由 UI 如实提示「本页没有可复制的文字」。
     @Volatile private var textPages: List<String>? = null
 
+    private fun readSourceBytes(): ByteArray = try {
+        ctx.contentResolver.openInputStream(uri)?.use { input ->
+            val buf = java.io.ByteArrayOutputStream()
+            val tmp = ByteArray(65536)
+            var left = PdfTextExtractor.MAX_SOURCE_BYTES + 1   // 多读 1 字节，超限即可识别
+            while (left > 0) {
+                val n = input.read(tmp, 0, minOf(tmp.size, left))
+                if (n <= 0) break
+                buf.write(tmp, 0, n)
+                left -= n
+            }
+            buf.toByteArray()
+        } ?: ByteArray(0)
+    } catch (e: Exception) { ByteArray(0) }
+
     private fun ensureText(): List<String> {
         textPages?.let { return it }
-        val data = try {
-            ctx.contentResolver.openInputStream(uri)?.use { input ->
-                val buf = java.io.ByteArrayOutputStream()
-                val tmp = ByteArray(65536)
-                var left = PdfTextExtractor.MAX_SOURCE_BYTES
-                while (left > 0) {
-                    val n = input.read(tmp, 0, minOf(tmp.size, left))
-                    if (n <= 0) break
-                    buf.write(tmp, 0, n)
-                    left -= n
-                }
-                buf.toByteArray()
-            } ?: ByteArray(0)
-        } catch (e: Exception) { ByteArray(0) }
-        val pages = PdfTextExtractor.extract(data)
+        val pages = PdfTextExtractor.extract(readSourceBytes())
         textPages = pages
         return pages
+    }
+
+    // 页内选字：解析器 + 对象表较占内存，用软引用，系统缺内存时可回收，下次再解析。
+    private val layoutLock = Any()
+    private var layoutDoc: java.lang.ref.SoftReference<PdfLayoutDoc>? = null
+    private var layoutDocFailed = false
+    private val layoutCache = object : LinkedHashMap<Int, PageTextLayout?>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, PageTextLayout?>?) =
+            size > 12
+    }
+
+    override fun pageTextLayout(page: Int): PageTextLayout? = synchronized(layoutLock) {
+        if (layoutCache.containsKey(page)) return@synchronized layoutCache[page]
+        if (layoutDocFailed) return@synchronized null
+        var doc = layoutDoc?.get()
+        if (doc == null) {
+            val bytes = readSourceBytes()
+            doc = if (bytes.isEmpty() || bytes.size > PdfTextExtractor.MAX_SOURCE_BYTES) null
+                  else PdfLayoutDoc.open(bytes)
+            if (doc == null) {
+                layoutDocFailed = true
+                return@synchronized null
+            }
+            layoutDoc = java.lang.ref.SoftReference(doc)
+        }
+        val l = doc.layout(page)
+        layoutCache[page] = l
+        l
     }
 
     override fun pageText(page: Int): String? =

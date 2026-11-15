@@ -56,6 +56,39 @@ class TextPageSource(ctx: Context, uri: Uri) : RasterPageSource() {
 
     override fun extractAllText(): List<String> = pages.map { it.joinToString("\n") }
 
+    // 页内选字：每行的基线、每个字的横向位置都和 drawTile 画的一致。
+    override fun pageTextLayout(page: Int): PageTextLayout? {
+        val lines = pages.getOrNull(page)?.takeIf { it.isNotEmpty() } ?: return null
+        val paint = Paint(textPaint)
+        val fm = paint.fontMetrics
+        val sb = StringBuilder()
+        val boxes = ArrayList<Float>()
+        val real = ArrayList<Boolean>()
+        for ((i, line) in lines.withIndex()) {
+            val base = TextLayout.PAD + (i + 1) * TextLayout.LINE_H - 6f
+            val widths = FloatArray(line.length)
+            paint.getTextWidths(line, widths)
+            var x = TextLayout.PAD
+            val top = (base + fm.ascent) / TextLayout.CANVAS_H
+            val bottom = (base + fm.descent) / TextLayout.CANVAS_H
+            for (k in line.indices) {
+                sb.append(line[k])
+                boxes.add(x / TextLayout.BASE_W); boxes.add(top)
+                boxes.add((x + widths[k]) / TextLayout.BASE_W); boxes.add(bottom)
+                real.add(true)
+                x += widths[k]
+            }
+            if (i < lines.lastIndex) {
+                sb.append('\n')
+                boxes.add(x / TextLayout.BASE_W); boxes.add(top)
+                boxes.add(x / TextLayout.BASE_W); boxes.add(bottom)
+                real.add(false)
+            }
+        }
+        if (sb.isBlank()) return null
+        return PageTextLayout(sb.toString(), boxes.toFloatArray(), real.toBooleanArray())
+    }
+
     override fun drawTile(
         page: Int, cw: Int, ch: Int, left: Int, top: Int, tw: Int, th: Int
     ): Bitmap {

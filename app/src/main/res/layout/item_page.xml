@@ -40,6 +40,11 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 
+            <com.moye.pdfink.PageTextOverlay
+                android:id="@+id/textOverlay"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
         </com.moye.pdfink.PageContainer>
 
         <!-- v7 双页并排：相邻的下一页。GONE 时不参与 LinearLayout 的 weight 分配 -->
@@ -65,6 +70,11 @@
 
             <com.moye.pdfink.InkView
                 android:id="@+id/secondInk"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <com.moye.pdfink.PageTextOverlay
+                android:id="@+id/secondTextOverlay"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent" />
 

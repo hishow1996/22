@@ -42,7 +42,7 @@ object PdfTextExtractor {
         """<\s*([0-9A-Fa-f]+)\s*>\s*<\s*([0-9A-Fa-f]+)\s*>\s*(<[^>]*>|\[[^\]]*\])"""
     )
 
-    private class Objects {
+    internal class Objects {
         val bodies = LinkedHashMap<Int, String>()
         val streams = HashMap<Int, ByteArray>()
     }
@@ -63,7 +63,7 @@ object PdfTextExtractor {
     }
 
     // ---------- 对象表 ----------
-    private fun collect(text: String): Objects {
+    internal fun collect(text: String): Objects {
         val o = Objects()
         for (m in OBJ.findAll(text)) {
             val num = m.groupValues[1].toIntOrNull() ?: continue
@@ -81,11 +81,80 @@ object PdfTextExtractor {
             val de = body.lastIndexOf("endstream")
             if (de <= ds) continue
             val raw = body.substring(ds, de).toByteArray(Charsets.ISO_8859_1)
-            o.streams[num] = if (body.substring(0, si).contains("/FlateDecode"))
-                (inflate(raw) ?: raw) else raw
+            o.streams[num] = decodeStream(body.substring(0, si), raw)
         }
         expandObjStm(o)
         return o
+    }
+
+    private val FILTER = Regex(
+        """/(ASCII85Decode|A85|ASCIIHexDecode|AHx|FlateDecode|Fl|LZWDecode|LZW|RunLengthDecode|RL|DCTDecode|DCT|CCITTFaxDecode|JBIG2Decode|JPXDecode|Crypt)(?![A-Za-z])"""
+    )
+
+    /**
+     * 按 /Filter 列出的顺序依次解码。认得 ASCII85 / ASCIIHex / Flate
+     * （ReportLab 默认是 [ASCII85 Flate]，以前会读出乱码）；遇到不认得的滤镜就停在那一步。
+     */
+    internal fun decodeStream(dictHead: String, raw: ByteArray): ByteArray {
+        val fi = dictHead.indexOf("/Filter")
+        if (fi < 0) return raw
+        var data = raw
+        for (m in FILTER.findAll(dictHead.substring(fi + 7))) {
+            data = when (m.groupValues[1]) {
+                "ASCII85Decode", "A85" -> ascii85(data) ?: return data
+                "ASCIIHexDecode", "AHx" -> asciiHex(data)
+                "FlateDecode", "Fl" -> inflate(data) ?: return data
+                else -> return data
+            }
+        }
+        return data
+    }
+
+    private fun ascii85(src: ByteArray): ByteArray? {
+        val out = ByteArrayOutputStream(src.size)
+        var i = 0
+        if (src.size >= 2 && src[0] == '<'.code.toByte() && src[1] == '~'.code.toByte()) i = 2
+        val grp = IntArray(5)
+        var n = 0
+        while (i < src.size) {
+            val c = src[i].toInt() and 0xFF
+            i++
+            if (c == '~'.code) break
+            if (c <= 32) continue
+            if (c == 'z'.code && n == 0) {
+                out.write(0); out.write(0); out.write(0); out.write(0)
+                continue
+            }
+            if (c < 33 || c > 117) return null
+            grp[n++] = c - 33
+            if (n == 5) {
+                var v = 0L
+                for (k in 0..4) v = v * 85 + grp[k]
+                for (k in 0..3) out.write(((v shr (24 - 8 * k)) and 0xFF).toInt())
+                n = 0
+            }
+        }
+        if (n > 1) {
+            for (k in n until 5) grp[k] = 84
+            var v = 0L
+            for (k in 0..4) v = v * 85 + grp[k]
+            for (k in 0 until n - 1) out.write(((v shr (24 - 8 * k)) and 0xFF).toInt())
+        }
+        return out.toByteArray()
+    }
+
+    private fun asciiHex(src: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream(src.size / 2 + 1)
+        var hi = -1
+        for (b in src) {
+            val ch = (b.toInt() and 0xFF).toChar()
+            if (ch == '>') break
+            val d = Character.digit(ch, 16)
+            if (d < 0) continue
+            if (hi < 0) hi = d else { out.write((hi shl 4) or d); hi = -1 }
+        }
+        if (hi >= 0) out.write(hi shl 4)
+        return out.toByteArray()
     }
 
     private fun inflate(raw: ByteArray): ByteArray? = try {
@@ -141,7 +210,7 @@ object PdfTextExtractor {
     }
 
     // ---------- 页树 ----------
-    private fun pageOrder(o: Objects, text: String): List<Int> {
+    internal fun pageOrder(o: Objects, text: String): List<Int> {
         val out = ArrayList<Int>()
         val seen = HashSet<Int>()
         var root: Int? = null
@@ -223,7 +292,7 @@ object PdfTextExtractor {
         return out
     }
 
-    private fun parseCmap(s: String, out: MutableMap<Int, String>) {
+    internal fun parseCmap(s: String, out: MutableMap<Int, String>) {
         for (m in BFCHAR.findAll(s)) {
             for (p in CMAP_PAIR.findAll(m.groupValues[1])) {
                 val k = hexInt(p.groupValues[1]) ?: continue
