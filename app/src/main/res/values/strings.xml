@@ -105,8 +105,8 @@
     <string name="cd_tab_add">新增标签</string>
     <string name="cd_tab_close">关闭此标签</string>
     <string name="cd_doc_search">全文搜索</string>
-    <string name="cd_doc_copy_page">复制本页文字</string>
-    <string name="cd_doc_copy_all">复制全文文字</string>
+    <string name="cd_doc_copy_page">查看本页文字，长按选中后用系统菜单复制</string>
+    <string name="cd_doc_copy_all">查看全文文字，长按选中后用系统菜单复制</string>
     <string name="cd_pressure">压感档位</string>
     <string name="pressure_off">压感：关</string>
     <string name="pressure_soft">压感：弱</string>
@@ -120,5 +120,8 @@
     <string name="doc_no_text">本页没有可复制的文字（扫描件或不支持的编码）</string>
     <string name="doc_no_text_all">该文档没有可复制的文字（扫描件或加密 PDF）</string>
     <string name="doc_copy_done">已复制到剪贴板</string>
-    <string name="doc_copy_all_done">全文已复制到剪贴板</string>
+    <!-- v43.2：文字预览，主路径交给系统 ActionMode -->
+    <string name="text_preview_page">第 %1$d 页文字</string>
+    <string name="text_preview_all">全文文字</string>
+    <string name="cd_text_copy_all">复制全部文字到系统剪贴板</string>
 </resources>

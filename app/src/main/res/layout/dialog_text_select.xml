@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v43.2：文字预览。TextView 交给系统 ActionMode（复制 / 全选 / 分享），App 不再直接写整页文字。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/paper"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/textSelectTitle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:gravity="center_vertical"
+            android:maxLines="1"
+            android:textColor="@color/icon"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/textSelectClose"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@null"
+            android:contentDescription="@string/cd_close"
+            android:padding="7dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_close"
+            android:tint="@color/icon" />
+
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/textSelectBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingExtra="4dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingBottom="8dp"
+            android:textColor="@color/icon"
+            android:textIsSelectable="true"
+            android:textSize="14sp" />
+
+    </ScrollView>
+
+    <!-- 兜底：想一次拿走全部时走系统剪贴板；主路径仍是长按选中 → 系统菜单 -->
+    <ImageButton
+        android:id="@+id/textSelectCopyAll"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="end"
+        android:layout_marginTop="6dp"
+        android:background="@null"
+        android:contentDescription="@string/cd_text_copy_all"
+        android:padding="7dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_copy_text"
+        android:tint="@color/icon" />
+
+</LinearLayout>

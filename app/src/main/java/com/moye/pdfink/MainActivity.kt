@@ -1973,7 +1973,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             showDocSearch()
         },
         MenuAction(R.drawable.ic_copy_text, getString(R.string.cd_doc_copy_page), { false }) {
-            copyPageText()
+            openPageTextPreview()
         },
         MenuAction(R.drawable.ic_tabs, getString(R.string.cd_tabs), {
             ::tabs.isInitialized && tabs.visible()
@@ -2319,15 +2319,34 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         cm.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
     }
 
-    private fun copyPageText() {
+    /**
+     * v43.2：文字不再由 App 直接写进剪贴板，交给系统 TextView 的 ActionMode。
+     * 长按文字 → 系统自带「复制 / 全选 / 分享」，只复制选中的那一段；
+     * 右下角按钮是兜底，想一次拿走全部时仍写系统剪贴板。
+     */
+    private fun showTextPreview(title: String, text: String) {
+        val v = layoutInflater.inflate(R.layout.dialog_text_select, null)
+        val dialog = AlertDialog.Builder(this).setView(v).create()
+        v.findViewById<TextView>(R.id.textSelectTitle).text = title
+        v.findViewById<TextView>(R.id.textSelectBody).text = text
+        v.findViewById<ImageButton>(R.id.textSelectClose)
+            .setOnClickListener { dialog.dismiss() }
+        v.findViewById<ImageButton>(R.id.textSelectCopyAll).setOnClickListener {
+            copyToClipboard(text, title)
+            flash(getString(R.string.doc_copy_done))
+        }
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.WHITE))
+        dialog.show()
+        // 荣耀 10 竖屏约 360dp 宽，340dp 留边不被裁
+        dialog.window?.setLayout(dp(340), dp(480))
+    }
+
+    private fun openPageTextPreview() {
         val page = currentPage()
         withAllText { pages ->
             val t = pages.getOrNull(page)?.takeIf { it.isNotBlank() }
             if (t == null) flash(getString(R.string.doc_no_text))
-            else {
-                copyToClipboard(t, "墨页 第 ${page + 1} 页")
-                flash(getString(R.string.doc_copy_done))
-            }
+            else showTextPreview(getString(R.string.text_preview_page, page + 1), t)
         }
     }
 
@@ -2357,6 +2376,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                         setTextColor(ContextCompat.getColor(
                             this@MainActivity, R.color.icon))
                         setPadding(dp(6), dp(9), dp(6), dp(9))
+                        // v43.2：短按跳页，长按进系统选择菜单，只复制选中的片段
+                        setTextIsSelectable(true)
                         setOnClickListener {
                             goToPage(h.page)
                             dialog.dismiss()
@@ -2383,8 +2404,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 val all = DocumentSearch.allText(pages)
                 if (all.isEmpty()) flash(getString(R.string.doc_no_text_all))
                 else {
-                    copyToClipboard(all, "墨页 全文")
-                    flash(getString(R.string.doc_copy_all_done))
+                    dialog.dismiss()
+                    showTextPreview(getString(R.string.text_preview_all), all)
                 }
             }
         }
