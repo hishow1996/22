@@ -16,8 +16,5 @@
         android:fillColor="#FF000000"
         android:pathData="M14.7,14.7 L20.3,20.3 L18.9,21.7 L13.3,16.1 Z" />
 
-    <!-- 圆内一条文字线：与书架搜索的空放大镜区分 -->
-    <path
-        android:fillColor="#FF000000"
-        android:pathData="M7,9.4 L13,9.4 L13,10.6 L7,10.6 Z" />
+    <!-- v43.1：按需求去掉圆内横线，保留纯空放大镜（圆环 + 手柄） -->
 </vector>
