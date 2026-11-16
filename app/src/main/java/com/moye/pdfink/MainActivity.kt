@@ -1827,6 +1827,15 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun finishOpenUri(r: PageSource, fp: String) {
         openingDocument = false
+        // v45：文字缓存按内容指纹落盘；停稳几秒后在后台把全文先提取好，
+        // 之后点查找就是秒出（已有缓存时这一步只是读一个小文件）。
+        r.attachFingerprint(fp)
+        workScope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(3000)
+            if (repo === r && !isFinishing && !isDestroyed) {
+                try { r.extractAllText() } catch (e: Exception) { /* 预热失败不影响使用 */ }
+            }
+        }
         // v27：首次打开（含冷启动恢复、SAF 新选、从首页点记录）先同步方向，
         // 否则 UiState 的 landscape 初值会让 currentFitMode() 误判成横屏。
         state.landscape = resources.configuration.orientation !=
@@ -2008,6 +2017,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_doc_search, getString(R.string.cd_doc_search), { false }) {
             showDocSearch()
+        },
+        MenuAction(R.drawable.ic_ocr, getString(R.string.cd_ocr), { ocrRunning }) {
+            startOcrFlow()
         },
         MenuAction(R.drawable.ic_tabs, getString(R.string.cd_tabs), {
             ::tabs.isInitialized && tabs.visible()
@@ -2301,6 +2313,70 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { marginEnd = dp(8) })
         }
+        // v45：PDF 自带目录（系统 PdfRenderer 不提供，由自己的解析器读 /Outlines）。
+        // 解析放后台；没有目录的文档这一块保持隐藏，面板与以前一致。
+        val outlineBox = v.findViewById<LinearLayout>(R.id.navOutline)
+        workScope.launch {
+            val items = try { r.outline() } catch (e: Exception) { emptyList() }
+            withContext(Dispatchers.Main) {
+                if (items.isEmpty() || isFinishing || isDestroyed ||
+                    repo !== r || !dialog.isShowing) return@withContext
+                val ink = ContextCompat.getColor(this@MainActivity, R.color.icon)
+                val muted = ContextCompat.getColor(this@MainActivity, R.color.page_text)
+                val accent = ContextCompat.getColor(this@MainActivity, R.color.accent)
+                outlineBox.visibility = View.VISIBLE
+                outlineBox.addView(TextView(this@MainActivity).apply {
+                    text = getString(R.string.nav_outline_title)
+                    textSize = 11f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(muted)
+                    setPadding(dp(8), dp(4), dp(8), dp(4))
+                })
+                val cur = currentPage()
+                for (e in items) {
+                    val row = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(dp(8 + 14 * e.level.coerceAtMost(5)), dp(9), dp(8), dp(9))
+                    }
+                    val go = e.page >= 0
+                    row.addView(TextView(this@MainActivity).apply {
+                        text = e.title
+                        textSize = if (e.level == 0) 14f else 13f
+                        if (e.level == 0) typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(if (go) ink else muted)
+                        maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    if (go) {
+                        row.addView(TextView(this@MainActivity).apply {
+                            text = (e.page + 1).toString()
+                            textSize = 12f
+                            setTextColor(muted)
+                            setPadding(dp(10), 0, 0, 0)
+                        })
+                        row.setOnClickListener {
+                            goToPage(e.page)
+                            dialog.dismiss()
+                        }
+                    }
+                    outlineBox.addView(row, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                }
+                // 当前所在章节（页号不大于当前页的最后一项）标成强调色，并滚进视野
+                val at = items.indexOfLast { it.page in 0..cur }
+                if (at >= 0) {
+                    val row = outlineBox.getChildAt(at + 1) as? LinearLayout
+                    (row?.getChildAt(0) as? TextView)?.setTextColor(accent)
+                    if (row != null) {
+                        v.post {
+                            row.requestRectangleOnScreen(
+                                android.graphics.Rect(0, 0, row.width, row.height), false)
+                        }
+                    }
+                }
+            }
+        }
         val shelf = v.findViewById<LinearLayout>(R.id.navShelf)
         recents.all().forEach { item ->
             val t = TextView(this).apply {
@@ -2325,7 +2401,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         v.findViewById<ImageButton>(R.id.navClose).setOnClickListener { dialog.dismiss() }
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.WHITE))
         dialog.show()
-        dialog.window?.setLayout(dp(480), dp(420))
+        val dm = resources.displayMetrics
+        dialog.window?.setLayout(
+            minOf(dp(480), dm.widthPixels - dp(24)),
+            minOf(dp(560), (dm.heightPixels * 0.82f).toInt()))
     }
 
     // ----- v43：全文搜索 / 页面文字复制 / 压感档位 -----
@@ -2523,6 +2602,79 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         closeFindBar()
         findPages = null
         findLoading = false
+        ocrOffered = false
+    }
+
+    // ----- v45：扫描页文字识别（OCR） -----
+
+    private var ocrRunning = false
+    private var ocrOffered = false
+
+    private fun startOcrFlow() {
+        val r = repo ?: return
+        if (ocrRunning) { flash(getString(R.string.ocr_running)); return }
+        flash(getString(R.string.doc_search_loading))
+        workScope.launch {
+            val pending = try { r.ocrPending() } catch (e: Exception) { 0 }
+            withContext(Dispatchers.Main) {
+                if (isFinishing || isDestroyed || repo !== r) return@withContext
+                if (pending <= 0) { flash(getString(R.string.ocr_none)); return@withContext }
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle(R.string.ocr_confirm_title)
+                    .setMessage(getString(R.string.ocr_confirm_body, pending))
+                    .setPositiveButton(R.string.ocr_start) { _, _ -> runOcrWithProgress(r, pending) }
+                    .setNegativeButton(R.string.ocr_cancel, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun runOcrWithProgress(r: PageSource, total: Int) {
+        ocrRunning = true
+        val cancel = java.util.concurrent.atomic.AtomicBoolean(false)
+        val tv = TextView(this).apply {
+            text = getString(R.string.ocr_progress, 0, total)
+            textSize = 15f
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.icon))
+            setPadding(dp(24), dp(20), dp(24), dp(8))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setView(tv)
+            .setCancelable(false)
+            .setNegativeButton(R.string.ocr_stop) { _, _ -> cancel.set(true) }
+            .create()
+        dialog.show()
+        // 识别期间保持亮屏；用户本来就开了常亮的，结束时不去动它
+        val addedAwake = !state.keepAwake
+        if (addedAwake) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        workScope.launch {
+            val done = try {
+                r.runOcr(
+                    { d, t -> runOnUiThread { tv.text = getString(R.string.ocr_progress, d, t) } },
+                    { cancel.get() }
+                )
+            } catch (e: Throwable) { 0 }
+            withContext(Dispatchers.Main) {
+                ocrRunning = false
+                if (addedAwake) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                if (dialog.isShowing) dialog.dismiss()
+                if (isFinishing || isDestroyed || repo !== r) return@withContext
+                if (done > 0) {
+                    flash(getString(R.string.ocr_done, done))
+                    // 文字变了：旧的查找缓存作废，已加载的「没有文字」字框层重读
+                    findPages = null
+                    adapter?.reloadTextLayouts()
+                    val q = findBar?.findViewById<EditText>(R.id.findInput)
+                        ?.text?.toString().orEmpty().trim()
+                    if (findBar?.visibility == View.VISIBLE && q.isNotEmpty()) {
+                        resetFind()
+                        runFind(q)
+                    }
+                } else if (!cancel.get()) {
+                    flash(getString(R.string.ocr_failed))
+                }
+            }
+        }
     }
 
     private fun runFind(q: String) {
@@ -2564,7 +2716,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     findIndex = -1
                     adapter?.clearSearch()
                     setFindCount(getString(R.string.find_none))
-                    if (!DocumentSearch.hasText(pages)) flash(getString(R.string.doc_search_no_layer))
+                    if (!DocumentSearch.hasText(pages)) {
+                        // 整本都没有文字层：第一次直接引导去识别，之后只提示
+                        if (!ocrOffered) { ocrOffered = true; startOcrFlow() }
+                        else flash(getString(R.string.doc_search_no_layer))
+                    }
                     return@withContext
                 }
                 // 点列表进来的就定位到那一处；否则从当前页起第一处，都在前面就回绕到第一处

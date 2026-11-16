@@ -45,6 +45,21 @@ interface PageSource : Closeable {
 
     /** 一次性抽出全部页文字；可能读几十 MB 并解压，主线程不要调。 */
     fun extractAllText(): List<String> = emptyList()
+
+    /** v45：告诉文档源它的内容指纹，用来给全文文字做磁盘缓存；不需要的实现忽略。 */
+    fun attachFingerprint(fp: String) {}
+
+    /** v45：没有文字层、且还没识别过的页数（扫描件 / 图片页）；不支持 OCR 的文档源返回 0。后台线程调用。 */
+    fun ocrPending(): Int = 0
+
+    /**
+     * v45：识别没有文字层的页，结果落盘并并入搜索 / 选字。progress(已完成, 总数)，
+     * cancelled() 为真时尽快停下（已识别的保留）。返回本次识别的页数。后台线程调用。
+     */
+    fun runOcr(progress: (Int, Int) -> Unit, cancelled: () -> Boolean): Int = 0
+
+    /** v45：文档自带的目录（展平、带层级）；没有或不支持返回空。耗时，须在后台线程调用。 */
+    fun outline(): List<OutlineEntry> = emptyList()
 }
 
 /**

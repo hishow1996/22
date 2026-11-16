@@ -88,10 +88,25 @@
         android:scrollbars="none">
 
         <LinearLayout
-            android:id="@+id/navShelf"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
+            android:orientation="vertical">
+
+            <!-- v45：PDF 自带目录；有目录时由 MainActivity.showNav 异步填充并显示 -->
+            <LinearLayout
+                android:id="@+id/navOutline"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/navShelf"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+        </LinearLayout>
 
     </ScrollView>
 

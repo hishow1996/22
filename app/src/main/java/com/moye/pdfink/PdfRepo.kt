@@ -70,9 +70,24 @@ class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
             size > 12
     }
 
-    override fun pageTextLayout(page: Int): PageTextLayout? = synchronized(layoutLock) {
+    /** 原生文字层优先；本页没有文字时，用 OCR 的结果顶上（识别过才有）。 */
+    override fun pageTextLayout(page: Int): PageTextLayout? {
+        val l = nativeLayout(page)
+        if (l != null && l.text.isNotBlank()) return l
+        return ocrLayoutOf(page) ?: l
+    }
+
+    private fun nativeLayout(page: Int): PageTextLayout? = synchronized(layoutLock) {
         if (layoutCache.containsKey(page)) return@synchronized layoutCache[page]
-        if (layoutDocFailed) return@synchronized null
+        val doc = layoutDocLocked() ?: return@synchronized null
+        val l = doc.layout(page)
+        layoutCache[page] = l
+        l
+    }
+
+    /** 调用方须持有 layoutLock。读不出（加密 / 过大 / 损坏）后不再重试。 */
+    private fun layoutDocLocked(): PdfLayoutDoc? {
+        if (layoutDocFailed) return null
         var doc = layoutDoc?.get()
         if (doc == null) {
             val bytes = readSourceBytes()
@@ -80,13 +95,21 @@ class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
                   else PdfLayoutDoc.open(bytes)
             if (doc == null) {
                 layoutDocFailed = true
-                return@synchronized null
+                return null
             }
             layoutDoc = java.lang.ref.SoftReference(doc)
         }
-        val l = doc.layout(page)
-        layoutCache[page] = l
-        l
+        return doc
+    }
+
+    @Volatile private var outlineCache: List<OutlineEntry>? = null
+
+    // v45：PDF 自带目录。系统 PdfRenderer 不暴露目录，这里用自己的解析器读 /Outlines。
+    override fun outline(): List<OutlineEntry> {
+        outlineCache?.let { return it }
+        val items = synchronized(layoutLock) { layoutDocLocked()?.outline() ?: emptyList() }
+        outlineCache = items
+        return items
     }
 
     override fun pageText(page: Int): String? =
@@ -94,13 +117,118 @@ class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
 
     // v44：全文搜索 / 复制全文用版面文字（与选字同源，按每段文字实际字体解码），
     // 读不出来的页才退回老提取器；与 pageText 的缓存分开，互不拖慢。
-    @Volatile private var searchPages: List<String>? = null
+    // ----- v45：扫描页 OCR -----
 
-    override fun extractAllText(): List<String> {
-        searchPages?.let { return it }
+    private val ocrLock = Any()
+    private var ocrPages: Array<PageTextLayout?>? = null      // null 项 = 这一页还没识别过
+
+    private fun ocrFile(): java.io.File? = contentFp?.let { OcrCache.fileFor(ctx.cacheDir, it) }
+
+    /** 调用方须持有 ocrLock。第一次用到时从磁盘读；没有缓存就是全空数组。 */
+    private fun ocrArrayLocked(): Array<PageTextLayout?> {
+        ocrPages?.let { return it }
+        val n = count
+        val arr = ocrFile()?.let { OcrCache.read(it, n) } ?: arrayOfNulls(n)
+        ocrPages = arr
+        return arr
+    }
+
+    private fun ocrLayoutOf(page: Int): PageTextLayout? = synchronized(ocrLock) {
+        ocrArrayLocked().getOrNull(page)?.takeIf { it.text.isNotBlank() }
+    }
+
+    override fun ocrPending(): Int {
+        val pages = extractAllText()
+        return synchronized(ocrLock) {
+            val ocr = ocrArrayLocked()
+            pages.indices.count { pages[it].isBlank() && ocr.getOrNull(it) == null }
+        }
+    }
+
+    /** 渲染一页给 OCR 用：长边约 2200px（内存紧时 1800），白底，调用方负责回收。 */
+    private fun renderForOcr(page: Int): Bitmap = synchronized(renderer) {
+        val r = ratio(page)                                  // 宽 / 高
+        val side = if (Runtime.getRuntime().maxMemory() >= 192L * 1024 * 1024) 2200f else 1800f
+        val w = if (r >= 1f) side.toInt() else (side * r).toInt()
+        val h = if (r >= 1f) (side / r).toInt() else side.toInt()
+        closeTileRenderPageLocked()
+        val bmp = Bitmap.createBitmap(w.coerceAtLeast(1), h.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        bmp.eraseColor(Color.WHITE)
+        try {
+            val p = renderer.openPage(page)
+            try { p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY) } finally { p.close() }
+            bmp
+        } catch (t: Throwable) {
+            if (!bmp.isRecycled) bmp.recycle()
+            throw t
+        }
+    }
+
+    override fun runOcr(progress: (Int, Int) -> Unit, cancelled: () -> Boolean): Int {
+        val base = extractAllText()
+        val todo = synchronized(ocrLock) {
+            val ocr = ocrArrayLocked()
+            base.indices.filter { base[it].isBlank() && ocr.getOrNull(it) == null }
+        }
+        if (todo.isEmpty()) return 0
+        var done = 0
+        progress(0, todo.size)
+        for (page in todo) {
+            if (cancelled()) break
+            val bmp = try { renderForOcr(page) } catch (t: Throwable) { null } ?: continue
+            val layout = try {
+                OcrEngine.recognize(bmp)?.let { OcrLayoutBuilder.build(it, bmp.width, bmp.height) }
+            } finally {
+                if (!bmp.isRecycled) bmp.recycle()
+            }
+            if (layout != null) {          // null = 引擎失败，留给下次重试；空文字也算「识别过」
+                synchronized(ocrLock) { ocrArrayLocked()[page] = layout }
+                done++
+                // 每 4 页落一次盘，中途退出也能接着识别
+                if (done % 4 == 0) synchronized(ocrLock) { ocrFile()?.let { OcrCache.write(it, ocrArrayLocked()) } }
+            }
+            progress(done, todo.size)
+        }
+        synchronized(ocrLock) { ocrFile()?.let { OcrCache.write(it, ocrArrayLocked()) } }
+        if (done > 0) {
+            // 把 OCR 文字并进搜索文本并重写文字缓存；字框层的 LRU 里可能缓存了「本页没有文字」，一并作废
+            synchronized(layoutLock) { layoutCache.clear() }
+            val merged = synchronized(ocrLock) {
+                val ocr = ocrArrayLocked()
+                base.mapIndexed { i, t ->
+                    if (t.isBlank()) ocr.getOrNull(i)?.text?.takeIf { it.isNotBlank() } ?: t else t
+                }
+            }
+            synchronized(textLock) {
+                searchPages = merged
+                contentFp?.let { TextCache.write(TextCache.fileFor(ctx.cacheDir, it), merged) }
+            }
+        }
+        return done
+    }
+
+    @Volatile private var searchPages: List<String>? = null
+    @Volatile private var contentFp: String? = null
+    private val textLock = Any()
+
+    override fun attachFingerprint(fp: String) { contentFp = fp }
+
+    // v45：提取结果按内容指纹落盘缓存（cacheDir，系统可回收）；同一份文档第二次起秒出。
+    // 并发调用（后台预热 + 用户点搜索）串行化，后到的直接拿先到的结果，不重复提取。
+    // 全是空白（扫描件 / 加密 / 解析失败）不落盘，避免一次临时失败被缓存成「没有文字」。
+    override fun extractAllText(): List<String> = synchronized(textLock) {
+        searchPages?.let { return@synchronized it }
+        val file = contentFp?.let { TextCache.fileFor(ctx.cacheDir, it) }
+        if (file != null) {
+            TextCache.read(file, count)?.let {
+                searchPages = it
+                return@synchronized it
+            }
+        }
         val pages = SearchText.build(count, { pageTextLayout(it) }) { ensureText() }
         searchPages = pages
-        return pages
+        if (file != null && DocumentSearch.hasText(pages)) TextCache.write(file, pages)
+        pages
     }
 
     private fun closeTileRenderPageLocked() {

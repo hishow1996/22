@@ -328,6 +328,8 @@ class PdfLayoutDoc private constructor(
     companion object {
         private const val MAX_DEPTH = 6
         private const val MAX_FORMS = 400
+        private const val MAX_OUTLINE_ITEMS = 3000
+        private const val MAX_OUTLINE_DEPTH = 12
 
         fun open(bytes: ByteArray): PdfLayoutDoc? {
             if (bytes.isEmpty() || bytes.size > PdfTextExtractor.MAX_SOURCE_BYTES) return null
@@ -368,6 +370,102 @@ class PdfLayoutDoc private constructor(
         } catch (e: StackOverflowError) {
             null
         }
+    }
+
+    // ----- v45：目录（Outlines） -----
+
+    /**
+     * 读取 PDF 自带的目录树，按文档顺序展平成带层级的列表；没有目录或读不出来返回空。
+     * 目标支持：直接目标数组、/A << /S /GoTo /D … >>、命名目标（/Dests 字典与 /Names 名称树）。
+     */
+    fun outline(): List<OutlineEntry> = try {
+        outlineUnsafe()
+    } catch (e: Exception) {
+        emptyList()
+    } catch (e: StackOverflowError) {
+        emptyList()
+    }
+
+    private fun catalogDict(): Map<String, Any?>? {
+        var fallback: Map<String, Any?>? = null
+        for ((n, b) in o.bodies) {
+            if (!b.contains("/Catalog")) continue
+            val d = dict(PRef(n)) ?: continue
+            if ((resolve(d["Type"]) as? PName)?.v != "Catalog") continue
+            if (d["Outlines"] != null) return d
+            if (fallback == null && d["Pages"] != null) fallback = d
+        }
+        return fallback
+    }
+
+    private fun outlineUnsafe(): List<OutlineEntry> {
+        val cat = catalogDict() ?: return emptyList()
+        val root = dict(cat["Outlines"]) ?: return emptyList()
+        val pageIndex = HashMap<Int, Int>()
+        pageNums.forEachIndexed { i, n -> pageIndex[n] = i }
+        val out = ArrayList<OutlineEntry>()
+        val seen = HashSet<Int>()
+
+        fun walk(first: Any?, level: Int) {
+            var cur: Any? = first
+            while (cur != null && out.size < MAX_OUTLINE_ITEMS) {
+                val ref = cur as? PRef
+                if (ref != null && !seen.add(ref.num)) return   // 环
+                val d = dict(cur) ?: return
+                val title = PdfText.decode(resolve(d["Title"]) as? ByteArray).trim()
+                if (title.isNotEmpty()) {
+                    out.add(OutlineEntry(title, destPage(d, cat, pageIndex), level))
+                }
+                if (level < MAX_OUTLINE_DEPTH) d["First"]?.let { walk(it, level + 1) }
+                cur = d["Next"]
+            }
+        }
+        walk(root["First"], 0)
+        return out
+    }
+
+    private fun destPage(item: Map<String, Any?>, cat: Map<String, Any?>, pageIndex: Map<Int, Int>): Int {
+        var dest: Any? = item["Dest"]
+        if (dest == null) {
+            val a = dict(item["A"])
+            if (a != null && (resolve(a["S"]) as? PName)?.v == "GoTo") dest = a["D"]
+        }
+        return pageOfDest(dest, cat, pageIndex, 0)
+    }
+
+    private fun pageOfDest(dest: Any?, cat: Map<String, Any?>, pageIndex: Map<Int, Int>, depth: Int): Int {
+        if (dest == null || depth > 4) return -1
+        return when (val v = resolve(dest)) {
+            is List<*> -> (v.firstOrNull() as? PRef)?.let { pageIndex[it.num] } ?: -1
+            is Map<*, *> -> pageOfDest(v["D"], cat, pageIndex, depth + 1)
+            is PName -> namedDest(v.v, cat, pageIndex, depth)
+            is ByteArray -> namedDest(String(v, Charsets.ISO_8859_1), cat, pageIndex, depth)
+            else -> -1
+        }
+    }
+
+    private fun namedDest(name: String, cat: Map<String, Any?>, pageIndex: Map<Int, Int>, depth: Int): Int {
+        dict(cat["Dests"])?.get(name)?.let { return pageOfDest(it, cat, pageIndex, depth + 1) }
+        val tree = dict(dict(cat["Names"])?.get("Dests")) ?: return -1
+        val v = findInNameTree(tree, name, 0) ?: return -1
+        return pageOfDest(v, cat, pageIndex, depth + 1)
+    }
+
+    private fun findInNameTree(node: Map<String, Any?>, key: String, depth: Int): Any? {
+        if (depth > 8) return null
+        list(node["Names"])?.let { l ->
+            var i = 0
+            while (i + 1 < l.size) {
+                val k = resolve(l[i]) as? ByteArray
+                if (k != null && String(k, Charsets.ISO_8859_1) == key) return l[i + 1]
+                i += 2
+            }
+        }
+        list(node["Kids"])?.forEach { kid ->
+            val kd = dict(kid) ?: return@forEach
+            findInNameTree(kd, key, depth + 1)?.let { return it }
+        }
+        return null
     }
 
     // ----- 对象访问 -----

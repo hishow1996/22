@@ -500,6 +500,15 @@ class PagesAdapter(
 
     fun clearSearch() = setSearch(emptyList(), emptyList(), null)
 
+    /** v45：OCR 完成后，已加载的「本页没有文字」结果作废，下次长按选字 / 搜索重新读。 */
+    fun reloadTextLayouts() {
+        for (h in holders.values) {
+            h.textOverlay.layout = null
+            h.secondTextOverlay.layout = null
+            if (searchActive) refreshSearch(h)
+        }
+    }
+
     private fun refreshSearch(h: VH) {
         val p0 = h.boundLogical
         if (p0 < 0) return
