@@ -2112,7 +2112,16 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             state.tempEraserOn
         }) {
             state.tempEraserOn = !state.tempEraserOn
-            if (!state.tempEraserOn && tempEraserActive) {
+            if (state.tempEraserOn) {
+                // 顶部打开悬浮橡皮时直接进入激活态：右下角按钮立即显示选中效果
+                // （实心图标），与点右下角按钮走同一条 toggle 路径，不另设状态。
+                if (!tempEraserActive) {
+                    toolBeforeEraser =
+                        if (currentTool == Tools.ERASER) lastDrawTool else currentTool
+                    tempEraserActive = true
+                    selectTool(Tools.ERASER)
+                }
+            } else if (tempEraserActive) {
                 tempEraserActive = false
                 selectTool(toolBeforeEraser)
             }
