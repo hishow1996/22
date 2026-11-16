@@ -255,8 +255,26 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val store: InkStore get() = inkStore
     override val ioScope: CoroutineScope get() = workScope
     override fun onFocus(key: String) { focusKey = key }
+    // 一笔跨页：两页各提交一次，合成撤销历史里的一步（同一页多次提交取首个 before、末个 after）
+    private var inkGrouping = false
+    private val groupChanges = ArrayList<InkHistory.Change>()
+    override fun onGroupBegin() { inkGrouping = true; groupChanges.clear() }
+    override fun onGroupEnd() {
+        inkGrouping = false
+        if (groupChanges.isEmpty()) return
+        val merged = LinkedHashMap<String, InkHistory.Change>()
+        for (c in groupChanges) {
+            val prev = merged[c.key]
+            merged[c.key] = if (prev == null) c else InkHistory.Change(c.key, prev.before, c.after)
+        }
+        groupChanges.clear()
+        history.push(merged.values.toList())
+        refreshUndoState()
+    }
     override fun onCommit(key: String, before: List<Mark>, after: List<Mark>) {
-        history.push(listOf(InkHistory.Change(key, before, after)))
+        val change = InkHistory.Change(key, before, after)
+        if (inkGrouping) { groupChanges.add(change); return }
+        history.push(listOf(change))
         refreshUndoState()
     }
     override fun onSelectionChanged(active: Boolean) {

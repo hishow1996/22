@@ -52,6 +52,9 @@ class InkView @JvmOverloads constructor(
         val visibleLayers: Set<Int>
         val store: InkStore
         val ioScope: CoroutineScope
+        /** 一笔跨页时，两页各自的提交合成撤销历史里的一步。 */
+        fun onGroupBegin() {}
+        fun onGroupEnd() {}
         fun onFocus(key: String)
         fun onCommit(key: String, before: List<Mark>, after: List<Mark>)
         fun onSelectionChanged(active: Boolean)
@@ -210,6 +213,15 @@ class InkView @JvmOverloads constructor(
 
     private val unit: Float get() = min(width, height).toFloat().coerceAtLeast(1f)
     private val density: Float get() = resources.displayMetrics.density
+
+    /** 当前工具能不能把一笔接到相邻页：自由笔 / 荧光笔 / 橡皮可以，形状、套索、便签不行。 */
+    fun canCrossPages(): Boolean {
+        val t = host?.tool ?: return false
+        return t == Tools.PEN || t == Tools.HIGHLIGHT || t == Tools.ERASER
+    }
+
+    fun groupBegin() { host?.onGroupBegin() }
+    fun groupEnd() { host?.onGroupEnd() }
 
     fun attach(h: Host, k: String) {
         loadJob?.cancel()

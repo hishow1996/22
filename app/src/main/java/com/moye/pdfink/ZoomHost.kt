@@ -113,6 +113,22 @@ class ZoomHost @JvmOverloads constructor(
     private var manualInk: View? = null
     private var manualDx = 0f
     private var manualDy = 0f
+
+    // ---- 连续滚动：一笔跨页 ----
+    // 手势始终由起笔那一页（本 View）收到；笔移出本页时，把这一笔在页边切开：
+    // 当前页补一个边缘点后抬笔，相邻页在边缘处落笔继续。所有坐标都用本 View 的局部坐标，
+    // 邻页的位置靠两个列表项 top 的差换算。
+    private var crossActive = false
+    private var crossCur: ZoomHost? = null
+    private var crossUp: ZoomHost? = null
+    private var crossDown: ZoomHost? = null
+    private var boundUp = Float.NEGATIVE_INFINITY
+    private var boundDown = Float.POSITIVE_INFINITY
+    private var crossGrouped = false
+    private var crossPrevX = 0f
+    private var crossPrevY = 0f
+    private val crossProps = MotionEvent.PointerProperties()
+    private val crossCoords = MotionEvent.PointerCoords()
     private var singleStartX = 0f
     private var singleStartY = 0f
     private var lastSingleX = 0f
@@ -451,6 +467,7 @@ class ZoomHost @JvmOverloads constructor(
                 try {
                     if (manualInk != null) sendManual(c) else super.dispatchTouchEvent(c)
                 } finally { c.recycle() }
+                endCross()
                 manualInk = null
             }
             zooming = true
@@ -572,23 +589,192 @@ class ZoomHost @JvmOverloads constructor(
             return true
         }
         if (manualInk != null) {
-            val handled = sendManual(ev)
+            val handled = if (crossActive) sendCross(ev) else sendManual(ev)
             if (ev.actionMasked == MotionEvent.ACTION_UP ||
-                ev.actionMasked == MotionEvent.ACTION_CANCEL) manualInk = null
+                ev.actionMasked == MotionEvent.ACTION_CANCEL) {
+                endCross()
+                manualInk = null
+            }
             return handled
         }
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
-            val target = outsideFrameInk(ev.x, ev.y)
+            val target = outsideFrameInk(ev.x, ev.y) ?: insideFrameCrossInk(ev)
             if (target != null) {
                 manualInk = target.first
                 manualDx = target.second
                 manualDy = target.third
                 val handled = sendManual(ev)
                 if (!handled) manualInk = null
+                else beginCross(target.first as? InkView, ev)
                 return handled
             }
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** 连续滚动里，落在本页页框内的单指落笔：自由笔 / 橡皮改走手动转发，才能一笔跨页。 */
+    private fun insideFrameCrossInk(ev: MotionEvent): Triple<View, Float, Float>? {
+        if (!continuousScroll || ev.pointerCount != 1) return null
+        val (ink, f) = primaryInkAndFrame() ?: return null
+        if (!ink.canCrossPages()) return null
+        if (ev.x < f.left || ev.x >= f.right || ev.y < f.top || ev.y >= f.bottom) return null
+        return Triple(ink, f.left, f.top)
+    }
+
+    private fun primaryInkAndFrame(): Pair<InkView, PageFrame>? {
+        val page = primaryPage as? android.view.ViewGroup ?: return null
+        val f = pageFrameFor(page) ?: return null
+        val ink = (0 until page.childCount).map { page.getChildAt(it) }
+            .lastOrNull { it is InkView && it.visibility == View.VISIBLE } as? InkView
+            ?: return null
+        return ink to f
+    }
+
+    private fun usableNeighbor(of: ZoomHost, dir: Int): ZoomHost? {
+        val rv = of.parent as? androidx.recyclerview.widget.RecyclerView ?: return null
+        val pos = rv.getChildAdapterPosition(of)
+        if (pos == androidx.recyclerview.widget.RecyclerView.NO_POSITION) return null
+        val n = rv.findViewHolderForAdapterPosition(pos + dir)?.itemView as? ZoomHost ?: return null
+        if (!n.continuousScroll || n.browseMode || n.primaryInkAndFrame() == null) return null
+        return n
+    }
+
+    private fun beginCross(ink: InkView?, ev: MotionEvent) {
+        crossActive = continuousScroll && ink != null && ink.canCrossPages()
+        crossGrouped = false
+        crossPrevX = ev.x
+        crossPrevY = ev.y
+        crossCur = this
+        if (crossActive) refreshCrossBounds()
+    }
+
+    private fun refreshCrossBounds() {
+        val cur = crossCur ?: return
+        crossUp = usableNeighbor(cur, -1)
+        crossDown = usableNeighbor(cur, 1)
+        boundUp = crossUp?.let { (it.bottom + cur.top) * 0.5f } ?: Float.NEGATIVE_INFINITY
+        boundDown = crossDown?.let { (cur.bottom + it.top) * 0.5f } ?: Float.POSITIVE_INFINITY
+    }
+
+    private fun endCross() {
+        if (crossGrouped) (manualInk as? InkView)?.groupEnd()
+        crossGrouped = false
+        crossActive = false
+        crossCur = null
+        crossUp = null
+        crossDown = null
+    }
+
+    /** 本 View 局部纵坐标 y 落在当前接笔页的上方(-1) / 内(0) / 下方(1)。 */
+    private fun crossDir(y: Float): Int {
+        val yr = y + top
+        return when {
+            yr < boundUp -> -1
+            yr >= boundDown -> 1
+            else -> 0
+        }
+    }
+
+    private fun lerpX(x0: Float, y0: Float, x1: Float, y1: Float, y: Float): Float {
+        val dy = y1 - y0
+        if (kotlin.math.abs(dy) < 0.001f) return x1
+        return x0 + (x1 - x0) * ((y - y0) / dy)
+    }
+
+    /**
+     * 用 ev 的第 idx 个采样（idx == historySize 表示当前点）做底，换成指定动作和位置，
+     * 造一个单指事件。保留触控笔类型 / 压力 / 触摸面积；原始坐标仍是真实屏幕位置，
+     * 这样顶边防误触、手掌判断照常生效。
+     */
+    private fun synthSample(ev: MotionEvent, idx: Int, action: Int, x: Float, y: Float): MotionEvent {
+        val hs = ev.historySize
+        ev.getPointerProperties(0, crossProps)
+        val time: Long
+        if (idx < hs) {
+            ev.getHistoricalPointerCoords(0, idx, crossCoords)
+            time = ev.getHistoricalEventTime(idx)
+        } else {
+            ev.getPointerCoords(0, crossCoords)
+            time = ev.eventTime
+        }
+        val ox = ev.rawX - ev.x
+        val oy = ev.rawY - ev.y
+        crossCoords.x = x + ox
+        crossCoords.y = y + oy
+        val c = MotionEvent.obtain(
+            if (action == MotionEvent.ACTION_DOWN) time else ev.downTime, time, action,
+            1, arrayOf(crossProps), arrayOf(crossCoords),
+            ev.metaState, ev.buttonState, ev.xPrecision, ev.yPrecision,
+            ev.deviceId, ev.edgeFlags, ev.source, ev.flags
+        )
+        c.offsetLocation(-ox, -oy)
+        return c
+    }
+
+    private fun sendSynth(ev: MotionEvent, idx: Int, action: Int, x: Float, y: Float): Boolean {
+        val c = synthSample(ev, idx, action, x, y)
+        return try { sendManual(c) } finally { c.recycle() }
+    }
+
+    /** 当前接笔页换成相邻页 dir（-1 上 / 1 下）：本页补边缘点并抬笔，邻页在边缘落笔。 */
+    private fun crossTo(ev: MotionEvent, idx: Int, dir: Int, x: Float, y: Float): Boolean {
+        val cur = crossCur ?: return false
+        val next = (if (dir > 0) crossDown else crossUp) ?: return false
+        val (nInk, nFrame) = next.primaryInkAndFrame() ?: return false
+        val curEdge = (if (dir > 0) cur.bottom else cur.top) - top.toFloat()
+        val nextEdge = (if (dir > 0) next.top else next.bottom) - top.toFloat()
+        val exitX = lerpX(crossPrevX, crossPrevY, x, y, curEdge)
+        val entryX = lerpX(crossPrevX, crossPrevY, x, y, nextEdge)
+        if (!crossGrouped) {
+            crossGrouped = true
+            (manualInk as? InkView)?.groupBegin()
+        }
+        sendSynth(ev, idx, MotionEvent.ACTION_MOVE, exitX, curEdge)
+        sendSynth(ev, idx, MotionEvent.ACTION_UP, exitX, curEdge)
+        manualInk = nInk
+        manualDx = nFrame.left + (next.left - left)
+        manualDy = nFrame.top + (next.top - top)
+        crossCur = next
+        refreshCrossBounds()
+        val ok = sendSynth(ev, idx, MotionEvent.ACTION_DOWN, entryX, nextEdge)
+        crossPrevX = entryX
+        crossPrevY = nextEdge
+        return ok
+    }
+
+    /** 一笔跨页的事件分发：绝大多数事件仍整块转发（保留历史采样），只有越过页边的才逐点拆开。 */
+    private fun sendCross(ev: MotionEvent): Boolean {
+        val act = ev.actionMasked
+        if (ev.pointerCount != 1 || act == MotionEvent.ACTION_CANCEL ||
+            (act != MotionEvent.ACTION_MOVE && act != MotionEvent.ACTION_UP)
+        ) return sendManual(ev)
+        val hs = ev.historySize
+        var inside = true
+        for (i in 0..hs) {
+            val y = if (i < hs) ev.getHistoricalY(i) else ev.y
+            if (crossDir(y) != 0) { inside = false; break }
+        }
+        if (inside) {
+            val handled = sendManual(ev)
+            crossPrevX = ev.x
+            crossPrevY = ev.y
+            return handled
+        }
+        var handled = true
+        for (i in 0..hs) {
+            val x = if (i < hs) ev.getHistoricalX(i) else ev.x
+            val y = if (i < hs) ev.getHistoricalY(i) else ev.y
+            var guard = 0
+            while (guard++ < 3) {
+                val dir = crossDir(y)
+                if (dir == 0 || !crossTo(ev, i, dir, x, y)) break
+            }
+            val action = if (i == hs) act else MotionEvent.ACTION_MOVE
+            handled = sendSynth(ev, i, action, x, y)
+            crossPrevX = x
+            crossPrevY = y
+        }
+        return handled
     }
 
     private fun sendManual(ev: MotionEvent): Boolean {
