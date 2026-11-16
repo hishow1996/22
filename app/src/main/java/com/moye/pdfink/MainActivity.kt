@@ -3425,13 +3425,16 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val inDoc = repo != null && pager.visibility == View.VISIBLE
         btnTempEraser.visibility =
             if (inDoc && state.tempEraserOn && !state.browse) View.VISIBLE else View.GONE
-        btnTempEraser.isSelected = tempEraserActive
+        // 选中效果统一指示「处于橡皮模式」：右下角进入（tempEraserActive）
+        // 或顶部工具栏选了橡皮（currentTool == ERASER）都显示实心态
+        val eraserEngaged = tempEraserActive || currentTool == Tools.ERASER
+        btnTempEraser.isSelected = eraserEngaged
         // v12：只换图案，不再套圆形背景、不再整体染色（会染掉白色高光）
         btnTempEraser.setImageResource(
-            if (tempEraserActive) R.drawable.ic_temp_eraser_on
+            if (eraserEngaged) R.drawable.ic_temp_eraser_on
             else R.drawable.ic_temp_eraser)
         btnTempEraser.contentDescription = getString(
-            if (tempEraserActive) R.string.cd_temp_eraser_off
+            if (eraserEngaged) R.string.cd_temp_eraser_off
             else R.string.cd_temp_eraser)
     }
 
@@ -3443,9 +3446,16 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     /** 点一下切成橡皮并高亮，再点切回上一个绘图工具。 */
     private fun toggleTempEraser() {
-        if (tempEraserActive) {
-            tempEraserActive = false
-            selectTool(toolBeforeEraser)
+        if (tempEraserActive || currentTool == Tools.ERASER) {
+            // 已处于橡皮模式（右下角进入或顶部工具栏进入）→ 退出回绘图工具
+            if (tempEraserActive) {
+                tempEraserActive = false
+                selectTool(toolBeforeEraser)
+            } else {
+                // 顶部工具栏进入的：与顶部再点一次橡皮的退出行为保持一致
+                tempEraserActive = false
+                selectTool(ToolModeRules.closeFallback(lastDrawTool))
+            }
         } else {
             toolBeforeEraser =
                 if (currentTool == Tools.ERASER) lastDrawTool else currentTool
