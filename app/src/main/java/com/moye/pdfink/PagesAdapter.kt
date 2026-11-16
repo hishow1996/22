@@ -264,8 +264,8 @@ class PagesAdapter(
             }
             if (h.image.isShown) h.image.invalidate()
             if (h.secondImage.isShown) h.secondImage.invalidate()
-            if (h.textOverlay.hasSelection) h.textOverlay.invalidate()
-            if (h.secondTextOverlay.hasSelection) h.secondTextOverlay.invalidate()
+            if (h.textOverlay.needsRedraw) h.textOverlay.invalidate()
+            if (h.secondTextOverlay.needsRedraw) h.secondTextOverlay.invalidate()
             h.zoom.onSelectionViewportChanged()
         }
         h.zoom.onViewportGestureChanged = { active ->
@@ -300,6 +300,8 @@ class PagesAdapter(
         h.secondTextOverlay.visibility = if (showSecond) View.VISIBLE else View.GONE
         h.zoom.textOverlays =
             if (showSecond) listOf(h.textOverlay, h.secondTextOverlay) else listOf(h.textOverlay)
+        // v44：搜索中翻到 / 滚到的新页，文字层读到后自动带上高亮
+        if (searchActive) refreshSearch(h)
         h.zoom.textGate = { ev ->
             state.browse ||
                 (state.stylusOnly && ev.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_FINGER)
@@ -468,6 +470,86 @@ class PagesAdapter(
                 loadingText.remove(o)
                 if (h.renderToken == token && h.bindingAdapterPosition == position) {
                     o.layout = l ?: PageTextLayout.EMPTY
+                    pushSearch(o, page)
+                }
+            }
+        }
+    }
+
+
+    // ----- v44 全文搜索：高亮 + 定位 -----
+
+    private var searchRanges: Map<Int, List<IntArray>> = emptyMap()
+    private var searchTexts: List<String> = emptyList()
+    private var searchCurPage = -1
+    private var searchCurStart = -1
+    val searchActive: Boolean get() = searchRanges.isNotEmpty()
+
+    /**
+     * 设置要高亮的命中。texts 是搜索时用的每页文字：只有页面文字层的文字与它一致，
+     * 命中下标才对得上字框；老提取器补出来的页没有字框，只能跳页、不能高亮。
+     */
+    fun setSearch(hits: List<SearchHit>, texts: List<String>, current: SearchHit?) {
+        searchRanges = hits.groupBy { it.page }
+            .mapValues { (_, v) -> v.map { intArrayOf(it.start, it.end) } }
+        searchTexts = texts
+        searchCurPage = current?.page ?: -1
+        searchCurStart = current?.start ?: -1
+        for (h in holders.values) refreshSearch(h)
+    }
+
+    fun clearSearch() = setSearch(emptyList(), emptyList(), null)
+
+    private fun refreshSearch(h: VH) {
+        val p0 = h.boundLogical
+        if (p0 < 0) return
+        pushSearch(h.textOverlay, p0)
+        if (h.secondTextOverlay.visibility == View.VISIBLE) pushSearch(h.secondTextOverlay, p0 + 1)
+    }
+
+    private fun pushSearch(o: PageTextOverlay, page: Int) {
+        if (!searchActive) { o.clearSearch(); return }
+        val l = o.layout
+        if (l == null) { o.loader?.invoke(); return }   // 读到后 loadTextLayout 会再推一次
+        val list = searchRanges[page]
+        if (list == null || searchTexts.getOrNull(page) != l.text) { o.clearSearch(); return }
+        val cur = if (page == searchCurPage) list.indexOfFirst { it[0] == searchCurStart } else -1
+        o.setSearch(list, cur)
+    }
+
+    /**
+     * 把 [page] 页里从 [start] 起的那一处命中挪进可视区：缩放后平移，连续滚动时再滚列表。
+     * 页面还没绑定 / 文字层还没读到时每 80ms 重试，最多约 1.2 秒。
+     */
+    fun revealSearchHit(page: Int, start: Int, attempt: Int = 0) {
+        val rv = recycler ?: return
+        fun retry() {
+            if (attempt < 15) rv.postDelayed({ revealSearchHit(page, start, attempt + 1) }, 80L)
+        }
+        val h = holders.values.firstOrNull {
+            it.boundLogical == page || (doublePage && it.boundLogical + 1 == page)
+        }
+        if (h == null) { retry(); return }
+        val o = if (h.boundLogical == page) h.textOverlay else h.secondTextOverlay
+        val idx = searchRanges[page]?.indexOfFirst { it[0] == start } ?: -1
+        if (idx < 0) return                      // 这一处不在本页的高亮里：只跳页
+        val layout = o.layout
+        if (layout == null) { o.loader?.invoke(); retry(); return }
+        // 没有字框（扫描页 / 老提取器补出的页）或文字对不上：只跳页，不再重试
+        if (layout === PageTextLayout.EMPTY || searchTexts.getOrNull(page) != layout.text) return
+        val b = FloatArray(4)
+        if (!o.searchHitNormalizedBounds(idx, b)) { retry(); return }
+        val pageView = o.parent as? View
+        val cx = (b[0] + b[2]) * 0.5f
+        val cy = (b[1] + b[3]) * 0.5f
+        h.zoom.revealPagePoint(pageView, cx, cy)
+        if (continuous) {
+            val p = FloatArray(2)
+            if (h.zoom.pagePointInHost(pageView, cx, cy, p)) {
+                val y = h.itemView.top + p[1]
+                val rh = rv.height.toFloat()
+                if (rh > 0f && (y < rh * 0.16f || y > rh * 0.84f)) {
+                    rv.smoothScrollBy(0, (y - rh * 0.4f).toInt())
                 }
             }
         }

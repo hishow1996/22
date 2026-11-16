@@ -882,6 +882,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun handleBack() {
         // SAF 选择器 / 文档加载中不接管，避免打断打开流程
         if (openingDocument) return
+        // 0 文档内查找条：先收起（同时清掉页面高亮），不算退出确认第一下
+        if (findBar?.visibility == View.VISIBLE) {
+            closeFindBar()
+            lastExitBackAt = 0L
+            return
+        }
         // 1 套索选区：先取消，属于关掉中间状态，不算退出确认第一下
         if (activeViews.values.any { it.hasSelection() }) {
             activeViews.values.forEach { it.cancelSelection() }
@@ -1181,6 +1187,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnShow.translationX = safeL.toFloat()
 
         refreshTools()
+        positionFindBar()
         // 栏显隐 / insets / 旋转改了宿主视口，页面几何必须跟着重算，
         // 避免平移边界与分块视口继续使用旧尺寸。
         if (inDoc) adapter?.relayoutForChrome()
@@ -1462,6 +1469,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun showHome() {
+        dropFindState()
         if (openingDocument) {
             openGeneration++
             openingDocument = false
@@ -1769,6 +1777,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         if (r.count <= 0) { r.close(); showHome(); return false }
 
+        dropFindState()
         val generation = ++openGeneration
         // 先把当前页已完成/正在结束的笔迹快照排进旧文档队列，再卸载旧页面。
         activeViews.values.toList().forEach { it.persistForDocumentSwitch() }
@@ -2348,6 +2357,234 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         dialog.window?.setLayout(dp(340), dp(480))
     }
 
+    // ----- v44：文档内查找（像 WPS：关键词直接在页面上高亮，上一处 / 下一处定位）-----
+
+    private var findBar: View? = null
+    private var findPages: List<String>? = null
+    private var findHits: List<SearchHit> = emptyList()
+    private var findCapped = false
+    private var findIndex = -1
+    private var findQuery = ""
+    private var findInFlight = ""
+    private var findSeq = 0
+    private var findLoading = false
+    /** 从结果列表点进来时，要定位到的那一处（而不是「当前页之后第一处」）。 */
+    private var findPreferred: SearchHit? = null
+
+    private fun findMax() = 1000
+
+    private fun showDocSearch() { openFindBar(null) }
+
+    private fun openFindBar(initial: String?) {
+        if (repo == null) return
+        val host = root as? ViewGroup ?: return
+        var bar = findBar
+        if (bar == null) {
+            bar = layoutInflater.inflate(R.layout.bar_doc_find, host, false)
+            host.addView(bar)
+            findBar = bar
+            setupFindBar(bar)
+        }
+        bar.visibility = View.VISIBLE
+        positionFindBar()
+        val input = bar.findViewById<EditText>(R.id.findInput)
+        val cur = input.text?.toString().orEmpty().trim()
+        val q = (initial ?: cur.ifEmpty { lastDocQuery }).trim()
+        // 查找条本来就开着、词没变、又是从结果列表点进来的：直接定位到点的那一处
+        val pref = findPreferred
+        val prefIdx = if (pref != null && q == findQuery) {
+            findHits.indexOfFirst { it.page == pref.page && it.start == pref.start }
+        } else -1
+        if (prefIdx >= 0) {
+            findPreferred = null
+            gotoFind(prefIdx)
+        } else if (q != cur) {
+            input.setText(q)              // 文字监听会接着去搜
+        } else if (q.isNotEmpty()) {
+            runFind(q)
+        }
+        input.requestFocus()
+        input.setSelection(0, input.text.length)
+        if (initial == null) {
+            input.post {
+                (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+    }
+
+    private fun setupFindBar(bar: View) {
+        val input = bar.findViewById<EditText>(R.id.findInput)
+        val clear = bar.findViewById<ImageButton>(R.id.findClear)
+        val debounced = Runnable { runFind(input.text?.toString().orEmpty().trim()) }
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                clear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
+                input.removeCallbacks(debounced)
+                if (s.isNullOrBlank()) resetFind() else input.postDelayed(debounced, 250L)
+            }
+        })
+        input.setOnEditorActionListener { _, action, _ ->
+            if (action == EditorInfo.IME_ACTION_SEARCH) {
+                input.removeCallbacks(debounced)
+                val q = input.text?.toString().orEmpty().trim()
+                // 词没变就是「下一处」，和 WPS 的回车一致
+                if (q == findQuery && findHits.isNotEmpty()) stepFind(1) else runFind(q)
+                hideFindKeyboard()
+                true
+            } else false
+        }
+        clear.setOnClickListener { input.setText(""); input.requestFocus() }
+        bar.findViewById<ImageButton>(R.id.findNext).setOnClickListener {
+            input.removeCallbacks(debounced)
+            stepFind(1)
+            hideFindKeyboard()
+        }
+        bar.findViewById<ImageButton>(R.id.findPrev).setOnClickListener {
+            input.removeCallbacks(debounced)
+            stepFind(-1)
+            hideFindKeyboard()
+        }
+        bar.findViewById<ImageButton>(R.id.findList).setOnClickListener {
+            hideFindKeyboard()
+            lastDocQuery = input.text?.toString().orEmpty().trim()
+            showDocSearchList()
+        }
+        bar.findViewById<ImageButton>(R.id.findClose).setOnClickListener { closeFindBar() }
+    }
+
+    private fun hideFindKeyboard() {
+        val input = findBar?.findViewById<View>(R.id.findInput) ?: return
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(input.windowToken, 0)
+    }
+
+    /** 查找条盖在顶栏上：高度 / 刘海内边距照搬顶栏；沉浸态顶栏隐藏时自己留出安全区。 */
+    private fun positionFindBar() {
+        val bar = findBar ?: return
+        val lp = bar.layoutParams as FrameLayout.LayoutParams
+        lp.gravity = Gravity.TOP
+        val topInset = maxOf(safeT, sysTop)
+        if (barsHidden || topBar.visibility != View.VISIBLE) {
+            lp.height = dp(54) + topInset
+            bar.setPadding(safeL + dp(8), topInset, safeR + dp(4), 0)
+        } else {
+            lp.height = (topBar.layoutParams as FrameLayout.LayoutParams).height
+            bar.setPadding(safeL + dp(8), topBar.paddingTop, safeR + dp(4), topBar.paddingBottom)
+        }
+        bar.layoutParams = lp
+        bar.bringToFront()
+    }
+
+    private fun setFindCount(t: String) {
+        findBar?.findViewById<TextView>(R.id.findCount)?.text = t
+    }
+
+    private fun resetFind() {
+        findSeq++
+        findHits = emptyList()
+        findIndex = -1
+        findQuery = ""
+        findInFlight = ""
+        adapter?.clearSearch()
+        setFindCount("")
+    }
+
+    private fun closeFindBar() {
+        val bar = findBar ?: return
+        if (bar.visibility == View.VISIBLE) hideFindKeyboard()
+        bar.visibility = View.GONE
+        findPreferred = null
+        resetFind()
+    }
+
+    /** 换文档 / 回书架：查找条和上一份文档的文字层都作废。 */
+    private fun dropFindState() {
+        closeFindBar()
+        findPages = null
+        findLoading = false
+    }
+
+    private fun runFind(q: String) {
+        if (q.isEmpty()) { resetFind(); return }
+        if ((q == findQuery && findHits.isNotEmpty()) || q == findInFlight) return
+        lastDocQuery = q
+        val cached = findPages
+        if (cached != null) { applyFind(q, cached); return }
+        if (findLoading) return          // 提取完会按输入框里最新的词再搜一次
+        val r = repo ?: return
+        findLoading = true
+        setFindCount("…")
+        workScope.launch {
+            val pages = try { r.extractAllText() } catch (e: Exception) { emptyList() }
+            withContext(Dispatchers.Main) {
+                findLoading = false
+                if (isFinishing || isDestroyed || repo !== r) return@withContext
+                findPages = pages
+                val cur = findBar?.findViewById<EditText>(R.id.findInput)
+                    ?.text?.toString().orEmpty().trim()
+                if (cur.isNotEmpty()) applyFind(cur, pages) else setFindCount("")
+            }
+        }
+    }
+
+    private fun applyFind(q: String, pages: List<String>) {
+        val my = ++findSeq
+        findInFlight = q
+        workScope.launch {
+            val res = DocumentSearch.search(pages, q, findMax())
+            withContext(Dispatchers.Main) {
+                if (my != findSeq || isFinishing || isDestroyed ||
+                    findBar?.visibility != View.VISIBLE) return@withContext
+                findInFlight = ""
+                findQuery = q
+                findHits = res.hits
+                findCapped = res.capped
+                if (res.hits.isEmpty()) {
+                    findIndex = -1
+                    adapter?.clearSearch()
+                    setFindCount(getString(R.string.find_none))
+                    if (!DocumentSearch.hasText(pages)) flash(getString(R.string.doc_search_no_layer))
+                    return@withContext
+                }
+                // 点列表进来的就定位到那一处；否则从当前页起第一处，都在前面就回绕到第一处
+                val pref = findPreferred
+                findPreferred = null
+                val cp = currentPage()
+                val i = pref?.let { p ->
+                    res.hits.indexOfFirst { it.page == p.page && it.start == p.start }
+                }?.takeIf { it >= 0 }
+                    ?: res.hits.indexOfFirst { it.page >= cp }.let { if (it < 0) 0 else it }
+                gotoFind(i)
+            }
+        }
+    }
+
+    private fun stepFind(delta: Int) {
+        if (findHits.isEmpty()) {
+            runFind(findBar?.findViewById<EditText>(R.id.findInput)
+                ?.text?.toString().orEmpty().trim())
+            return
+        }
+        gotoFind(findIndex + delta)
+    }
+
+    /** 定位到第 i 处（越界回绕）：全部命中淡黄、当前这一处橙色，翻到该页并平移到可视区。 */
+    private fun gotoFind(i: Int) {
+        val hits = findHits
+        val pages = findPages
+        if (hits.isEmpty() || pages == null) return
+        val idx = ((i % hits.size) + hits.size) % hits.size
+        findIndex = idx
+        val h = hits[idx]
+        setFindCount("${idx + 1}/${hits.size}${if (findCapped) "+" else ""}")
+        adapter?.setSearch(hits, pages, h)
+        if (currentPage() != h.page) goToPage(h.page)
+        adapter?.revealSearchHit(h.page, h.start)
+    }
+
     /** 上一次搜的词：跳页看完再打开搜索面板时带回来，方便接着找下一处。 */
     private var lastDocQuery = ""
 
@@ -2358,7 +2595,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      *  - 提取中有细进度条；没有文字层 / 没找到 / 命中过多各有各的提示；
      *  - 尺寸跟屏幕走，不再写死 460×440dp（窄屏被裁，软键盘一出来列表只剩一条缝）。
      */
-    private fun showDocSearch() {
+    private fun showDocSearchList() {
         val v = layoutInflater.inflate(R.layout.dialog_doc_search, null)
         val dialog = AlertDialog.Builder(this).setView(v).create()
         val input = v.findViewById<EditText>(R.id.docSearchInput)
@@ -2427,8 +2664,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     // 短按跳页，长按进系统选择菜单，只复制选中的片段
                     setTextIsSelectable(true)
                     setOnClickListener {
-                        goToPage(h.page)
+                        // v44：点结果 = 回到文档里，在页面上高亮并定位到这一处
                         dialog.dismiss()
+                        findPreferred = h
+                        openFindBar(lastDocQuery)
                     }
                 }
                 results.addView(row, LinearLayout.LayoutParams(

@@ -29,6 +29,7 @@ class PageTextOverlay @JvmOverloads constructor(
         set(value) {
             field = value
             clear()
+            clearSearch()
         }
 
     /** 第一次需要文字层时由 ZoomHost 调用，适配器在这里启动后台读取。 */
@@ -36,6 +37,50 @@ class PageTextOverlay @JvmOverloads constructor(
 
     private var selStart = -1
     private var selEnd = -1
+
+    // v44 全文搜索高亮：本页所有命中（[start, end) 为文字层下标），cur 是当前命中的序号
+    private var searchRanges: List<IntArray> = emptyList()
+    private var searchCur = -1
+
+    /** 选区或搜索高亮存在时，视口变化都要重画。 */
+    val needsRedraw: Boolean get() = hasSelection || searchRanges.isNotEmpty()
+
+    fun setSearch(ranges: List<IntArray>, current: Int) {
+        searchRanges = ranges
+        searchCur = current
+        invalidate()
+    }
+
+    fun clearSearch() {
+        if (searchRanges.isEmpty() && searchCur == -1) return
+        searchRanges = emptyList()
+        searchCur = -1
+        invalidate()
+    }
+
+    /**
+     * 第 [index] 处搜索命中的外接矩形（归一化 0..1，左上原点，已含页面旋转），
+     * 用来把它平移进可视区；没有文字层或下标越界返回 null。
+     */
+    fun searchHitNormalizedBounds(index: Int, out: FloatArray): Boolean {
+        val l = layout ?: return false
+        val r = searchRanges.getOrNull(index) ?: return false
+        var x0 = Float.MAX_VALUE
+        var y0 = Float.MAX_VALUE
+        var x1 = -Float.MAX_VALUE
+        var y1 = -Float.MAX_VALUE
+        var any = false
+        for (i in r[0].coerceAtLeast(0) until r[1].coerceAtMost(l.length)) {
+            if (!l.real[i]) continue
+            x0 = minOf(x0, l.boxes[4 * i]); y0 = minOf(y0, l.boxes[4 * i + 1])
+            x1 = maxOf(x1, l.boxes[4 * i + 2]); y1 = maxOf(y1, l.boxes[4 * i + 3])
+            any = true
+        }
+        if (!any) return false
+        out[0] = x0; out[1] = y0; out[2] = x1; out[3] = y1
+        return true
+    }
+
 
     val hasSelection: Boolean get() = selStart in 0 until selEnd
 
@@ -46,6 +91,13 @@ class PageTextOverlay @JvmOverloads constructor(
     }
     private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(41, 121, 255)
+    }
+    // 搜索：所有命中淡黄，当前这一处橙色加深（与 WPS 同样的两档）
+    private val hitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(110, 255, 214, 10)
+    }
+    private val hitCurPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(150, 255, 138, 0)
     }
 
     init {
@@ -186,7 +238,9 @@ class PageTextOverlay @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         val l = layout ?: return
-        if (!hasSelection || !ready()) return
+        if (!ready()) return
+        if (searchRanges.isNotEmpty()) drawSearch(canvas, l)
+        if (!hasSelection) return
         val rects = TextSelectionMath.lineRects(l, selStart, selEnd, pageW(), pageH())
         val dx = ox()
         val dy = oy()
@@ -200,6 +254,28 @@ class PageTextOverlay @JvmOverloads constructor(
         val a = FloatArray(2)
         if (anchor(HANDLE_START, a)) drawHandle(canvas, a[0], a[1], true)
         if (anchor(HANDLE_END, a)) drawHandle(canvas, a[0], a[1], false)
+    }
+
+    private fun drawSearch(canvas: Canvas, l: PageTextLayout) {
+        val dx = ox()
+        val dy = oy()
+        val w = pageW()
+        val h = pageH()
+        // 先画普通命中，再画当前命中，保证当前这一处不被相邻的盖住
+        for (pass in 0..1) {
+            for ((i, r) in searchRanges.withIndex()) {
+                if ((i == searchCur) != (pass == 1)) continue
+                val rects = TextSelectionMath.lineRects(l, r[0], r[1], w, h)
+                val paint = if (pass == 1) hitCurPaint else hitPaint
+                var k = 0
+                while (k + 3 < rects.size) {
+                    canvas.drawRect(
+                        rects[k] - dx, rects[k + 1] - dy, rects[k + 2] - dx, rects[k + 3] - dy, paint
+                    )
+                    k += 4
+                }
+            }
+        }
     }
 
     /** 水滴形把手：圆在锚点下方，尖角顶住锚点（左把手尖角朝右上，右把手朝左上）。 */

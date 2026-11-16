@@ -9,4 +9,11 @@
     <string name="doc_search_no_layer">该文档没有可搜索的文字层（扫描件、图片或加密 PDF）</string>
     <string name="doc_search_page_header">第 %1$d 页 · %2$d 处</string>
     <string name="cd_doc_search_clear">清空关键词</string>
+    <!-- v44：文档内查找条 -->
+    <string name="find_hint">在文档中查找</string>
+    <string name="find_none">无结果</string>
+    <string name="cd_find_prev">上一处</string>
+    <string name="cd_find_next">下一处</string>
+    <string name="cd_find_list">结果列表</string>
+    <string name="cd_find_close">关闭查找</string>
 </resources>

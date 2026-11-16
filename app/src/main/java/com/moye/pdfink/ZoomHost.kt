@@ -1001,6 +1001,48 @@ class ZoomHost @JvmOverloads constructor(
 
     fun refreshPanBounds() { refreshPageGeometry() }
 
+
+    /**
+     * 页面上归一化坐标 (nx, ny) 的点此刻在本 View 里的位置（本 View 局部像素）。
+     * 公式与 [ZoomTransform.pageViewportMapping] 的 displayedLeft / displayedTop 一致。
+     */
+    fun pagePointInHost(pageView: View?, nx: Float, ny: Float, out: FloatArray): Boolean {
+        val f = pageFrameFor(pageView) ?: return false
+        if (width <= 0 || height <= 0) return false
+        val s = scale
+        val left = width * 0.5f + (f.left - width * 0.5f) * s + tx
+        val top = height * 0.5f + (f.top - height * 0.5f) * s + ty
+        out[0] = left + nx * f.width * s
+        out[1] = top + ny * f.height * s
+        return true
+    }
+
+    /**
+     * v44 搜索定位：把页面上的点平移进可视区。已经在可视区内（四周留一点边）就不动；
+     * 不在就平移到横向居中、纵向约 40% 处。平移范围由 applyTransform 照常限位，
+     * 页面没有可移动余量（整页都在屏幕里）时什么也不会发生。
+     * 连续滚动的纵向位置由列表滚动决定，这里只处理横向。
+     */
+    fun revealPagePoint(pageView: View?, nx: Float, ny: Float) {
+        val p = FloatArray(2)
+        if (!pagePointInHost(pageView, nx, ny, p)) return
+        flushTransform()
+        if (!pagePointInHost(pageView, nx, ny, p)) return
+        val mx = width * 0.12f
+        val my = height * 0.16f
+        var ntx = tx
+        var nty = ty
+        if (p[0] < mx || p[0] > width - mx) ntx = tx + (width * 0.5f - p[0])
+        if (!continuousScroll && (p[1] < my || p[1] > height - my)) {
+            nty = ty + (height * 0.4f - p[1])
+        }
+        if (ntx == tx && nty == ty) return
+        tx = ntx
+        ty = nty
+        applyTransform()
+        onViewportSettled?.invoke()
+    }
+
     private companion object {
         const val SEL_NONE = 0
         const val SEL_PENDING = 1
