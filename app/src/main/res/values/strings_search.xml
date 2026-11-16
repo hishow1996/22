@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v44：全文搜索面板 -->
+    <string name="doc_search_idle2">输入关键词，自动搜索当前文档</string>
+    <string name="doc_search_summary">找到 %1$d 处 · %2$d 页</string>
+    <string name="doc_search_capped">仅显示前 %1$d 处，换个更具体的词可缩小范围</string>
+    <string name="doc_search_fuzzy">没找到完整短语，改为「同一页里各个词都出现」· %1$d 处</string>
+    <string name="doc_search_none_for">没有找到「%1$s」</string>
+    <string name="doc_search_no_layer">该文档没有可搜索的文字层（扫描件、图片或加密 PDF）</string>
+    <string name="doc_search_page_header">第 %1$d 页 · %2$d 处</string>
+    <string name="cd_doc_search_clear">清空关键词</string>
+</resources>

@@ -10,6 +10,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.pdf.PdfDocument
@@ -25,8 +26,14 @@ import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.provider.MediaStore
 import android.text.Editable
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.InputType
 import android.text.TextWatcher
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -34,6 +41,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.GridLayout
@@ -2340,52 +2348,186 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         dialog.window?.setLayout(dp(340), dp(480))
     }
 
+    /** 上一次搜的词：跳页看完再打开搜索面板时带回来，方便接着找下一处。 */
+    private var lastDocQuery = ""
+
+    /**
+     * v44 全文搜索面板：
+     *  - 边输边搜（停手 300ms）；文字层只提取一次，之后改词都是内存匹配；
+     *  - 命中词在片段里高亮，按页分组，页头标出本页几处；
+     *  - 提取中有细进度条；没有文字层 / 没找到 / 命中过多各有各的提示；
+     *  - 尺寸跟屏幕走，不再写死 460×440dp（窄屏被裁，软键盘一出来列表只剩一条缝）。
+     */
     private fun showDocSearch() {
         val v = layoutInflater.inflate(R.layout.dialog_doc_search, null)
         val dialog = AlertDialog.Builder(this).setView(v).create()
         val input = v.findViewById<EditText>(R.id.docSearchInput)
+        val clear = v.findViewById<ImageButton>(R.id.docSearchClear)
         val status = v.findViewById<TextView>(R.id.docSearchStatus)
+        val progress = v.findViewById<View>(R.id.docSearchProgress)
         val results = v.findViewById<LinearLayout>(R.id.docSearchResults)
+        val accent = ContextCompat.getColor(this, R.color.accent)
+        val ink = ContextCompat.getColor(this, R.color.icon)
+        val muted = ContextCompat.getColor(this, R.color.page_text)
+        val rowBg = TypedValue().also {
+            theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true)
+        }.resourceId
 
-        fun runSearch() {
-            val q = input.text?.toString().orEmpty().trim()
-            if (q.isEmpty()) return
+        var textPages: List<String>? = null   // 文字层，只提取一次
+        var loading = false
+        var seq = 0                            // 只认最新一次搜索的结果
+
+        fun showResult(q: String, res: SearchResult) {
             results.removeAllViews()
-            status.text = getString(R.string.doc_search_loading)
-            withAllText { pages ->
-                val hits = DocumentSearch.find(pages, q)
-                if (hits.isEmpty()) {
-                    status.text = getString(R.string.doc_search_none)
-                    return@withAllText
-                }
-                status.text = getString(R.string.doc_search_count, hits.size)
-                for (h in hits) {
-                    val row = TextView(this@MainActivity).apply {
-                        text = "P${h.page + 1}  ${h.snippet}"
-                        textSize = 12f
-                        setTextColor(ContextCompat.getColor(
-                            this@MainActivity, R.color.icon))
-                        setPadding(dp(6), dp(9), dp(6), dp(9))
-                        // v43.2：短按跳页，长按进系统选择菜单，只复制选中的片段
-                        setTextIsSelectable(true)
-                        setOnClickListener {
-                            goToPage(h.page)
-                            dialog.dismiss()
-                        }
+            if (res.hits.isEmpty()) {
+                status.text = getString(R.string.doc_search_none_for, q)
+                return
+            }
+            val summary = StringBuilder(
+                if (res.fuzzy) getString(R.string.doc_search_fuzzy, res.hits.size)
+                else getString(R.string.doc_search_summary, res.hits.size, res.pageCount)
+            )
+            if (res.capped) {
+                summary.append('\n')
+                    .append(getString(R.string.doc_search_capped, DocumentSearch.MAX_HITS))
+            }
+            status.text = summary
+
+            val perPage = res.hits.groupingBy { it.page }.eachCount()
+            var lastPage = -1
+            for (h in res.hits) {
+                if (h.page != lastPage) {
+                    lastPage = h.page
+                    val head = TextView(this).apply {
+                        text = getString(
+                            R.string.doc_search_page_header, h.page + 1, perPage[h.page] ?: 0)
+                        textSize = 11f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(muted)
+                        setPadding(dp(6), dp(12), dp(6), dp(2))
                     }
-                    results.addView(row, LinearLayout.LayoutParams(
+                    results.addView(head, LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT))
+                }
+                val sp = SpannableString(h.snippet)
+                if (h.snipEnd > h.snipStart && h.snipEnd <= sp.length) {
+                    val f = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                    sp.setSpan(BackgroundColorSpan(0x302F6FED), h.snipStart, h.snipEnd, f)
+                    sp.setSpan(ForegroundColorSpan(accent), h.snipStart, h.snipEnd, f)
+                    sp.setSpan(StyleSpan(Typeface.BOLD), h.snipStart, h.snipEnd, f)
+                }
+                val row = TextView(this).apply {
+                    text = sp
+                    textSize = 14f
+                    setTextColor(ink)
+                    setLineSpacing(0f, 1.15f)
+                    setPadding(dp(6), dp(9), dp(6), dp(9))
+                    setBackgroundResource(rowBg)
+                    // 短按跳页，长按进系统选择菜单，只复制选中的片段
+                    setTextIsSelectable(true)
+                    setOnClickListener {
+                        goToPage(h.page)
+                        dialog.dismiss()
+                    }
+                }
+                results.addView(row, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+        }
+
+        /** 用输入框当前的词在已提取的文字上搜；匹配放后台，回来只认最新一次。 */
+        fun render(pages: List<String>) {
+            val q = input.text?.toString().orEmpty().trim()
+            if (q.isEmpty()) {
+                results.removeAllViews()
+                status.text = getString(R.string.doc_search_idle2)
+                return
+            }
+            if (!DocumentSearch.hasText(pages)) {
+                results.removeAllViews()
+                status.text = getString(R.string.doc_search_no_layer)
+                return
+            }
+            val my = ++seq
+            workScope.launch {
+                val res = DocumentSearch.search(pages, q)
+                withContext(Dispatchers.Main) {
+                    if (my != seq || isFinishing || isDestroyed || !dialog.isShowing) {
+                        return@withContext
+                    }
+                    showResult(q, res)
                 }
             }
         }
 
-        v.findViewById<ImageButton>(R.id.docSearchGo)
-            .setOnClickListener { runSearch() }
+        fun runSearch() {
+            lastDocQuery = input.text?.toString().orEmpty().trim()
+            val cached = textPages
+            if (cached != null) { render(cached); return }
+            if (lastDocQuery.isEmpty()) { render(emptyList()); return }
+            if (loading) return          // 提取完会按输入框里最新的词再渲染一次
+            val r = repo
+            if (r == null) { status.text = getString(R.string.doc_no_text_all); return }
+            loading = true
+            progress.visibility = View.VISIBLE
+            status.text = getString(R.string.doc_search_loading)
+            workScope.launch {
+                val pages = try { r.extractAllText() } catch (e: Exception) { emptyList() }
+                withContext(Dispatchers.Main) {
+                    loading = false
+                    progress.visibility = View.GONE
+                    if (isFinishing || isDestroyed || repo !== r || !dialog.isShowing) {
+                        return@withContext
+                    }
+                    textPages = pages
+                    render(pages)
+                }
+            }
+        }
+
+        // 带回上一次的词并全选，直接打字就是换词；先填再挂监听，避免误触发一次搜索
+        if (lastDocQuery.isNotEmpty()) {
+            input.setText(lastDocQuery)
+            input.setSelection(0, input.text.length)
+            clear.visibility = View.VISIBLE
+        }
+        val debounced = Runnable { runSearch() }
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                clear.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
+                input.removeCallbacks(debounced)
+                if (s.isNullOrBlank()) {
+                    seq++
+                    lastDocQuery = ""
+                    results.removeAllViews()
+                    status.text = getString(R.string.doc_search_idle2)
+                } else {
+                    input.postDelayed(debounced, 300L)
+                }
+            }
+        })
+        clear.setOnClickListener {
+            input.setText("")
+            input.requestFocus()
+        }
+        v.findViewById<ImageButton>(R.id.docSearchGo).setOnClickListener {
+            input.removeCallbacks(debounced)
+            runSearch()
+        }
         input.imeOptions = EditorInfo.IME_ACTION_SEARCH
         input.setOnEditorActionListener { _, action, _ ->
-            if (action == EditorInfo.IME_ACTION_SEARCH) { runSearch(); true }
-            else false
+            if (action == EditorInfo.IME_ACTION_SEARCH) {
+                input.removeCallbacks(debounced)
+                runSearch()
+                // 收起键盘，结果才看得全
+                (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .hideSoftInputFromWindow(input.windowToken, 0)
+                true
+            } else false
         }
         v.findViewById<ImageButton>(R.id.docSearchClose)
             .setOnClickListener { dialog.dismiss() }
@@ -2400,8 +2542,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
         }
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.WHITE))
+        dialog.window?.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        input.requestFocus()
         dialog.show()
-        dialog.window?.setLayout(dp(460), dp(440))
+        // 手机竖屏约 360dp 宽，按屏幕留边，不再固定 460×440dp
+        val dm = resources.displayMetrics
+        dialog.window?.setLayout(
+            minOf(dp(460), dm.widthPixels - dp(24)),
+            minOf(dp(560), (dm.heightPixels * 0.82f).toInt()))
+        if (lastDocQuery.isNotEmpty()) runSearch()
     }
 
     private fun cyclePressure() {

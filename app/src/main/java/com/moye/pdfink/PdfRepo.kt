@@ -92,7 +92,16 @@ class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
     override fun pageText(page: Int): String? =
         ensureText().getOrNull(page)?.takeIf { it.isNotBlank() }
 
-    override fun extractAllText(): List<String> = ensureText()
+    // v44：全文搜索 / 复制全文用版面文字（与选字同源，按每段文字实际字体解码），
+    // 读不出来的页才退回老提取器；与 pageText 的缓存分开，互不拖慢。
+    @Volatile private var searchPages: List<String>? = null
+
+    override fun extractAllText(): List<String> {
+        searchPages?.let { return it }
+        val pages = SearchText.build(count, { pageTextLayout(it) }) { ensureText() }
+        searchPages = pages
+        return pages
+    }
 
     private fun closeTileRenderPageLocked() {
         val opened = tileRenderPage
