@@ -1163,6 +1163,28 @@ class ZoomHost @JvmOverloads constructor(
         onViewportSettled?.invoke()
     }
 
+    /**
+     * v46 自动裁白边：把视口缩放平移到页面内容外框 b（归一化 [左,上,右,下]）上。
+     * 只用于单页、非连续滚动；双页 / 对开 / 倍率已被改过（用户已动手）时不动，返回 false。
+     */
+    fun fitContent(b: FloatArray): Boolean {
+        if (continuousScroll || width <= 0 || height <= 0) return false
+        if (abs(scale - 1f) > 0.001f) return false
+        if (pageFrameFor(secondaryPage) != null || pageFrameFor(draftPage) != null) return false
+        val f = pageFrameFor(primaryPage) ?: return false
+        val plan = AutoCrop.plan(b, width, height, f.left, f.top, f.width, f.height)
+            ?: return false
+        flushTransform()
+        pendingResizeViewportState = null
+        scale = plan.scale.coerceIn(ZoomTransform.MIN_SCALE, 4f)
+        tx = plan.tx
+        ty = plan.ty
+        applyTransform()
+        notifyScaleIfNeeded(force = true)
+        onViewportSettled?.invoke()
+        return true
+    }
+
     /** 连续滚动：整列统一倍率与横向位移（纵向位移由页高算出，不用传）。 */
     fun setListView(s: Float, px: Float) {
         flushTransform()

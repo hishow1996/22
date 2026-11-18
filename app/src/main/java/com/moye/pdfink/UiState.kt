@@ -33,6 +33,8 @@ class UiState {
     @Volatile var volumeFlip = true
     @Volatile var keepAwake = true
     @Volatile var followSystemDark = false
+    /** v46：打开一页时自动把视口对准内容、隐藏四周空白（不改页面坐标）。 */
+    @Volatile var autoCrop = false
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true

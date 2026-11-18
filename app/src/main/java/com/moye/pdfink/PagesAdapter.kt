@@ -443,6 +443,10 @@ class PagesAdapter(
                         silent = false,
                         toTop = fitMode == PageContainer.WIDTH
                     )
+                    // v46：没有记忆位置的页，按内容外框自动裁白边（单页、铺宽模式才做）
+                    if (state.autoCrop && fitMode != PageContainer.FIT &&
+                        !showSecond && !state.effectiveSpread
+                    ) requestAutoCrop(h, p0, token, position)
                 }
             }
             if (position == restorePanAt) restorePanAt = -1
@@ -702,6 +706,39 @@ class PagesAdapter(
 
     fun bitmapFor(page: Int): android.graphics.Bitmap? =
         PdfBitmapCache.findPrefix("page:${repo.cacheId}:$page-")
+
+    // ----- v46 自动裁白边 -----
+
+    /** 页 × 旋转 → 归一化内容外框；EMPTY 表示扫过了但没什么可裁。 */
+    private val cropCache = java.util.concurrent.ConcurrentHashMap<Int, FloatArray>()
+    private val noCrop = FloatArray(0)
+
+    fun invalidateCropCache() { cropCache.clear() }
+
+    private fun requestAutoCrop(h: VH, page: Int, token: Int, position: Int) {
+        val rot = RasterRotation.normalize(state.pageRotation)
+        val key = page * 4 + rot / 90
+        scope.launch(Dispatchers.IO) {
+            val b = cropCache[key] ?: run {
+                val found = runCatching {
+                    val w = 240
+                    val ratio = repo.ratioWithRotation(page, rot)
+                    val ht = (w / ratio).toInt().coerceIn(48, 900)
+                    val bmp = repo.render(page, w, ht, PageFilter.WHITE, 0f, rot)
+                    val px = IntArray(bmp.width * bmp.height)
+                    bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+                    AutoCrop.findBounds(px, bmp.width, bmp.height)
+                }.getOrNull()
+                (found ?: noCrop).also { cropCache[key] = it }
+            }
+            if (b.size < 4) return@launch
+            withContext(Dispatchers.Main) {
+                if (state.autoCrop && h.renderToken == token &&
+                    h.bindingAdapterPosition == position && h.boundLogical == page
+                ) h.zoom.fitContent(b)
+            }
+        }
+    }
 
     fun invalidateRenderCache() {
         TileCache.clear()

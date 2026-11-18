@@ -577,6 +577,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             .coerceIn(0, eraserWidths.lastIndex)
         currentShape = p.getInt("shape", Shapes.LINE)
         state.tint = p.getInt("tint", PageFilter.WHITE).coerceIn(0, 2)
+        state.autoCrop = p.getBoolean("autoCrop", false)
         state.brightness = p.getFloat("brightness", 0f)
         // v16：默认浏览。老版本存过 false 的也算升级首次，强制回浏览；
         // 之后用户切到做题会写进偏好，重开保持上次模式。
@@ -650,6 +651,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
             putBoolean("showCorrection", state.showCorrection)
+            putBoolean("autoCrop", state.autoCrop)
         }.apply()
         sessionRepo.setRotation(state.pageRotation)
         sessionRepo.setVolumeFlip(state.volumeFlip)
@@ -1768,6 +1770,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             sessionRepo.setFollowSystemDark(state.followSystemDark)
             savePrefs(); applySystemDark(null)
         },
+        MenuAction(R.drawable.ic_trim, getString(R.string.cd_autocrop), { state.autoCrop }) {
+            toggleAutoCrop()
+        },
         MenuAction(R.drawable.ic_stylus, getString(R.string.cd_stylus), {
             state.stylusOnly
         }) {
@@ -2147,6 +2152,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             sessionRepo.setFollowSystemDark(state.followSystemDark)
             savePrefs()
             applySystemDark(null)
+        },
+        MenuAction(R.drawable.ic_trim, getString(R.string.cd_autocrop), { state.autoCrop }) {
+            toggleAutoCrop()
         },
         MenuAction(R.drawable.ic_history, getString(R.string.cd_snapshots), { false }) {
             showSnapshots()
@@ -3406,6 +3414,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+    }
+
+    /**
+     * v46：开 / 关自动裁白边。已记住的逐页阅读位置会让它不生效，所以切换时清掉
+     * 内存里的逐页位置并重新绑定（只丢缩放平移记忆，不动笔迹与书签）。
+     */
+    private fun toggleAutoCrop() {
+        state.autoCrop = !state.autoCrop
+        savePrefs()
+        pageViewports.clear()
+        adapter?.invalidateCropCache()
+        adapter?.notifyDataSetChanged()
+        saveSessionNow()
     }
 
     private fun applySystemDark(cfg: Configuration?) {
