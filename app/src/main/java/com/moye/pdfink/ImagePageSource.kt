@@ -22,6 +22,8 @@ import kotlin.math.floor
  */
 class ImagePageSource(ctx: Context, uri: Uri) : RasterPageSource() {
 
+    private val appCtx: Context = ctx.applicationContext
+
     private var decoder: BitmapRegionDecoder? = null
     private var fallback: Bitmap? = null
     private val srcW: Int
@@ -103,6 +105,67 @@ class ImagePageSource(ctx: Context, uri: Uri) : RasterPageSource() {
             if (part !== fallback) part.recycle()
         }
         return out
+    }
+
+    // ----- v46：图片 OCR（与 PdfRepo 的扫描页 OCR 同一套引擎与缓存） -----
+    // 一张图就是一页：识别结果转成字框层，搜索 / 命中高亮 / 长按选字 / 复制直接可用；
+    // 按内容指纹落盘到 ocr-cache，重开同一张图不用再识别。
+
+    private val ocrLock = Any()
+    private var ocrLayout: PageTextLayout? = null
+    private var ocrLoaded = false          // 已尝试从磁盘读过
+    @Volatile private var fp: String? = null
+
+    override fun attachFingerprint(fp: String) { this.fp = fp }
+
+    private fun ocrFile(): java.io.File? = fp?.let { OcrCache.fileFor(appCtx.cacheDir, it) }
+
+    /** 调用方须持有 ocrLock；null = 还没识别过（空文字的识别结果是 EMPTY，不是 null）。 */
+    private fun ocrLocked(): PageTextLayout? {
+        if (!ocrLoaded) {
+            ocrLayout = ocrFile()?.let { OcrCache.read(it, 1) }?.getOrNull(0)
+            if (ocrLayout != null || fp != null) ocrLoaded = true
+        }
+        return ocrLayout
+    }
+
+    override fun pageTextLayout(page: Int): PageTextLayout? =
+        if (page != 0) null
+        else synchronized(ocrLock) { ocrLocked()?.takeIf { it.text.isNotBlank() } }
+
+    override fun pageText(page: Int): String? = pageTextLayout(page)?.text
+
+    override fun extractAllText(): List<String> = listOf(pageText(0) ?: "")
+
+    override fun ocrPending(): Int = synchronized(ocrLock) { if (ocrLocked() == null) 1 else 0 }
+
+    /** 长边最多约 2200px（内存紧时 1800），不放大小图；调用方负责回收。 */
+    private fun renderForOcr(): Bitmap {
+        val side = if (Runtime.getRuntime().maxMemory() >= 192L * 1024 * 1024) 2200f else 1800f
+        val a = minOf(1f, side / maxOf(srcW, srcH).toFloat())
+        val cw = (srcW * a).toInt().coerceAtLeast(1)
+        val ch = (srcH * a).toInt().coerceAtLeast(1)
+        return drawTile(0, cw, ch, 0, 0, cw, ch)
+    }
+
+    override fun runOcr(progress: (Int, Int) -> Unit, cancelled: () -> Boolean): Int {
+        if (ocrPending() == 0) return 0
+        progress(0, 1)
+        if (cancelled()) return 0
+        val bmp = try { renderForOcr() } catch (t: Throwable) { null } ?: return 0
+        val layout = try {
+            OcrEngine.recognize(bmp)?.let { OcrLayoutBuilder.build(it, bmp.width, bmp.height) }
+        } finally {
+            if (!bmp.isRecycled) bmp.recycle()
+        }
+        if (layout == null) return 0         // 引擎失败：留给下次重试
+        synchronized(ocrLock) {
+            ocrLayout = layout
+            ocrLoaded = true
+            ocrFile()?.let { OcrCache.write(it, arrayOf<PageTextLayout?>(layout)) }
+        }
+        progress(1, 1)
+        return 1
     }
 
     override fun close() {

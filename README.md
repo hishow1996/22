@@ -2127,3 +2127,23 @@ v42 README「按推荐保留原样」的 6 个（sun/awake/pen/eye_off/note/repl
 
 验证：`AutoCropTest` 8 条（外框、彩色底、噪点、空白 / 满页 / 只有页码、居中与顶对齐的数学、倍率上限）本地 JVM 跑通；
 `ZoomHost` / `PagesAdapter` / 菜单接线**未编译**，待 CI / 真机。
+
+## v46 · 图片文档 OCR
+
+核对 v45 的 OCR 之后，需求里的「识别结果缓存」「搜索对扫描页生效」「长按选字对扫描页生效」
+对 **PDF 扫描页** 早已做完（`OcrCache` 按指纹落盘、断点续识；识别结果转成字框层并入搜索文本与选字）。
+真正的缺口是**图片文档**——拍照 / 截图导入的单张图（`ImagePageSource`）根本没有 OCR 入口，
+菜单里点「识别扫描页文字」只会提示「没有需要识别的页」。
+
+这次补上：
+
+- `ImagePageSource` 实现 `ocrPending / runOcr / pageTextLayout / pageText / extractAllText / attachFingerprint`，
+  与 `PdfRepo` 共用 `OcrEngine`（ML Kit）、`OcrLayoutBuilder`、`OcrCache`；一张图就是一页。
+- 识别用图的长边最多约 2200px（内存紧时 1800），不放大小图；复用现有的区域解码，不额外整图加载。
+- 结果按内容指纹存进 `ocr-cache`，重开同一张图不再识别；空文字的识别结果也记为「识别过」，不会反复识别；
+  引擎失败（返回 null）不落盘，留给下次重试。
+- 因为 `extractAllText()` 返回的文字与字框层同源，查找条的命中高亮、页内长按选字、复制都对图片生效；
+  没有文字的图片第一次查找会像扫描 PDF 一样被引导去识别。
+- 指纹在文档打开后才附上：附上之前读到的「没有缓存」不会被记成定论，之后会重新读盘。
+
+验证：纯逻辑没有新增，沿用 v45 的 `OcrLayoutTest`；`ImagePageSource` 的接线**未编译**，识别效果与速度待真机。
