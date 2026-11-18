@@ -121,6 +121,9 @@
     <string name="doc_no_text_all">该文档没有可复制的文字（扫描件或加密 PDF）</string>
     <string name="sel_copy">复制</string>
     <string name="sel_select_all">全选</string>
+    <string name="sel_highlight">高亮</string>
+    <string name="sel_underline">下划线</string>
+    <string name="sel_strike">删除线</string>
     <string name="sel_text_loading">正在读取页面文字，稍后再长按</string>
     <string name="doc_copy_done">已复制到剪贴板</string>
     <!-- v43.2：文字预览，主路径交给系统 ActionMode -->

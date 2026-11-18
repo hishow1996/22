@@ -145,6 +145,8 @@ class ZoomHost @JvmOverloads constructor(
     /** 本次触摸允许长按选字吗：浏览模式、或「仅手写笔」下的手指。 */
     var textGate: ((MotionEvent) -> Boolean)? = null
     var onTextCopied: ((String) -> Unit)? = null
+    /** v46：选中文字后点高亮 / 下划线 / 删除线；rects 为归一化的每行矩形。 */
+    var onTextMarkup: ((PageTextOverlay, Int, FloatArray) -> Unit)? = null
     /** 文字层还在后台读取时长按，提示一下。 */
     var onTextNotReady: (() -> Unit)? = null
     private var selTarget: PageTextOverlay? = null
@@ -362,7 +364,13 @@ class ZoomHost @JvmOverloads constructor(
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
             menu.add(Menu.NONE, SEL_ID_COPY, 0, context.getString(R.string.sel_copy))
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
-            menu.add(Menu.NONE, SEL_ID_ALL, 1, context.getString(R.string.sel_select_all))
+            menu.add(Menu.NONE, SEL_ID_HL, 1, context.getString(R.string.sel_highlight))
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(Menu.NONE, SEL_ID_UL, 2, context.getString(R.string.sel_underline))
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(Menu.NONE, SEL_ID_STRIKE, 3, context.getString(R.string.sel_strike))
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
+            menu.add(Menu.NONE, SEL_ID_ALL, 4, context.getString(R.string.sel_select_all))
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM)
             return true
         }
@@ -384,6 +392,16 @@ class ZoomHost @JvmOverloads constructor(
                 SEL_ID_ALL -> {
                     t.selectAll()
                     mode.invalidateContentRect()
+                }
+                SEL_ID_HL, SEL_ID_UL, SEL_ID_STRIKE -> {
+                    val shape = when (item.itemId) {
+                        SEL_ID_HL -> Shapes.TEXT_HL
+                        SEL_ID_UL -> Shapes.TEXT_UL
+                        else -> Shapes.TEXT_STRIKE
+                    }
+                    val rects = t.selectionRectsNormalized()
+                    if (rects != null) onTextMarkup?.invoke(t, shape, rects)
+                    mode.finish()
                 }
                 else -> return false
             }
@@ -1236,5 +1254,8 @@ class ZoomHost @JvmOverloads constructor(
         const val SEL_DRAG = 3
         const val SEL_ID_COPY = 0x7f0f0001
         const val SEL_ID_ALL = 0x7f0f0002
+        const val SEL_ID_HL = 0x7f0f0003
+        const val SEL_ID_UL = 0x7f0f0004
+        const val SEL_ID_STRIKE = 0x7f0f0005
     }
 }

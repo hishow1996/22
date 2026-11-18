@@ -1308,6 +1308,25 @@ class InkView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * v46：给选中的文字加一条高亮 / 下划线 / 删除线。rects 是每行一个矩形
+     * （归一化 x0,y0,x1,y1）。作为一步正常提交，走撤销历史。
+     */
+    fun addTextMarkup(shape: Int, rects: FloatArray, color: Int, alpha: Int): Boolean {
+        val h = host ?: return false
+        if (!Shapes.isTextMarkup(shape) || rects.size < 4 || loadingMarks || key.isEmpty()) return false
+        before = ArrayList(marks)
+        val m = Mark(color, 0.0028f, alpha, shape, rects.copyOf(), null, h.activeLayer)
+        marks.add(m)
+        val index = marks.lastIndex
+        if (baseTiles.ready && visible(m)) paintMark(baseTiles, m)
+        if (spatialReady) indexMark(index, m)
+        dropHiResCache()
+        commit()
+        invalidate()
+        return true
+    }
+
     private fun cancelGesture() {
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         lassoScreenPts.clear()

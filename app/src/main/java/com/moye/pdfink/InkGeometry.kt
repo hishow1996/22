@@ -39,6 +39,11 @@ object InkGeometry {
             return
         }
 
+        if (Shapes.isTextMarkup(m.shape)) {
+            drawTextMarkup(c, m, w, h, base, argb, paint)
+            return
+        }
+
         paint.color = argb
         paint.style = Paint.Style.STROKE
         paint.strokeCap = Paint.Cap.ROUND
@@ -98,6 +103,32 @@ object InkGeometry {
             paint.strokeWidth = base * (widthAt(m, i - 1) + widthAt(m, i)) * 0.5f
             c.drawPath(path, paint)
             prevX = endX; prevY = endY
+        }
+    }
+
+    /** 高亮 = 整行半透明色块；下划线 = 行底一条线；删除线 = 行中一条线。 */
+    private fun drawTextMarkup(
+        c: Canvas, m: Mark, w: Float, h: Float, base: Float, argb: Int, paint: Paint
+    ) {
+        paint.color = argb
+        paint.strokeCap = Paint.Cap.BUTT
+        if (m.shape == Shapes.TEXT_HL) paint.style = Paint.Style.FILL
+        else {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = base.coerceAtLeast(1.2f)
+        }
+        var i = 0
+        while (i + 3 < m.pts.size) {
+            val x0 = minOf(m.pts[i], m.pts[i + 2]) * w
+            val x1 = maxOf(m.pts[i], m.pts[i + 2]) * w
+            val y0 = minOf(m.pts[i + 1], m.pts[i + 3]) * h
+            val y1 = maxOf(m.pts[i + 1], m.pts[i + 3]) * h
+            when (m.shape) {
+                Shapes.TEXT_HL -> c.drawRect(x0, y0, x1, y1, paint)
+                Shapes.TEXT_UL -> c.drawLine(x0, y1, x1, y1, paint)
+                else -> { val my = (y0 + y1) * 0.5f; c.drawLine(x0, my, x1, my, paint) }
+            }
+            i += 4
         }
     }
 

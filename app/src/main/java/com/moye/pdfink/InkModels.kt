@@ -10,6 +10,17 @@ object Shapes {
     const val OVAL = 3
     const val ARROW = 4
     const val NOTE = 5
+
+    /**
+     * v46 文字标注：吸附在 PDF 文字上的高亮 / 下划线 / 删除线。
+     * pts 不是「起点终点」，而是每行一个矩形，flat 为 x0,y0,x1,y1（归一化）。
+     */
+    const val TEXT_HL = 6
+    const val TEXT_UL = 7
+    const val TEXT_STRIKE = 8
+
+    fun isTextMarkup(shape: Int): Boolean =
+        shape == TEXT_HL || shape == TEXT_UL || shape == TEXT_STRIKE
 }
 
 /**

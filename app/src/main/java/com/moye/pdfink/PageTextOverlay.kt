@@ -153,6 +153,17 @@ class PageTextOverlay @JvmOverloads constructor(
         return l.text.substring(selStart, selEnd)
     }
 
+    /**
+     * 选区每一行的矩形，归一化到页面（x0,y0,x1,y1…），与笔迹同一坐标系，
+     * 用来生成高亮 / 下划线 / 删除线；没有选区返回 null。
+     */
+    fun selectionRectsNormalized(): FloatArray? {
+        val l = layout ?: return null
+        if (!hasSelection) return null
+        val r = TextSelectionMath.lineRects(l, selStart, selEnd, 1f, 1f)
+        return if (r.isEmpty()) null else r
+    }
+
     // ----- 把手 -----
 
     private fun anchor(handle: Int, out: FloatArray): Boolean {

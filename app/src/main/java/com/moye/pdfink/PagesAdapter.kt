@@ -307,6 +307,14 @@ class PagesAdapter(
                 (state.stylusOnly && ev.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_FINGER)
         }
         h.zoom.onTextCopied = { t -> onTextCopied?.invoke(t) }
+        h.zoom.onTextMarkup = { overlay, shape, rects ->
+            val ink = if (overlay === h.secondTextOverlay) h.secondInk else h.ink
+            val (color, alpha) = when (shape) {
+                Shapes.TEXT_HL -> 0xFFFFD60A.toInt() to 110
+                else -> 0xFFE53935.toInt() to 255
+            }
+            ink.addTextMarkup(shape, rects, color, alpha)
+        }
         h.zoom.onTextNotReady = { onTextNotReady?.invoke() }
 
         // v31：三态对齐表。v29 的「非 FIT 一律顶部对齐」把「适应宽度」也

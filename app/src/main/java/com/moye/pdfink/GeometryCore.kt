@@ -97,6 +97,26 @@ object GeometryCore {
             }
             val n = m.pts.size / 2
             if (n == 0) continue
+            if (Shapes.isTextMarkup(m.shape)) {
+                // 文字标注按「行」擦：橡皮碰到哪一行，就只去掉那一行，其余行保留
+                val reach = radiusPx + m.width * unit * 0.5f
+                val keep = ArrayList<Float>()
+                var k = 0
+                while (k + 3 < m.pts.size) {
+                    val l = min(m.pts[k], m.pts[k + 2]) * w
+                    val r = max(m.pts[k], m.pts[k + 2]) * w
+                    val t = min(m.pts[k + 1], m.pts[k + 3]) * h
+                    val b = max(m.pts[k + 1], m.pts[k + 3]) * h
+                    if (!eraseTouchesRect(erasePx, l - reach, t - reach, r + reach, b + reach)) {
+                        keep.add(m.pts[k]); keep.add(m.pts[k + 1])
+                        keep.add(m.pts[k + 2]); keep.add(m.pts[k + 3])
+                    }
+                    k += 4
+                }
+                if (keep.size == m.pts.size) out.add(m)
+                else if (keep.isNotEmpty()) out.add(m.copyWith(pts = keep.toFloatArray(), ws = null))
+                continue
+            }
             if (m.shape != Shapes.FREE) {
                 // 形状命中即整删：橡皮轨迹包围盒（外扩笔宽半径）与形状包围盒相交即删除，
                 // 覆盖「橡皮落在形状内部/边线穿过」而顶点不在橡皮附近的情形。
@@ -145,6 +165,33 @@ object GeometryCore {
             }
         }
         return out
+    }
+
+    /** 橡皮轨迹（像素折线）是否碰到矩形（已外扩橡皮半径）。 */
+    fun eraseTouchesRect(e: FloatArray, l: Float, t: Float, r: Float, b: Float): Boolean {
+        if (e.size < 2) return false
+        fun inside(x: Float, y: Float) = x >= l && x <= r && y >= t && y <= b
+        if (e.size == 2) return inside(e[0], e[1])
+        var i = 2
+        while (i + 1 < e.size) {
+            val ax = e[i - 2]; val ay = e[i - 1]; val bx = e[i]; val by = e[i + 1]
+            if (inside(ax, ay) || inside(bx, by)) return true
+            // Liang–Barsky：线段是否穿过矩形
+            var t0 = 0f
+            var t1 = 1f
+            val dx = bx - ax
+            val dy = by - ay
+            fun clip(p: Float, q: Float): Boolean {
+                if (p == 0f) return q >= 0f
+                val u = q / p
+                if (p < 0f) { if (u > t1) return false; if (u > t0) t0 = u }
+                else { if (u < t0) return false; if (u < t1) t1 = u }
+                return true
+            }
+            if (clip(-dx, ax - l) && clip(dx, r - ax) && clip(-dy, ay - t) && clip(dy, b - ay)) return true
+            i += 2
+        }
+        return false
     }
 
     /** 以 (cx,cy) 为中心缩放，再平移 (dx,dy)，坐标均为归一化。 */
