@@ -153,3 +153,4 @@ echo "  142. v45：扫描页 OCR（ML Kit 内置中文模型，仅 OcrEngine.kt 
 echo "  143. v46：选字菜单新增「高亮 / 下划线 / 删除线」——批注直接吸附在 PDF 文字行上（每行一个矩形，Shapes.TEXT_HL/UL/STRIKE），走正常撤销历史、随缩放平移与导出同步；橡皮按行擦，只去掉碰到的那一行；GeometryCoreTest 新增 5 条。只提交未编译待真机验收"
 echo "  144. v46：整本导出可选「标准批注版」——在原 PDF 后追加增量更新，把笔迹/形状/便签/高亮写成标准 PDF 注释（Ink/Line/Square/Circle/Text/Highlight/Underline/StrikeOut，带外观流），原文字与原字节不动，WPS / Acrobat 能看能改；经典交叉引用表与交叉引用流两种原文件都支持，页自带 /Rotate 与用户旋转叠加；加密或读不出页树时退回图片版并提示；PdfAnnotWriterTest 13 条 + AnnotExportTest 5 条（本地 JVM 已跑通），并用 qpdf --check / pypdf / poppler 对 6 种构造的 PDF 验证。只提交未编译 APK 待真机验收"
 echo "  145. v46：跳转面板新增「批注 · N 条」汇总——按页排序、点一行跳页；高亮/下划线/删除线/便签各一行并带原文摘录（选字时把选中文字存进 Mark.text，也写进标准 PDF 注释的 /Contents），手写与形状每页合并一行；只列可见图层、最多 500 条、后台读盘、无批注时不显示；AnnotSummaryTest 4 条（本地 JVM 已跑通）。只提交未编译 APK 待真机验收"
+echo "  146. v46：低延迟笔迹——落笔/擦除时对原始 DOWN 事件请求非缓冲输入分发（requestUnbufferedDispatch，便签/套索/浏览模式除外），触摸事件不再按帧合并；原有历史点批处理 / 脏矩形 / 笔尖预测保留，未引入 GLFrontBufferedRenderer 依赖。只提交未编译待真机验收"

@@ -2092,3 +2092,13 @@ v42 README「按推荐保留原样」的 6 个（sun/awake/pen/eye_off/note/repl
 - 标准批注版 PDF 里，高亮 / 下划线 / 删除线会带上这段原文作为注释的 `/Contents`，在 WPS / Acrobat 的批注列表里也能看到。
 
 验证：`AnnotSummaryTest` 4 条、`PdfAnnotWriterTest` 新增 1 条，本地 JVM 跑通；UI 部分**未编译**，待 CI / 真机。
+
+## v46 · 低延迟笔迹
+
+原有的笔迹管线已经做了：历史点批处理、脏矩形局部重绘、自己的笔尖预测。这次只补了最后一块——**请求非缓冲输入分发**：落笔 / 擦除时调用 `requestUnbufferedDispatch`，系统不再把触摸事件按帧合并，来一个分发一个（仍带历史点），笔尖到屏幕的延迟少约一帧。
+
+- 只对书写类工具和橡皮开；便签、套索、浏览模式不开。
+- 必须用原始 DOWN 事件调用，所以放在 `onTouchEvent` 入口，而不是坐标映射之后；包了 try，设备不支持就当没发生。
+- **没有**采用 `GLFrontBufferedRenderer`（androidx.graphics）：要新增依赖，这个环境既不能下载依赖也不能编译，真机上才能验证，风险大于收益。以后有真机条件可以再评估。
+
+验证：**未编译**，待 CI / 真机对比手感。

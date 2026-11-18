@@ -594,6 +594,14 @@ class InkView @JvmOverloads constructor(
         if (h.browseMode) return false
         if (loadingMarks) return true
         if (ev.actionMasked == MotionEvent.ACTION_DOWN && blocked(ev)) return false
+        // v46：落笔/擦除时请求「非缓冲输入分发」——系统默认把触摸事件按帧合并，
+        // 开启后来一个分发一个（仍带历史点），笔尖到屏幕的延迟少约一帧。
+        // 只在书写类工具上开；便签、套索、浏览模式不需要。必须用原始 DOWN 事件调用。
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN &&
+            h.tool != Tools.NOTE && h.tool != Tools.LASSO
+        ) {
+            try { requestUnbufferedDispatch(ev) } catch (_: Throwable) { }
+        }
         // 低内存回收后，下一次编辑前重建笔迹缓冲，避免笔迹缓冲未就绪导致笔迹不能提交。
         if (!baseTiles.ready) {
             ensureBuffers()
