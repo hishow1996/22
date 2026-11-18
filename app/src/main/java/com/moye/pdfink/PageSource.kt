@@ -60,6 +60,12 @@ interface PageSource : Closeable {
 
     /** v45：文档自带的目录（展平、带层级）；没有或不支持返回空。耗时，须在后台线程调用。 */
     fun outline(): List<OutlineEntry> = emptyList()
+
+    /**
+     * v46：原 PDF 文件的全部字节，供「导出为标准 PDF 批注」追加写入；只有真 PDF 页源有。
+     * 图片 / 文本页源、读取失败、超过大小上限返回 null。耗时，须在后台线程调用。
+     */
+    fun sourceBytes(): ByteArray? = null
 }
 
 /**

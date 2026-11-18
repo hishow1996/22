@@ -161,6 +161,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         set(v) { vm.toolBeforeEraser = v }
     private var pendingPdfPages: List<Int> = emptyList()
     private var pendingPdfWidth: Int = 1240
+    /** v46：这次整本导出走「标准 PDF 批注」（保留原文字，批注可在 WPS / Acrobat 里继续编辑）。 */
+    private var pendingPdfAnnot: Boolean = false
     /** 用户是否主动选择过显示模式；未选择时竖屏和横屏默认 WIDTH */
     private var modeChosen = false
     /** P1：竖屏默认在阅读区域内完整显示页面；用户切到其他模式后记住。 */
@@ -348,19 +350,60 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             if (uri == null) return@registerForActivityResult
             val r = repo ?: return@registerForActivityResult
             val pages = ArrayList(pendingPdfPages)
+            val annot = pendingPdfAnnot
+            pendingPdfAnnot = false
+            val layers = state.visibleLayers
+            val rotation = state.pageRotation
             workScope.launch {
+                var fallback = false
                 val ok = try {
-                    contentResolver.openOutputStream(uri)?.use { o ->
-                        PdfExporter.export(
-                            r, inkStore, pages, o, state.tint, state.brightness,
-                            state.visibleLayers, state.effectiveSpread, pendingPdfWidth,
-                            state.pageRotation
-                        ) { _, _ -> }
-                    } ?: false
+                    val done = if (annot) exportStandardAnnots(r, uri, layers, rotation) else null
+                    if (done != null) {
+                        done
+                    } else {
+                        // 图片版；标准批注写不了（加密 / 读不出页树 / 文件过大）时也退到这里
+                        fallback = annot
+                        contentResolver.openOutputStream(uri)?.use { o ->
+                            PdfExporter.export(
+                                r, inkStore, pages, o, state.tint, state.brightness,
+                                layers, state.effectiveSpread, pendingPdfWidth,
+                                rotation
+                            ) { _, _ -> }
+                        } ?: false
+                    }
                 } catch (e: Exception) { false }
-                withContext(Dispatchers.Main) { flash(if (ok) "✓" else "!") }
+                withContext(Dispatchers.Main) {
+                    if (fallback && ok) {
+                        Toast.makeText(this@MainActivity, R.string.pdf_annot_fallback,
+                            Toast.LENGTH_LONG).show()
+                    } else flash(if (ok) "✓" else "!")
+                }
             }
         }
+
+    /**
+     * v46：在原 PDF 后面追加标准注释再写出。成功返回 true；没有批注就原样复制一份；
+     * 写不了返回 null（调用方退回图片版）。后台线程调用。
+     */
+    private fun exportStandardAnnots(
+        r: PageSource, uri: Uri, layers: Set<Int>, rotation: Int
+    ): Boolean? {
+        val src = r.sourceBytes() ?: return null
+        val perPage = AnnotExport.collect(r.count, layers) { p -> inkStore.load("p$p") }
+        val out = contentResolver.openOutputStream(uri) ?: return false
+        out.use { o ->
+            if (perPage.isEmpty()) {
+                o.write(src)
+                return true
+            }
+            val n = PdfAnnotWriter.write(src, perPage, rotation, o)
+            if (n < 0) {
+                // 一个字节都没写；让调用方在同一个文件上改写图片版
+                return null
+            }
+        }
+        return true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -3017,6 +3060,26 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun exportPdf(pages: List<Int>, tag: String) {
         if (pages.isEmpty()) return
+        val r = repo
+        // 整本 + 真 PDF：问一句要图片版还是标准批注版（单页 / 选页要抽页，仍走图片版）
+        if (tag == "全本" && r is PdfRepo && pages.size == r.count) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.pdf_kind_title)
+                .setItems(arrayOf(
+                    getString(R.string.pdf_kind_standard),
+                    getString(R.string.pdf_kind_image)
+                )) { _, which ->
+                    pendingPdfAnnot = which == 0
+                    startExportPdf(pages, if (which == 0) "批注版" else tag)
+                }
+                .show()
+            return
+        }
+        pendingPdfAnnot = false
+        startExportPdf(pages, tag)
+    }
+
+    private fun startExportPdf(pages: List<Int>, tag: String) {
         pendingPdfPages = pages
         val scale = when {
             pages.size > 40 -> 0.72f

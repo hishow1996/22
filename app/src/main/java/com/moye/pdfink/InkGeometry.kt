@@ -123,10 +123,16 @@ object InkGeometry {
             val x1 = maxOf(m.pts[i], m.pts[i + 2]) * w
             val y0 = minOf(m.pts[i + 1], m.pts[i + 3]) * h
             val y1 = maxOf(m.pts[i + 1], m.pts[i + 3]) * h
+            // 又高又窄的框 = 竖排文字（页面转过 90°或竖排中文）：线沿文字方向画，下划线放左边
+            val vertical = (y1 - y0) > 1.5f * (x1 - x0)
             when (m.shape) {
                 Shapes.TEXT_HL -> c.drawRect(x0, y0, x1, y1, paint)
-                Shapes.TEXT_UL -> c.drawLine(x0, y1, x1, y1, paint)
-                else -> { val my = (y0 + y1) * 0.5f; c.drawLine(x0, my, x1, my, paint) }
+                Shapes.TEXT_UL ->
+                    if (vertical) c.drawLine(x0, y0, x0, y1, paint) else c.drawLine(x0, y1, x1, y1, paint)
+                else -> {
+                    if (vertical) { val mx = (x0 + x1) * 0.5f; c.drawLine(mx, y0, mx, y1, paint) }
+                    else { val my = (y0 + y1) * 0.5f; c.drawLine(x0, my, x1, my, paint) }
+                }
             }
             i += 4
         }

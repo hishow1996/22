@@ -25,6 +25,10 @@
     <string name="cd_hide_layer">隐藏订正</string>
     <string name="cd_pdf_all">导出整本 PDF</string>
     <string name="cd_pdf_page">导出当前页 PDF</string>
+    <string name="pdf_kind_title">导出整本 PDF</string>
+    <string name="pdf_kind_standard">标准批注版：保留原文字，WPS / Acrobat 里能看能改</string>
+    <string name="pdf_kind_image">图片版：所见即所得，文字变成图片</string>
+    <string name="pdf_annot_fallback">这份文件写不了标准批注，已改成图片版</string>
     <string name="cd_export_selected">导出选中的页</string>
     <string name="cd_select_all">全选</string>
     <string name="cd_sel_delete">删除选中的笔迹</string>

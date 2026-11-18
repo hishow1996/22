@@ -63,11 +63,15 @@ object PdfTextExtractor {
     }
 
     // ---------- 对象表 ----------
-    internal fun collect(text: String): Objects {
+    /**
+     * newestWins：同一编号出现多次（增量更新）时取文件里最后一份。默认仍取第一份，
+     * 保持读文字的老行为；写批注（PdfAnnotWriter）必须用最新版本，才不会把旧页对象写回去。
+     */
+    internal fun collect(text: String, newestWins: Boolean = false): Objects {
         val o = Objects()
         for (m in OBJ.findAll(text)) {
             val num = m.groupValues[1].toIntOrNull() ?: continue
-            if (o.bodies.containsKey(num)) continue
+            if (!newestWins && o.bodies.containsKey(num)) continue
             val start = m.range.last + 1
             val end = text.indexOf("endobj", start)
             if (end < 0) continue

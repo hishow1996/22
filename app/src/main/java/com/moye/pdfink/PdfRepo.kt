@@ -54,6 +54,9 @@ class PdfRepo(private val ctx: Context, private val uri: Uri) : PageSource {
         } ?: ByteArray(0)
     } catch (e: Exception) { ByteArray(0) }
 
+    override fun sourceBytes(): ByteArray? =
+        readSourceBytes().takeIf { it.isNotEmpty() && it.size <= PdfTextExtractor.MAX_SOURCE_BYTES }
+
     private fun ensureText(): List<String> {
         textPages?.let { return it }
         val pages = PdfTextExtractor.extract(readSourceBytes())

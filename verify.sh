@@ -151,3 +151,4 @@ echo "  140. v45：读取 PDF 自带目录（PdfLayoutDoc.outline：直接目标
 echo "  141. v45：全文文字按内容指纹落盘缓存（TextCache，gzip + 原子替换 + 数量 / 体积上限），打开后 3 秒在后台预提取；TextCacheTest 5 条"
 echo "  142. v45：扫描页 OCR（ML Kit 内置中文模型，仅 OcrEngine.kt 依赖）：结果转成与 PDF 文字层同构的字框层，搜索 / 高亮 / 选字对扫描页同样可用；断点续识（OcrCache）；OcrLayoutTest 7 条。只提交未编译待真机验收"
 echo "  143. v46：选字菜单新增「高亮 / 下划线 / 删除线」——批注直接吸附在 PDF 文字行上（每行一个矩形，Shapes.TEXT_HL/UL/STRIKE），走正常撤销历史、随缩放平移与导出同步；橡皮按行擦，只去掉碰到的那一行；GeometryCoreTest 新增 5 条。只提交未编译待真机验收"
+echo "  144. v46：整本导出可选「标准批注版」——在原 PDF 后追加增量更新，把笔迹/形状/便签/高亮写成标准 PDF 注释（Ink/Line/Square/Circle/Text/Highlight/Underline/StrikeOut，带外观流），原文字与原字节不动，WPS / Acrobat 能看能改；经典交叉引用表与交叉引用流两种原文件都支持，页自带 /Rotate 与用户旋转叠加；加密或读不出页树时退回图片版并提示；PdfAnnotWriterTest 13 条 + AnnotExportTest 5 条（本地 JVM 已跑通），并用 qpdf --check / pypdf / poppler 对 6 种构造的 PDF 验证。只提交未编译 APK 待真机验收"
