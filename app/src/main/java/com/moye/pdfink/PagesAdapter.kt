@@ -313,7 +313,7 @@ class PagesAdapter(
                 Shapes.TEXT_HL -> 0xFFFFD60A.toInt() to 110
                 else -> 0xFFE53935.toInt() to 255
             }
-            ink.addTextMarkup(shape, rects, color, alpha)
+            ink.addTextMarkup(shape, rects, color, alpha, overlay.selectedText())
         }
         h.zoom.onTextNotReady = { onTextNotReady?.invoke() }
 

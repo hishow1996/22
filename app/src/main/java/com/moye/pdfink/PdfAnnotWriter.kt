@@ -676,7 +676,8 @@ internal object AnnotBuilder {
             else -> "StrikeOut"
         }
         val dict = "/Subtype /$sub /Rect [${nums(b)}] /QuadPoints [${nums(quads.toFloatArray())}] " +
-            "/C [${nums(c)}] /CA ${f(alpha)} /F 4"
+            "/C [${nums(c)}] /CA ${f(alpha)} /F 4" +
+            (if (!a.text.isNullOrBlank()) " /Contents ${pdfString(a.text)}" else "")
         val res = if (highlight) gsResources(alpha, true) else gsResources(alpha, false)
         val content = if (!highlight && alpha < 0.999f) "q\n/G0 gs\n$sb" + "Q\n" else "q\n$sb" + "Q\n"
         return PdfAnnotWriter.Built(dict, PdfAnnotWriter.Ap(b, res, content))

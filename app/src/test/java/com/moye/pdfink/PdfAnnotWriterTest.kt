@@ -176,6 +176,18 @@ class PdfAnnotWriterTest {
     }
 
     @Test
+    fun textMarkupKeepsSelectedTextAsContents() {
+        val a = AnnotInput(AnnotInput.HIGHLIGHT, 0xFFFFD60A.toInt(), 110, 0.0028f,
+            floatArrayOf(0.1f, 0.2f, 0.6f, 0.3f), "key (point)")
+        val upd = String(PdfAnnotWriter.plan(minimalPdf(), mapOf(0 to listOf(a)), 0)!!.update,
+            Charsets.ISO_8859_1)
+        assertTrue(upd.contains("/Contents (key \\(point\\))"))
+        val plain = String(PdfAnnotWriter.plan(minimalPdf(), mapOf(0 to listOf(hl(0f, 0f, 1f, 1f))), 0)!!.update,
+            Charsets.ISO_8859_1)
+        assertFalse(plain.contains("/Contents"))
+    }
+
+    @Test
     fun matchBracketSkipsStringsAndNesting() {
         val s = "/Annots [1 0 R (a]b) 2 0 R] /X 1"
         val open = s.indexOf('[')

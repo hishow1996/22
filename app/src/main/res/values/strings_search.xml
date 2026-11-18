@@ -18,6 +18,15 @@
     <string name="cd_find_close">关闭查找</string>
     <!-- v45：导航面板里的 PDF 目录 -->
     <string name="nav_outline_title">目录</string>
+    <!-- v46：批注汇总 -->
+    <string name="nav_annots_title">批注 · %1$d 条</string>
+    <string name="annot_hl">高亮</string>
+    <string name="annot_ul">下划线</string>
+    <string name="annot_strike">删除线</string>
+    <string name="annot_note">便签</string>
+    <string name="annot_ink">手写</string>
+    <string name="annot_ink_detail">%1$d 笔</string>
+    <string name="annot_shape_detail">形状 %1$d 个</string>
     <!-- v45：扫描页文字识别（OCR） -->
     <string name="cd_ocr">识别扫描页文字</string>
     <string name="ocr_none">没有需要识别的页，或当前文档不支持文字识别</string>

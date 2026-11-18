@@ -2429,6 +2429,75 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 }
             }
         }
+        // v46：批注汇总——读盘放后台；没有批注时这一块保持隐藏，面板与以前一致。
+        val annotBox = v.findViewById<LinearLayout>(R.id.navAnnots)
+        val annotLayers = state.visibleLayers.toSet()
+        workScope.launch {
+            val entries = try {
+                AnnotSummary.build(r.count, annotLayers) { p -> inkStore.load("p$p") }
+            } catch (e: Exception) { emptyList() }
+            withContext(Dispatchers.Main) {
+                if (entries.isEmpty() || isFinishing || isDestroyed ||
+                    repo !== r || !dialog.isShowing) return@withContext
+                val ink = ContextCompat.getColor(this@MainActivity, R.color.icon)
+                val muted = ContextCompat.getColor(this@MainActivity, R.color.page_text)
+                val accent = ContextCompat.getColor(this@MainActivity, R.color.accent)
+                annotBox.visibility = View.VISIBLE
+                annotBox.addView(TextView(this@MainActivity).apply {
+                    text = getString(R.string.nav_annots_title, entries.size)
+                    textSize = 11f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(muted)
+                    setPadding(dp(8), dp(10), dp(8), dp(4))
+                })
+                for (e in entries) {
+                    val label = when (e.kind) {
+                        AnnotSummary.HIGHLIGHT -> getString(R.string.annot_hl)
+                        AnnotSummary.UNDERLINE -> getString(R.string.annot_ul)
+                        AnnotSummary.STRIKE -> getString(R.string.annot_strike)
+                        AnnotSummary.NOTE -> getString(R.string.annot_note)
+                        else -> getString(R.string.annot_ink)
+                    }
+                    val detail = if (e.kind == AnnotSummary.INK) {
+                        listOfNotNull(
+                            if (e.strokes > 0) getString(R.string.annot_ink_detail, e.strokes) else null,
+                            if (e.shapes > 0) getString(R.string.annot_shape_detail, e.shapes) else null
+                        ).joinToString(" · ")
+                    } else e.snippet
+                    val row = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(dp(8), dp(9), dp(8), dp(9))
+                        setOnClickListener {
+                            goToPage(e.page)
+                            dialog.dismiss()
+                        }
+                    }
+                    row.addView(TextView(this@MainActivity).apply {
+                        text = label
+                        textSize = 12f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(accent)
+                        setPadding(0, 0, dp(10), 0)
+                    })
+                    row.addView(TextView(this@MainActivity).apply {
+                        text = detail
+                        textSize = 13f
+                        setTextColor(ink)
+                        maxLines = 2
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    row.addView(TextView(this@MainActivity).apply {
+                        text = (e.page + 1).toString()
+                        textSize = 12f
+                        setTextColor(muted)
+                        setPadding(dp(10), 0, 0, 0)
+                    })
+                    annotBox.addView(row, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                }
+            }
+        }
         val shelf = v.findViewById<LinearLayout>(R.id.navShelf)
         recents.all().forEach { item ->
             val t = TextView(this).apply {

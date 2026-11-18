@@ -100,6 +100,14 @@
                 android:orientation="vertical"
                 android:visibility="gone" />
 
+            <!-- v46：批注汇总；由 MainActivity.showNav 异步填充，没有批注时保持隐藏 -->
+            <LinearLayout
+                android:id="@+id/navAnnots"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/navShelf"
                 android:layout_width="match_parent"

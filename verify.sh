@@ -152,3 +152,4 @@ echo "  141. v45：全文文字按内容指纹落盘缓存（TextCache，gzip + 
 echo "  142. v45：扫描页 OCR（ML Kit 内置中文模型，仅 OcrEngine.kt 依赖）：结果转成与 PDF 文字层同构的字框层，搜索 / 高亮 / 选字对扫描页同样可用；断点续识（OcrCache）；OcrLayoutTest 7 条。只提交未编译待真机验收"
 echo "  143. v46：选字菜单新增「高亮 / 下划线 / 删除线」——批注直接吸附在 PDF 文字行上（每行一个矩形，Shapes.TEXT_HL/UL/STRIKE），走正常撤销历史、随缩放平移与导出同步；橡皮按行擦，只去掉碰到的那一行；GeometryCoreTest 新增 5 条。只提交未编译待真机验收"
 echo "  144. v46：整本导出可选「标准批注版」——在原 PDF 后追加增量更新，把笔迹/形状/便签/高亮写成标准 PDF 注释（Ink/Line/Square/Circle/Text/Highlight/Underline/StrikeOut，带外观流），原文字与原字节不动，WPS / Acrobat 能看能改；经典交叉引用表与交叉引用流两种原文件都支持，页自带 /Rotate 与用户旋转叠加；加密或读不出页树时退回图片版并提示；PdfAnnotWriterTest 13 条 + AnnotExportTest 5 条（本地 JVM 已跑通），并用 qpdf --check / pypdf / poppler 对 6 种构造的 PDF 验证。只提交未编译 APK 待真机验收"
+echo "  145. v46：跳转面板新增「批注 · N 条」汇总——按页排序、点一行跳页；高亮/下划线/删除线/便签各一行并带原文摘录（选字时把选中文字存进 Mark.text，也写进标准 PDF 注释的 /Contents），手写与形状每页合并一行；只列可见图层、最多 500 条、后台读盘、无批注时不显示；AnnotSummaryTest 4 条（本地 JVM 已跑通）。只提交未编译 APK 待真机验收"
