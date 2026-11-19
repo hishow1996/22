@@ -22,6 +22,8 @@ class UiState {
     @Volatile var browse = true
     @Volatile var stylusOnly = false
     @Volatile var palmGuard = true
+    /** v47：手指书写偏移档位 0 关 / 1 小 / 2 中 / 3 大，见 [FingerOffset]。 */
+    @Volatile var fingerOffset = FingerOffset.OFF
     // v43：压感档位 0 关 / 1 弱 / 2 标准 / 3 强，只对触控笔生效
     @Volatile var pressureLevel = PressureCurve.DEFAULT
     @Volatile var edgeFlip = true

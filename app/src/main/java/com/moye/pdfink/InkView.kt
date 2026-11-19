@@ -40,6 +40,11 @@ class InkView @JvmOverloads constructor(
         val browseMode: Boolean
         val stylusOnly: Boolean
         val palmGuard: Boolean
+        /**
+         * v47：手指书写偏移（屏幕像素）。大于 0 时，手指的落笔点上移这么多，
+         * 避免指腹盖住正在写的地方；触控笔和便签不受影响。不实现的实现者保持原样。
+         */
+        val fingerOffsetPx: Int get() = 0
         /** v43：触控笔压感档位，默认标准；不实现的实现者保持旧手感。 */
         val pressureLevel: Int get() = PressureCurve.DEFAULT
         /** v46：画完停住不抬笔，自动把直线 / 圈规整成直线 / 椭圆。 */
@@ -492,6 +497,11 @@ class InkView @JvmOverloads constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        drawInk(canvas)
+        if (cursorOn) drawCursor(canvas)       // v47：光标在所有笔迹之上、屏幕坐标
+    }
+
+    private fun drawInk(canvas: Canvas) {
         // v41：套索虚线是屏幕坐标，必须在任何 canvas 变换之前画，
         // 这样 1× / 放大 / 平移 / 高分辨率重绘分支下都严格跟着手指。
         if (lassoing) canvas.drawPath(lassoScreenPath, boxPaint)
@@ -599,7 +609,85 @@ class InkView @JvmOverloads constructor(
         return false
     }
 
-    override fun onTouchEvent(ev: MotionEvent): Boolean {
+    /**
+     * v47：手指书写偏移入口。手指按在页面上会盖住笔迹，接触点又是一整块指腹、难以判断落在哪。
+     * 打开偏移后，把整条事件流在屏幕空间里整体上移 N 像素再交给原来的处理（视口换算、
+     * 笔 / 橡皮 / 套索 / 形状全都照旧），并在落点画光标环。rawX / rawY 不受影响，
+     * 顶边防误触仍按真实手指位置判断。
+     */
+    override fun onTouchEvent(raw: MotionEvent): Boolean {
+        val h = host
+        val off = if (h != null &&
+            FingerOffset.applies(h.fingerOffsetPx, raw.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER, h.tool) &&
+            !h.browseMode
+        ) h.fingerOffsetPx else 0
+        if (off <= 0) {
+            hideCursor()
+            return handleRawTouch(raw)
+        }
+        val shifted = MotionEvent.obtain(raw)
+        shifted.offsetLocation(0f, -off.toFloat())
+        try {
+            updateCursor(shifted, off)
+            return handleRawTouch(shifted)
+        } finally {
+            shifted.recycle()
+        }
+    }
+
+    // ---------- v47：手指偏移光标 ----------
+    private var cursorOn = false
+    private var cursorX = 0f
+    private var cursorY = 0f          // 落笔点（视图坐标）
+    private var cursorFingerY = 0f    // 手指实际位置
+    private val cursorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private fun invalidateCursorArea() {
+        val r = 11f * density
+        invalidate(
+            (cursorX - r).toInt(), (cursorY - r).toInt(),
+            (cursorX + r).toInt() + 1, (cursorFingerY + 2f * density).toInt() + 1
+        )
+    }
+
+    private fun updateCursor(shifted: MotionEvent, off: Int) {
+        when (shifted.actionMasked) {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
+                hideCursor()
+                return
+            }
+        }
+        if (cursorOn) invalidateCursorArea()
+        cursorOn = true
+        cursorX = shifted.x
+        cursorY = shifted.y
+        cursorFingerY = shifted.y + off
+        invalidateCursorArea()
+    }
+
+    private fun hideCursor() {
+        if (!cursorOn) return
+        invalidateCursorArea()
+        cursorOn = false
+    }
+
+    /** 光标环：中间留空，不遮住正在落下的笔迹；白色外圈保证深色背景上也看得见。 */
+    private fun drawCursor(canvas: Canvas) {
+        val r = 7f * density
+        cursorPaint.style = Paint.Style.STROKE
+        // 落点到指尖的淡线：说明「笔迹在手指上方」
+        cursorPaint.strokeWidth = 1f * density
+        cursorPaint.color = 0x552F6FED
+        canvas.drawLine(cursorX, cursorY + r, cursorX, cursorFingerY, cursorPaint)
+        cursorPaint.strokeWidth = 3f * density
+        cursorPaint.color = 0xCCFFFFFF.toInt()
+        canvas.drawCircle(cursorX, cursorY, r, cursorPaint)
+        cursorPaint.strokeWidth = 1.5f * density
+        cursorPaint.color = 0xFF2F6FED.toInt()
+        canvas.drawCircle(cursorX, cursorY, r, cursorPaint)
+    }
+
+    private fun handleRawTouch(ev: MotionEvent): Boolean {
         val h = host ?: return false
         if (h.browseMode) return false
         if (loadingMarks) return true

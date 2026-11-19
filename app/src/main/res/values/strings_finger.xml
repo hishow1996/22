@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v47：手指书写偏移 -->
+    <string name="cd_finger_offset">手指书写偏移</string>
+    <string name="finger_offset_off">手指书写偏移：关</string>
+    <string name="finger_offset_small">手指书写偏移：小，笔迹落在指尖上方</string>
+    <string name="finger_offset_medium">手指书写偏移：中，笔迹落在指尖上方</string>
+    <string name="finger_offset_large">手指书写偏移：大，笔迹落在指尖上方</string>
+</resources>

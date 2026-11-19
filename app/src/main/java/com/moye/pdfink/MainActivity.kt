@@ -244,6 +244,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val browseMode: Boolean get() = state.browse
     override val stylusOnly: Boolean get() = state.stylusOnly
     override val palmGuard: Boolean get() = state.palmGuard
+    override val fingerOffsetPx: Int get() = dp(FingerOffset.dp(state.fingerOffset))
     override val holdToSnap: Boolean get() = state.holdSnap
     override val pressureLevel: Int get() = state.pressureLevel
     override val topEdgeGuardPx: Int
@@ -623,6 +624,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         state.stylusOnly = p.getBoolean("stylus", false)
         state.palmGuard = p.getBoolean("palm", true)
+        state.fingerOffset = FingerOffset.clamp(p.getInt("fingerOffset", FingerOffset.OFF))
         state.pressureLevel = PressureCurve.coerce(
             p.getInt("pressure", PressureCurve.DEFAULT))
         state.edgeFlip = p.getBoolean("edge", true)
@@ -649,6 +651,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("fillMigrated", true)
             putBoolean("fillV29Migrated", true)
             putBoolean("stylus", state.stylusOnly); putBoolean("palm", state.palmGuard)
+            putInt("fingerOffset", state.fingerOffset)
             putInt("pressure", state.pressureLevel)
             putBoolean("edge", state.edgeFlip); putBoolean("rightHand", rightHanded)
             putInt("layer", state.activeLayer)
@@ -2133,6 +2136,19 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_palm, getString(R.string.cd_palm), { state.palmGuard }) {
             state.palmGuard = !state.palmGuard; savePrefs()
+        },
+        MenuAction(R.drawable.ic_finger_offset, getString(R.string.cd_finger_offset), {
+            state.fingerOffset != FingerOffset.OFF
+        }) {
+            // v47：关 → 小 → 中 → 大 → 关；落笔点上移到手指上方，光标环标出落点
+            state.fingerOffset = FingerOffset.next(state.fingerOffset)
+            savePrefs()
+            flash(getString(when (state.fingerOffset) {
+                1 -> R.string.finger_offset_small
+                2 -> R.string.finger_offset_medium
+                3 -> R.string.finger_offset_large
+                else -> R.string.finger_offset_off
+            }))
         },
         MenuAction(R.drawable.ic_edge, getString(R.string.cd_edge), { state.edgeFlip }) {
             state.edgeFlip = !state.edgeFlip; savePrefs()

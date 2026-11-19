@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- 上方的空心环 = 落笔点；中间的线 = 偏移；下方的实心点 = 手指 -->
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M12,2.5a4.5,4.5 0 1,0 0.01,0zM12,4.5a2.5,2.5 0 1,1 -0.01,0z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M11.2,7.5h1.6v8h-1.6z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M12,15.8a4,4 0 1,0 0.01,0z" />
+</vector>
