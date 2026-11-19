@@ -157,3 +157,5 @@ echo "  146. v46：低延迟笔迹——落笔/擦除时对原始 DOWN 事件请
 echo "  147. v46：自动裁白边（默认关，菜单开关）——后台渲 240px 小图找内容外框（AutoCrop.findBounds：外圈众数为背景、噪点与只有页码的不算、满页不裁），再把视口缩放平移对准内容（AutoCrop.plan + ZoomHost.fitContent，内容宽加 2% 留白撑满、最多 2.5×、顶对齐），不改页面坐标系，笔迹照常；只对铺宽单页且无记忆位置、倍率仍 1× 的页生效。夜间反色与每文件页码/缩放记忆经核对早已存在，未重复实现；AutoCropTest 8 条（本地 JVM 已跑通）。只提交未编译待真机验收"
 echo "  148. v46：图片文档 OCR——ImagePageSource 补齐 ocrPending/runOcr/pageTextLayout/pageText/extractAllText/attachFingerprint，共用 v45 的 OcrEngine / OcrLayoutBuilder / OcrCache（按指纹落盘，空结果也算识别过，引擎失败不落盘）；查找、命中高亮、长按选字、复制对图片生效。PDF 扫描页的缓存/搜索/选字 v45 已有，未重复实现。只提交未编译待真机验收"
 echo "  149. v46：WebDAV 同步备份——WebDavClient（JDK HttpURLConnection，仅 PUT/GET/HEAD，目录须事先存在；仅 https、不跟随重定向、下载校验 zip 魔数且限 64MB）+ SecretBox（Keystore AES-GCM 加密密码）+ 菜单「WebDAV 同步」对话框（上传覆盖 moye-backup.moye / 下载后走导入对话框，可撤销）；新增 INTERNET 权限，仅用户触发时联网。WebDavTest 8 条本地用内置 HttpServer 跑通。只提交未编译待真机验收"
+echo "  150. v46：按住拉直 / 规整图形——ShapeSnap（直线 88% 弦长比 + 7% 偏差 + ±4° 摆正；椭圆需闭合、贴合、绕满 85% 圈；方框 / 弧 / 波浪 / 手写不吸附）；InkView 笔停 550ms 触发、直线可继续拖端点、椭圆固定、轻震；菜单开关默认开。ShapeSnapTest 8 条本地通过。只提交未编译待真机验收"
+echo "  151. v46：触控笔侧键临时橡皮——落笔时 buttonState 含 BUTTON_STYLUS_PRIMARY 且为触控笔，这一笔走橡皮流程，抬笔后工具不变；便签 / 套索不抢。只提交未编译待真机验收"

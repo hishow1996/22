@@ -42,6 +42,8 @@ class InkView @JvmOverloads constructor(
         val palmGuard: Boolean
         /** v43：触控笔压感档位，默认标准；不实现的实现者保持旧手感。 */
         val pressureLevel: Int get() = PressureCurve.DEFAULT
+        /** v46：画完停住不抬笔，自动把直线 / 圈规整成直线 / 椭圆。 */
+        val holdToSnap: Boolean get() = false
         /**
          * 屏幕最上沿这么高（像素，屏幕坐标）以内不接受落笔。
          * 系统的「顶边下拉呼出状态栏」只看手指是不是从顶边起手，应用拦不住；
@@ -157,6 +159,14 @@ class InkView @JvmOverloads constructor(
     private val liveShapeWidths = floatArrayOf(1f, 1f)
     private var liveMark: Mark? = null
     private var liveShape = Shapes.FREE
+
+    // ----- v46 按住拉直 / 规整图形 -----
+    private val snapHoldMs = 550L
+    private var holdAnchorX = 0f
+    private var holdAnchorY = 0f
+    /** 已吸附成椭圆后固定形状，笔再动也不改（直线则继续跟着笔尖调端点）。 */
+    private var snapFrozen = false
+    private val snapRunnable = Runnable { trySnap() }
     private var liveLayer = Layers.ANSWER
     private var lastX = 0f
     private var lastY = 0f
@@ -652,6 +662,11 @@ class InkView @JvmOverloads constructor(
         }
     }
 
+    /** 触控笔 + 侧键（主键）按下。手指、鼠标、没有侧键的笔都不会触发。 */
+    private fun sideButtonErase(ev: MotionEvent): Boolean =
+        ev.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS &&
+            (ev.buttonState and MotionEvent.BUTTON_STYLUS_PRIMARY) != 0
+
     private fun handleTouchEvent(ev: MotionEvent, h: Host): Boolean {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -664,6 +679,11 @@ class InkView @JvmOverloads constructor(
                     // 套索内部决定是否沿用「圈选前」快照；拖动选区不应覆盖它
                     h.tool == Tools.LASSO -> startLassoOrDrag(ev, h)
                     h.tool == Tools.ERASER -> {
+                        before = ArrayList(marks)
+                        startErase(ev, h)
+                    }
+                    // v46：落笔时按着触控笔侧键 = 这一笔当橡皮用，抬笔后工具不变
+                    sideButtonErase(ev) -> {
                         before = ArrayList(marks)
                         startErase(ev, h)
                     }
@@ -705,6 +725,9 @@ class InkView @JvmOverloads constructor(
         lastX = x; lastY = y; lastT = ev.eventTime; lastW = 1f
         tailX = x * width; tailY = y * height
         nextSeg = 1
+        snapFrozen = false
+        removeCallbacks(snapRunnable)
+        holdAnchorX = ev.x; holdAnchorY = ev.y
         liveShape = if (h.tool == Tools.SHAPE) h.inkShape else Shapes.FREE
         liveLayer = h.activeLayer
         livePts.clear(); liveWs.clear()
@@ -755,6 +778,7 @@ class InkView @JvmOverloads constructor(
             val nx = (x / width).coerceIn(0f, 1f)
             val ny = (y / height).coerceIn(0f, 1f)
             if (liveShape != Shapes.FREE) {
+                if (snapFrozen) return
                 liveShapePoints[2] = nx
                 liveShapePoints[3] = ny
                 return
@@ -779,8 +803,46 @@ class InkView @JvmOverloads constructor(
                 ev.getHistoricalEventTime(i), ev.getHistoricalPressure(i))
         }
         take(ev.x, ev.y, ev.eventTime, ev.pressure)
-        if (liveShape == Shapes.FREE) drawNewSegments(h) else drawShapeLive(h)
+        if (liveShape == Shapes.FREE) drawNewSegments(h) else if (!snapFrozen) drawShapeLive(h)
         drawPrediction(h)
+        // v46：笔离开锚点 6dp 以上才算「动了」，重新计时；停在原地（含笔尖抖动）满 550ms 触发吸附。
+        if (h.holdToSnap && liveShape == Shapes.FREE &&
+            hypot(ev.x - holdAnchorX, ev.y - holdAnchorY) > 6f * density
+        ) {
+            holdAnchorX = ev.x; holdAnchorY = ev.y
+            removeCallbacks(snapRunnable)
+            postDelayed(snapRunnable, snapHoldMs)
+        }
+    }
+
+    /** 按住够久：看这一笔像不像直线 / 圈，像就换成对应图形（可继续拖动直线端点）。 */
+    private fun trySnap() {
+        val h = host ?: return
+        if (!drawing || liveShape != Shapes.FREE || !h.holdToSnap || livePts.size < 16) return
+        val r = ShapeSnap.detect(livePts.toFloatArray(), width.toFloat(), height.toFloat()) ?: return
+        when (r) {
+            is ShapeSnap.Result.Line -> {
+                liveShape = Shapes.LINE
+                liveShapePoints[0] = r.x0; liveShapePoints[1] = r.y0
+                liveShapePoints[2] = r.x1; liveShapePoints[3] = r.y1
+                snapFrozen = false
+            }
+            is ShapeSnap.Result.Oval -> {
+                liveShape = Shapes.OVAL
+                liveShapePoints[0] = r.l; liveShapePoints[1] = r.t
+                liveShapePoints[2] = r.r; liveShapePoints[3] = r.b
+                snapFrozen = true
+            }
+        }
+        liveShapeWidths[0] = 1f; liveShapeWidths[1] = 1f
+        liveMark = Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
+            liveShapePoints, liveShapeWidths, liveLayer)
+        liveTiles.clear()
+        predictionVisible = false
+        predictionBoundsValid = false; liveDirty = null
+        invalidate()          // 整页刷一次，把徒手线擦掉
+        drawShapeLive(h)
+        try { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) } catch (_: Throwable) { }
     }
 
     private fun drawNewSegments(h: Host) {
@@ -1283,6 +1345,7 @@ class InkView @JvmOverloads constructor(
 
     private fun finishMark() {
         if (!drawing) return
+        removeCallbacks(snapRunnable)
         drawing = false
         val h = host
         val m = if (liveShape == Shapes.FREE && h != null) {
@@ -1337,6 +1400,7 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun cancelGesture() {
+        removeCallbacks(snapRunnable)
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         lassoScreenPts.clear()
         lassoScreenPath.reset()

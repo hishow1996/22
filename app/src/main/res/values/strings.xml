@@ -71,6 +71,7 @@
     <string name="cd_awake">屏幕常亮</string>
     <string name="cd_dark">跟随系统深浅色</string>
     <string name="cd_autocrop">自动裁白边</string>
+    <string name="cd_holdsnap">按住拉直 / 规整图形</string>
     <string name="cd_confirm_yes">确认</string>
     <string name="cd_confirm_no">取消</string>
     <string name="cd_merge">合并导入</string>
