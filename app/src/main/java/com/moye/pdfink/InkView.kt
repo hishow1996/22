@@ -759,7 +759,13 @@ class InkView @JvmOverloads constructor(
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 h.onFocus(key)
+                coverTapIdx = -1
                 when {
+                    // v46：点到答案遮罩 = 揭开 / 盖上，这一下不写字（橡皮 / 套索 / 便签 / 画新遮罩时不抢）
+                    coverTapAllowed(h, ev) && coverHit(ev.x, ev.y).also { coverTapIdx = it } >= 0 -> {
+                        coverDownX = ev.x; coverDownY = ev.y
+                        coverLastX = ev.x; coverLastY = ev.y
+                    }
                     h.tool == Tools.NOTE -> {
                         before = ArrayList(marks)
                         requestNote(ev, h)
@@ -775,6 +781,11 @@ class InkView @JvmOverloads constructor(
                         before = ArrayList(marks)
                         startErase(ev, h)
                     }
+                    // v46：批改章——点一下盖一个，不拖动
+                    h.tool == Tools.SHAPE && Shapes.isStamp(h.inkShape) -> {
+                        before = ArrayList(marks)
+                        placeStamp(ev, h)
+                    }
                     else -> {
                         before = ArrayList(marks)
                         startMark(ev, h)
@@ -788,6 +799,10 @@ class InkView @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (coverTapIdx >= 0) {
+                    coverLastX = ev.x; coverLastY = ev.y
+                    return true
+                }
                 if (drawing) addPoints(ev)
                 else if (erasing) erasePoints(ev)
                 else if (lassoing) addLassoPoints(ev)
@@ -795,15 +810,89 @@ class InkView @JvmOverloads constructor(
                 return drawing || erasing || lassoing || dragMode != 0
             }
             MotionEvent.ACTION_UP -> {
+                if (coverTapIdx >= 0) {
+                    val idx = coverTapIdx
+                    coverTapIdx = -1
+                    // 位移不超过 8dp 才算「点」，拖一下不触发
+                    if (hypot(ev.x - coverDownX, ev.y - coverDownY) <= 8f * density) toggleCover(idx)
+                    return true
+                }
                 finish()
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                coverTapIdx = -1
                 cancelGesture()
                 return true
             }
             else -> return false
         }
+    }
+
+    // ---------- v46：答案遮罩 / 批改章 ----------
+    private var coverTapIdx = -1
+    private var coverDownX = 0f
+    private var coverDownY = 0f
+    private var coverLastX = 0f
+    private var coverLastY = 0f
+
+    /** 这些工具下点遮罩才算「揭开」；画新遮罩、橡皮、套索、便签时不抢。 */
+    private fun coverTapAllowed(h: Host, ev: MotionEvent): Boolean = when {
+        h.tool == Tools.ERASER || h.tool == Tools.LASSO || h.tool == Tools.NOTE -> false
+        sideButtonErase(ev) -> false
+        h.tool == Tools.SHAPE && h.inkShape == Shapes.COVER -> false
+        else -> true
+    }
+
+    private fun coverHit(px: Float, py: Float): Int {
+        if (width <= 0 || height <= 0) return -1
+        val hitPx = maxOf(unit * CoverGeometry.RADIUS_FRAC, 22f * density)
+        return CoverGeometry.hitIndex(
+            marks, width.toFloat(), height.toFloat(), px, py,
+            unit * CoverGeometry.INSET_FRAC, hitPx
+        ) { visible(it) }
+    }
+
+    private fun toggleCover(idx: Int) {
+        val m = marks.getOrNull(idx) ?: return
+        m.revealed = !m.revealed
+        dropHiResCache()
+        drawAllBase()          // 遮罩画在底层里，状态变了要整层重画
+        invalidate()
+    }
+
+    /**
+     * 浏览模式下的点按（浏览模式不进 InkView 的触摸）：参数是本 View 内的局部坐标，
+     * 这里按当前视口反映射成页面坐标再判断。命中遮罩并切换返回 true。
+     */
+    fun revealCoverAtLocal(lx: Float, ly: Float): Boolean {
+        if (loadingMarks || width <= 0 || height <= 0) return false
+        var px = lx; var py = ly
+        val vp = viewport
+        if (vp != null && vp.scale > 0f) {
+            px = lx / vp.scale + ZoomTransform.pageCoordinate(0f, vp.originX, vp.scale)
+            py = ly / vp.scale + ZoomTransform.pageCoordinate(0f, vp.originY, vp.scale)
+        }
+        val i = coverHit(px, py)
+        if (i < 0) return false
+        toggleCover(i)
+        return true
+    }
+
+    private fun placeStamp(ev: MotionEvent, h: Host) {
+        if (width <= 0 || height <= 0) return
+        val hx = Stamps.SIZE_FRAC * unit * 0.5f / width
+        val hy = Stamps.SIZE_FRAC * unit * 0.5f / height
+        val cx = (ev.x / width).coerceIn(hx, 1f - hx)
+        val cy = (ev.y / height).coerceIn(hy, 1f - hy)
+        val m = Mark(Stamps.color(h.inkShape), 0.006f, 255, h.inkShape,
+            floatArrayOf(cx - hx, cy - hy, cx + hx, cy + hy), null, h.activeLayer)
+        marks.add(m)
+        val index = marks.lastIndex
+        if (baseTiles.ready && visible(m)) paintMark(baseTiles, m)
+        if (spatialReady) indexMark(index, m)
+        commit()
+        invalidate()
     }
 
     // ---------- 自由笔：增量段绘制 + 低延迟预测 ----------
@@ -834,8 +923,13 @@ class InkView @JvmOverloads constructor(
             liveShapePoints[3] = y
             liveShapeWidths[0] = 1f
             liveShapeWidths[1] = 1f
-            Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
-                liveShapePoints, liveShapeWidths, liveLayer)
+            if (liveShape == Shapes.COVER) {
+                Mark(CoverGeometry.COLOR, h.inkWidth, 255, liveShape,
+                    liveShapePoints, liveShapeWidths, liveLayer)
+            } else {
+                Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
+                    liveShapePoints, liveShapeWidths, liveLayer)
+            }
         }
         drawing = true
         erasing = false
@@ -1488,6 +1582,7 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun cancelGesture() {
+        coverTapIdx = -1
         removeCallbacks(snapRunnable)
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         lassoScreenPts.clear()

@@ -160,3 +160,5 @@ echo "  149. v46：WebDAV 同步备份——WebDavClient（JDK HttpURLConnection
 echo "  150. v46：按住拉直 / 规整图形——ShapeSnap（直线 88% 弦长比 + 7% 偏差 + ±4° 摆正；椭圆需闭合、贴合、绕满 85% 圈；方框 / 弧 / 波浪 / 手写不吸附）；InkView 笔停 550ms 触发、直线可继续拖端点、椭圆固定、轻震；菜单开关默认开。ShapeSnapTest 8 条本地通过。只提交未编译待真机验收"
 echo "  151. v46：触控笔侧键临时橡皮——落笔时 buttonState 含 BUTTON_STYLUS_PRIMARY 且为触控笔，这一笔走橡皮流程，抬笔后工具不变；便签 / 套索不抢。只提交未编译待真机验收"
 echo "  152. v47：手指书写偏移（FingerOffset）—— 手指的落笔点整体上移到指尖上方（关 / 小 32dp / 中 48dp / 大 64dp，更多菜单循环切换并记忆），落点画空心光标环、与指尖连一条淡线；只对手指的笔 / 荧光笔 / 形状 / 橡皮 / 套索生效，触控笔与便签不偏移；FingerOffsetTest 4 条。只提交未编译待真机验收"
+echo "  153. v48：答案/解析遮罩（Shapes.COVER）——图形工具栏拖出实心块，点一下揭开/点右上角圆标再盖上（写字与浏览模式都行，位移>8dp 不算点）；揭开状态只在内存（Mark.revealed 不入 JSON），橡皮擦不掉、不导出、不进汇总；CoverGeometry 纯逻辑 6 条测试本地通过。只提交未编译待真机验收"
+echo "  154. v48：批改章（STAMP_OK/BAD/Q）——点一下盖 ✓/✗/？（固定色、固定 5% 短边大小）；批注汇总每页一行 + 全本合计；导出标准 PDF 注释时 ✓/✗ 为折线笔迹、？为带 ? 的便签；AnnotSummaryTest/AnnotExportTest 新增用例本地通过。只提交未编译待真机验收"

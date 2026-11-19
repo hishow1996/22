@@ -44,6 +44,16 @@ object InkGeometry {
             return
         }
 
+        if (m.shape == Shapes.COVER) {
+            drawCover(c, m, w, h, unit, argb, paint, textPaint)
+            return
+        }
+
+        if (Shapes.isStamp(m.shape)) {
+            drawStamp(c, m, w, h, argb, paint, path, textPaint)
+            return
+        }
+
         paint.color = argb
         paint.style = Paint.Style.STROKE
         paint.strokeCap = Paint.Cap.ROUND
@@ -104,6 +114,90 @@ object InkGeometry {
             c.drawPath(path, paint)
             prevX = endX; prevY = endY
         }
+    }
+
+    /** v46 答案遮罩：盖着时是实心圆角块 + 提示字；揭开后只剩虚线框和右上角小圆标（点它再盖上）。 */
+    private fun drawCover(
+        c: Canvas, m: Mark, w: Float, h: Float, unit: Float, argb: Int,
+        paint: Paint, textPaint: Paint
+    ) {
+        val r = CoverGeometry.rect(m.pts) ?: return
+        val l = r[0] * w; val t = r[1] * h; val rt = r[2] * w; val b = r[3] * h
+        val rad = min(unit * 0.012f, min(rt - l, b - t) / 4f)
+        if (!m.revealed) {
+            paint.style = Paint.Style.FILL
+            paint.color = argb
+            c.drawRoundRect(l, t, rt, b, rad, rad, paint)
+            if (rt - l > unit * 0.16f && b - t > unit * 0.035f) {
+                val ts = min((b - t) * 0.4f, unit * 0.03f)
+                val oldAlign = textPaint.textAlign
+                val oldStyle = textPaint.style
+                textPaint.style = Paint.Style.FILL
+                textPaint.color = 0xCCFFFFFF.toInt()
+                textPaint.textSize = ts
+                textPaint.textAlign = Paint.Align.CENTER
+                c.drawText("点一下揭开", (l + rt) * 0.5f, (t + b) * 0.5f + ts * 0.35f, textPaint)
+                textPaint.textAlign = oldAlign
+                textPaint.style = oldStyle
+            }
+        } else {
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = (unit * 0.002f).coerceAtLeast(1.2f)
+            paint.color = (argb and 0x00FFFFFF) or (150 shl 24)
+            paint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 8f), 0f)
+            c.drawRoundRect(l, t, rt, b, rad, rad, paint)
+            paint.pathEffect = null
+            val bc = CoverGeometry.badgeCenter(m.pts, w, h, unit * CoverGeometry.INSET_FRAC)
+            if (bc != null) {
+                val br = unit * CoverGeometry.RADIUS_FRAC
+                paint.style = Paint.Style.FILL
+                paint.color = argb
+                c.drawCircle(bc[0], bc[1], br, paint)
+                paint.color = 0xFFFFFFFF.toInt()
+                c.drawCircle(bc[0], bc[1], br * 0.4f, paint)
+            }
+        }
+    }
+
+    /** v46 批改章：在外接矩形里居中画 ✓ / ✗ / ？。 */
+    private fun drawStamp(
+        c: Canvas, m: Mark, w: Float, h: Float, argb: Int,
+        paint: Paint, path: Path, textPaint: Paint
+    ) {
+        val r = CoverGeometry.rect(m.pts) ?: return
+        val l = r[0] * w; val t = r[1] * h; val rt = r[2] * w; val b = r[3] * h
+        val cx = (l + rt) * 0.5f; val cy = (t + b) * 0.5f
+        val s = min(rt - l, b - t)
+        if (m.shape == Shapes.STAMP_Q) {
+            val oldAlign = textPaint.textAlign
+            val oldStyle = textPaint.style
+            val oldBold = textPaint.isFakeBoldText
+            textPaint.style = Paint.Style.FILL
+            textPaint.color = argb
+            textPaint.textSize = s * 1.05f
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.isFakeBoldText = true
+            c.drawText("?", cx, cy + s * 0.36f, textPaint)
+            textPaint.textAlign = oldAlign
+            textPaint.style = oldStyle
+            textPaint.isFakeBoldText = oldBold
+            return
+        }
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeJoin = Paint.Join.ROUND
+        paint.strokeWidth = (s * 0.14f).coerceAtLeast(1.5f)
+        paint.color = argb
+        path.reset()
+        if (m.shape == Shapes.STAMP_OK) {
+            path.moveTo(cx - 0.30f * s, cy + 0.02f * s)
+            path.lineTo(cx - 0.08f * s, cy + 0.26f * s)
+            path.lineTo(cx + 0.34f * s, cy - 0.26f * s)
+        } else {
+            path.moveTo(cx - 0.26f * s, cy - 0.26f * s); path.lineTo(cx + 0.26f * s, cy + 0.26f * s)
+            path.moveTo(cx + 0.26f * s, cy - 0.26f * s); path.lineTo(cx - 0.26f * s, cy + 0.26f * s)
+        }
+        c.drawPath(path, paint)
     }
 
     /** 高亮 = 整行半透明色块；下划线 = 行底一条线；删除线 = 行中一条线。 */

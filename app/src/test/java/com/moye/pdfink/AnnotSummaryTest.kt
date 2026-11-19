@@ -56,6 +56,23 @@ class AnnotSummaryTest {
     }
 
     @Test
+    fun stampsMergePerPageAndCoversAreIgnored() {
+        val store = mapOf(
+            0 to listOf(m(Shapes.STAMP_OK), m(Shapes.STAMP_OK), m(Shapes.STAMP_BAD), m(Shapes.COVER)),
+            2 to listOf(m(Shapes.STAMP_Q), m(Shapes.STAMP_BAD)),
+            3 to listOf(m(Shapes.COVER)),
+            4 to listOf(m(Shapes.STAMP_OK, layer = 1))
+        )
+        val out = AnnotSummary.build(5, setOf(0)) { store[it] ?: emptyList() }
+        assertEquals(listOf(0, 2), out.map { it.page })
+        assertTrue(out.all { it.kind == AnnotSummary.STAMP })
+        assertEquals(2, out[0].ok); assertEquals(1, out[0].bad); assertEquals(0, out[0].q)
+        assertEquals(1, out[1].q); assertEquals(1, out[1].bad)
+        assertEquals(listOf(2, 2, 1), AnnotSummary.stampTotals(out).toList())
+        assertEquals(listOf(0, 2), AnnotSummary.badPages(out))
+    }
+
+    @Test
     fun capStopsEarly() {
         var loaded = 0
         val out = AnnotSummary.build(1000, setOf(0), maxEntries = 3) {

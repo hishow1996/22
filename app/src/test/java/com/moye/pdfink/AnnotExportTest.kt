@@ -57,4 +57,22 @@ class AnnotExportTest {
         assertEquals(setOf(0, 2), both.keys)
         assertTrue(both[2]!!.single().kind == AnnotInput.HIGHLIGHT)
     }
+
+    @Test
+    fun stampsBecomeInkOrNoteAndCoversAreSkipped() {
+        fun stamp(shape: Int) = Mark(Stamps.color(shape), 0.006f, 255, shape,
+            floatArrayOf(0.4f, 0.4f, 0.5f, 0.45f))
+        val ok = AnnotExport.toInput(stamp(Shapes.STAMP_OK))!!
+        assertEquals(AnnotInput.INK, ok.kind); assertEquals(6, ok.pts.size)
+        val bad = AnnotExport.toInput(stamp(Shapes.STAMP_BAD))!!
+        assertEquals(AnnotInput.INK, bad.kind); assertEquals(12, bad.pts.size)
+        val q = AnnotExport.toInput(stamp(Shapes.STAMP_Q))!!
+        assertEquals(AnnotInput.NOTE, q.kind); assertEquals("?", q.text); assertEquals(2, q.pts.size)
+        // 折线都落在章的外接盒内
+        for (i in 0 until ok.pts.size step 2) {
+            assertTrue(ok.pts[i] in 0.4f..0.5f && ok.pts[i + 1] in 0.4f..0.45f)
+        }
+        val cover = Mark(CoverGeometry.COLOR, 0.004f, 255, Shapes.COVER, floatArrayOf(0f, 0f, 1f, 1f))
+        assertNull(AnnotExport.toInput(cover))
+    }
 }

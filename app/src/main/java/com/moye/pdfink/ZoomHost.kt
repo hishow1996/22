@@ -580,6 +580,16 @@ class ZoomHost @JvmOverloads constructor(
                     lastSingleY = ev.y
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // v46：浏览模式下点一下答案遮罩 = 揭开 / 盖上（浏览模式的触摸不进 InkView，这里代办）
+                    if (ev.actionMasked == MotionEvent.ACTION_UP && !singlePanning &&
+                        !horizontalFlipDone &&
+                        abs(ev.x - singleStartX) < dp16 * 0.5f &&
+                        abs(ev.y - singleStartY) < dp16 * 0.5f
+                    ) {
+                        primaryInkAndFrame()?.let { (ink, f) ->
+                            ink.revealCoverAtLocal(ev.x - f.left, ev.y - f.top)
+                        }
+                    }
                     if (continuousScroll && singlePanning &&
                         ev.actionMasked == MotionEvent.ACTION_UP) {
                         val vt = velocity

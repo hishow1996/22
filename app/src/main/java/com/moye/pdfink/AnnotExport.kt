@@ -15,8 +15,39 @@ object AnnotExport {
         return m.width * (s / ws.size).coerceIn(0.2f, 4f)
     }
 
+    /**
+     * 批改章换成标准批注：✓ / ✗ 画成一条折线笔迹（✗ 在中心处折返，一笔画完两道），
+     * ？写成带「?」文字的便签。答案遮罩只是学习辅助，不导出（返回 null）。
+     */
+    internal fun stampToInput(m: Mark): AnnotInput? {
+        val r = CoverGeometry.rect(m.pts) ?: return null
+        val w = r[2] - r[0]; val h = r[3] - r[1]
+        val cx = (r[0] + r[2]) * 0.5f; val cy = (r[1] + r[3]) * 0.5f
+        return when (m.shape) {
+            Shapes.STAMP_OK -> AnnotInput(AnnotInput.INK, Stamps.color(m.shape), 255, 0.007f,
+                floatArrayOf(
+                    cx - 0.30f * w, cy + 0.02f * h,
+                    cx - 0.08f * w, cy + 0.26f * h,
+                    cx + 0.34f * w, cy - 0.26f * h
+                ))
+            Shapes.STAMP_BAD -> AnnotInput(AnnotInput.INK, Stamps.color(m.shape), 255, 0.007f,
+                floatArrayOf(
+                    cx - 0.26f * w, cy - 0.26f * h,
+                    cx + 0.26f * w, cy + 0.26f * h,
+                    cx, cy,
+                    cx + 0.26f * w, cy - 0.26f * h,
+                    cx, cy,
+                    cx - 0.26f * w, cy + 0.26f * h
+                ))
+            Shapes.STAMP_Q -> AnnotInput(AnnotInput.NOTE, Stamps.color(m.shape), 255, 0.007f,
+                floatArrayOf(cx, cy), "?")
+            else -> null
+        }
+    }
+
     fun toInput(m: Mark): AnnotInput? {
         if (m.pts.isEmpty()) return null
+        if (Shapes.isStamp(m.shape)) return stampToInput(m)
         val kind = when (m.shape) {
             Shapes.FREE -> AnnotInput.INK
             Shapes.LINE -> AnnotInput.LINE

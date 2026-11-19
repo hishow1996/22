@@ -117,6 +117,12 @@ object GeometryCore {
                 else if (keep.isNotEmpty()) out.add(m.copyWith(pts = keep.toFloatArray(), ws = null))
                 continue
             }
+            if (m.shape == Shapes.COVER) {
+                // v46：答案遮罩不被橡皮擦掉（橡皮常在遮罩下方擦字，误删遮罩很烦）；
+                // 要删用套索选中后删除。
+                out.add(m)
+                continue
+            }
             if (m.shape != Shapes.FREE) {
                 // 形状命中即整删：橡皮轨迹包围盒（外扩笔宽半径）与形状包围盒相交即删除，
                 // 覆盖「橡皮落在形状内部/边线穿过」而顶点不在橡皮附近的情形。

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cd_cover">答案遮罩（点一下揭开）</string>
+    <string name="cd_stamp_ok">批改：对</string>
+    <string name="cd_stamp_bad">批改：错</string>
+    <string name="cd_stamp_q">批改：存疑</string>
+    <string name="annot_stamp">批改</string>
+    <string name="annot_stamp_total">批改合计：✓ %1$d · ✗ %2$d · ？%3$d</string>
+</resources>

@@ -21,6 +21,26 @@ object Shapes {
 
     fun isTextMarkup(shape: Int): Boolean =
         shape == TEXT_HL || shape == TEXT_UL || shape == TEXT_STRIKE
+
+    /** v46 答案 / 解析遮罩：pts 是两个角点（和矩形同口径）；「揭开」只在内存里，不落盘。 */
+    const val COVER = 9
+
+    /** v46 批改章：pts 是章的外接矩形（两个角点）；形状本身由矩形内居中绘制。 */
+    const val STAMP_OK = 10
+    const val STAMP_BAD = 11
+    const val STAMP_Q = 12
+
+    fun isStamp(shape: Int): Boolean = shape == STAMP_OK || shape == STAMP_BAD || shape == STAMP_Q
+}
+
+/** v46 批改章：固定颜色、固定大小（页面短边的 5%）。 */
+object Stamps {
+    const val SIZE_FRAC = 0.05f
+    fun color(shape: Int): Int = when (shape) {
+        Shapes.STAMP_OK -> 0xFF2E9E4F.toInt()    // 对：绿
+        Shapes.STAMP_BAD -> 0xFFE53935.toInt()   // 错：红
+        else -> 0xFFF2A03D.toInt()               // 存疑：橙
+    }
 }
 
 /**
@@ -38,6 +58,9 @@ data class Mark(
     val layer: Int = 0,
     val text: String? = null
 ) {
+    /** v46：遮罩是否已被揭开。只活在内存里（不进 JSON / copy / equals），重新打开又盖上。 */
+    var revealed: Boolean = false
+
     fun toJson(): JSONObject {
         val a = JSONArray()
         for (v in pts) a.put(v.toDouble())

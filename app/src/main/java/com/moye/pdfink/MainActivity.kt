@@ -824,7 +824,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 View.VISIBLE else View.GONE
         mapOf(
             R.id.btnLine to Shapes.LINE, R.id.btnRect to Shapes.RECT,
-            R.id.btnOval to Shapes.OVAL, R.id.btnArrow to Shapes.ARROW
+            R.id.btnOval to Shapes.OVAL, R.id.btnArrow to Shapes.ARROW,
+            R.id.btnCover to Shapes.COVER, R.id.btnStampOk to Shapes.STAMP_OK,
+            R.id.btnStampBad to Shapes.STAMP_BAD, R.id.btnStampQ to Shapes.STAMP_Q
         ).forEach { (id, s) -> findViewById<ImageButton>(id).isSelected = currentShape == s }
         refreshDots()
         refreshLayerHint()
@@ -863,7 +865,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnEraser.setOnClickListener { toggleTool(Tools.ERASER) }
         mapOf(
             R.id.btnLine to Shapes.LINE, R.id.btnRect to Shapes.RECT,
-            R.id.btnOval to Shapes.OVAL, R.id.btnArrow to Shapes.ARROW
+            R.id.btnOval to Shapes.OVAL, R.id.btnArrow to Shapes.ARROW,
+            R.id.btnCover to Shapes.COVER, R.id.btnStampOk to Shapes.STAMP_OK,
+            R.id.btnStampBad to Shapes.STAMP_BAD, R.id.btnStampQ to Shapes.STAMP_Q
         ).forEach { (id, s) ->
             findViewById<ImageButton>(id).setOnClickListener {
                 currentShape = s; selectTool(Tools.SHAPE); savePrefs(); refreshTools()
@@ -2489,15 +2493,33 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     setTextColor(muted)
                     setPadding(dp(8), dp(10), dp(8), dp(4))
                 })
+                // v48：批改合计（有批改章才显示）
+                val st = AnnotSummary.stampTotals(entries)
+                if (st[0] + st[1] + st[2] > 0) {
+                    annotBox.addView(TextView(this@MainActivity).apply {
+                        text = getString(R.string.annot_stamp_total, st[0], st[1], st[2])
+                        textSize = 13f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(ink)
+                        setPadding(dp(8), dp(2), dp(8), dp(6))
+                    })
+                }
                 for (e in entries) {
                     val label = when (e.kind) {
                         AnnotSummary.HIGHLIGHT -> getString(R.string.annot_hl)
                         AnnotSummary.UNDERLINE -> getString(R.string.annot_ul)
                         AnnotSummary.STRIKE -> getString(R.string.annot_strike)
                         AnnotSummary.NOTE -> getString(R.string.annot_note)
+                        AnnotSummary.STAMP -> getString(R.string.annot_stamp)
                         else -> getString(R.string.annot_ink)
                     }
-                    val detail = if (e.kind == AnnotSummary.INK) {
+                    val detail = if (e.kind == AnnotSummary.STAMP) {
+                        listOfNotNull(
+                            if (e.ok > 0) "✓ ${e.ok}" else null,
+                            if (e.bad > 0) "✗ ${e.bad}" else null,
+                            if (e.q > 0) "？${e.q}" else null
+                        ).joinToString("  ")
+                    } else if (e.kind == AnnotSummary.INK) {
                         listOfNotNull(
                             if (e.strokes > 0) getString(R.string.annot_ink_detail, e.strokes) else null,
                             if (e.shapes > 0) getString(R.string.annot_shape_detail, e.shapes) else null

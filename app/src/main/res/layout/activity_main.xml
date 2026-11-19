@@ -250,6 +250,41 @@
                 android:contentDescription="@string/cd_arrow"
                 android:src="@drawable/ic_arrow" />
 
+            <ImageButton
+                android:id="@+id/btnCover"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_cover"
+                android:src="@drawable/ic_cover" />
+
+            <ImageButton
+                android:id="@+id/btnStampOk"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_stamp_ok"
+                android:tint="@null"
+                android:src="@drawable/ic_stamp_ok" />
+
+            <ImageButton
+                android:id="@+id/btnStampBad"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_stamp_bad"
+                android:tint="@null"
+                android:src="@drawable/ic_stamp_bad" />
+
+            <ImageButton
+                android:id="@+id/btnStampQ"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_stamp_q"
+                android:tint="@null"
+                android:src="@drawable/ic_stamp_q" />
+
         </LinearLayout>
 
         <LinearLayout
