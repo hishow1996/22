@@ -2525,6 +2525,22 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                         setPadding(dp(8), dp(2), dp(8), dp(6))
                     })
                 }
+                // v48：错题本——✗ 页 + 书签页导出成一份图片版 PDF
+                val wrong = WrongBook.pages(
+                    AnnotSummary.badPages(entries), inkStore.bookmarks(), r.count)
+                if (wrong.isNotEmpty()) {
+                    annotBox.addView(TextView(this@MainActivity).apply {
+                        text = getString(R.string.wrong_book_export, wrong.size)
+                        textSize = 13f
+                        typeface = Typeface.DEFAULT_BOLD
+                        setTextColor(accent)
+                        setPadding(dp(8), dp(6), dp(8), dp(8))
+                        setOnClickListener {
+                            dialog.dismiss()
+                            exportPdf(wrong, "错题本")
+                        }
+                    })
+                }
                 for (e in entries) {
                     val label = when (e.kind) {
                         AnnotSummary.HIGHLIGHT -> getString(R.string.annot_hl)

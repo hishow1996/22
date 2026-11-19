@@ -14,4 +14,5 @@
     <string name="timing_row">第 %1$d 页（用时最久）</string>
     <string name="timing_reset">清零计时</string>
     <string name="timing_reset_done">本文件的计时已清零</string>
+    <string name="wrong_book_export">导出错题本（%1$d 页：打 ✗ 的页 + 书签页）</string>
 </resources>

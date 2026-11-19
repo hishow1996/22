@@ -68,6 +68,8 @@ object PageComposer {
         c.clipRect(0f, 0f, w.toFloat(), h.toFloat())
         for (mk in marks) {
             if (mk.layer !in layers) continue
+            // v48：答案遮罩只是做题时的遮挡，导出 / 分享一律不画，免得盖住内容
+            if (mk.shape == Shapes.COVER) continue
             InkGeometry.drawMark(c, mk, w.toFloat(), h.toFloat(),
                 p, path, tp, bg, transform)
         }
