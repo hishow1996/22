@@ -1636,6 +1636,19 @@ class InkView @JvmOverloads constructor(
         return true
     }
 
+    /** v48：重做本页——清掉可见图层里的作答，留下读题标记 / 遮罩 / 便签；一步可撤销。 */
+    fun redoPage(): Boolean {
+        if (loadingMarks || key.isEmpty() || marks.isEmpty()) return false
+        val kept = RedoPage.keep(marks) { visible(it) }
+        if (kept.size == marks.size) return false
+        before = ArrayList(marks)
+        marks.clear(); marks.addAll(kept)
+        selection = null
+        rebuild()
+        commit()
+        return true
+    }
+
     fun clearLocal() {
         selection = null
         marks.clear()

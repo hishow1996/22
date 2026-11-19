@@ -2231,3 +2231,11 @@ v42 README「按推荐保留原样」的 6 个（sun/awake/pen/eye_off/note/repl
 
 验证：`CoverGeometryTest` 6 条、`AnnotSummaryTest`（+1）、`AnnotExportTest`（+1）本地 JVM 通过；
 `InkGeometry` 画法、`InkView` 触摸接线、`ZoomHost` 浏览模式点按、工具栏布局**未编译**，待 CI / 真机。
+
+### 重做本页（v48）
+菜单里「重做本页」：清掉这一页的**作答**，留下读题时的标记，方便再做一遍。
+
+- 清掉：手写笔迹、直线 / 矩形 / 椭圆 / 箭头、批改章（✓ ✗ ？）。
+- 留下：文字高亮 / 下划线 / 删除线、答案遮罩、便签。
+- 只动**可见图层**；整步走撤销历史，点撤销就回来（和「清除本页」不同的是它不会连标记一起清）。
+- 规则在 `RedoPage`（纯 JVM），`RedoPageTest` 3 条本地通过；菜单与 `InkView.redoPage` 接线**未编译**，待 CI / 真机。

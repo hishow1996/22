@@ -2051,6 +2051,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_close, getString(R.string.cd_clear), { false }) {
             activeViews[focusKey]?.clearPage()
         },
+        MenuAction(R.drawable.ic_redo_page, getString(R.string.cd_redo_page), { false }) {
+            if (activeViews[focusKey]?.redoPage() == true) flash(getString(R.string.redo_page_done))
+            else flash(getString(R.string.redo_page_none))
+        },
         MenuAction(R.drawable.ic_trash, getString(R.string.cd_clear_all), { false }) {
             confirmClearAll()
         },
