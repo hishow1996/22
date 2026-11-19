@@ -33,6 +33,18 @@ class SessionRepository(ctx: Context) {
         p.edit().putBoolean("followSystemDark", v).apply()
     }
 
+    // ---- v46 WebDAV 同步：地址 / 账号明文，密码经 Keystore 加密 ----
+    fun webDavUrl(): String = p.getString("wdUrl", "") ?: ""
+    fun webDavUser(): String = p.getString("wdUser", "") ?: ""
+    fun webDavPass(): String = SecretBox.open(p.getString("wdPass", "") ?: "")
+    fun setWebDav(url: String, user: String, pass: String) {
+        p.edit()
+            .putString("wdUrl", url)
+            .putString("wdUser", user)
+            .putString("wdPass", if (pass.isEmpty()) "" else (SecretBox.seal(pass) ?: ""))
+            .apply()
+    }
+
     // ---- 每卷会话 ----
     fun session(fp: String): DocSession = try {
         DocSession.fromJson(JSONObject(s.getString("doc_$fp", "{}") ?: "{}"))

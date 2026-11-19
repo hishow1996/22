@@ -1754,6 +1754,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_restore, getString(R.string.cd_restore), { false }) {
             openBackup.launch(arrayOf("*/*"))
         },
+        MenuAction(R.drawable.ic_cloud, getString(R.string.cd_webdav), { false }) {
+            showWebDav()
+        },
         MenuAction(R.drawable.ic_hand, getString(R.string.cd_hand), { rightHanded }) {
             rightHanded = !rightHanded
             savePrefs(); applyHandedness()
@@ -2056,6 +2059,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_restore, getString(R.string.cd_restore), { false }) {
             openBackup.launch(arrayOf("*/*"))
+        },
+        MenuAction(R.drawable.ic_cloud, getString(R.string.cd_webdav), { false }) {
+            showWebDav()
         },
         MenuAction(R.drawable.ic_grid, getString(R.string.cd_overview), { false }) {
             showOverview()
@@ -3637,6 +3643,151 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         v.findViewById<ImageButton>(R.id.btnConfirmNo).setOnClickListener { d.dismiss() }
         d.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        d.show()
+    }
+
+    // ----- v46：WebDAV 备份同步 -----
+
+    private fun webDavErrorText(e: WebDavException): String = when (e.code) {
+        401, 403 -> getString(R.string.webdav_err_auth)
+        WebDavException.NETWORK -> getString(R.string.webdav_err_net)
+        WebDavException.BAD_URL -> getString(R.string.webdav_err_url)
+        WebDavException.NOT_BACKUP -> getString(R.string.webdav_err_notbackup)
+        WebDavException.TOO_BIG -> getString(R.string.webdav_err_toobig)
+        404, 409 -> getString(R.string.webdav_err_dir)
+        in 300..399 -> getString(R.string.webdav_err_redirect)
+        else -> getString(R.string.webdav_err_http, e.code)
+    }
+
+    private fun showWebDav() {
+        val pad = dp(20)
+        fun field(hint: String, text: String, type: Int) = EditText(this).apply {
+            this.hint = hint
+            setText(text)
+            inputType = type
+            setSingleLine(true)
+        }
+        val url = field(
+            getString(R.string.webdav_url_hint), sessionRepo.webDavUrl(),
+            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        )
+        val user = field(
+            getString(R.string.webdav_user_hint), sessionRepo.webDavUser(),
+            android.text.InputType.TYPE_CLASS_TEXT
+        )
+        val pass = field(
+            getString(R.string.webdav_pass_hint), sessionRepo.webDavPass(),
+            android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        )
+        val status = android.widget.TextView(this).apply {
+            setPadding(0, dp(10), 0, 0)
+            textSize = 13f
+        }
+        val help = android.widget.TextView(this).apply {
+            text = getString(R.string.webdav_help)
+            textSize = 12f
+            setPadding(0, dp(10), 0, 0)
+            alpha = 0.7f
+        }
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, dp(8), pad, 0)
+            addView(url); addView(user); addView(pass); addView(status); addView(help)
+        }
+        val d = AlertDialog.Builder(this)
+            .setTitle(R.string.webdav_title)
+            .setView(box)
+            .setPositiveButton(R.string.webdav_upload, null)
+            .setNeutralButton(R.string.webdav_download, null)
+            .setNegativeButton(R.string.webdav_close, null)
+            .create()
+        var busy = false
+
+        // 校验并保存配置，返回客户端；地址不合法时在状态栏提示并返回 null
+        fun client(): WebDavClient? {
+            val raw = url.text.toString().trim()
+            val norm = WebDavClient.normalizeBase(raw)
+            if (norm == null) {
+                status.text = getString(
+                    if (raw.isEmpty()) R.string.webdav_fill_url else R.string.webdav_err_url
+                )
+                return null
+            }
+            val u = user.text.toString().trim()
+            val pw = pass.text.toString()
+            sessionRepo.setWebDav(norm, u, pw)
+            return WebDavClient(norm, u, pw)
+        }
+
+        class Outcome(val msg: String, val close: Boolean, val after: (() -> Unit)? = null)
+
+        fun doJob(job: (WebDavClient) -> Outcome) {
+            if (busy) return
+            val c = client() ?: return
+            busy = true
+            status.text = getString(R.string.webdav_busy)
+            workScope.launch {
+                val out = try {
+                    job(c)
+                } catch (e: WebDavException) {
+                    Outcome(webDavErrorText(e), false)
+                } catch (e: Exception) {
+                    Outcome(getString(R.string.webdav_err_net), false)
+                }
+                withContext(Dispatchers.Main) {
+                    busy = false
+                    if (isFinishing || isDestroyed) return@withContext
+                    status.text = out.msg
+                    if (out.close) {
+                        d.dismiss()
+                        if (out.msg.isNotEmpty()) flash(out.msg)
+                        out.after?.invoke()
+                    }
+                }
+            }
+        }
+
+        d.setOnShowListener {
+            d.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                doJob { c ->
+                    val bos = java.io.ByteArrayOutputStream()
+                    inkStore.exportTo(bos)
+                    c.upload(bos.toByteArray())
+                    Outcome(getString(R.string.webdav_up_ok), true)
+                }
+            }
+            d.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                doJob { c ->
+                    val bytes = c.download()
+                    if (bytes == null) {
+                        Outcome(getString(R.string.webdav_down_none), false)
+                    } else {
+                        // 落到缓存目录，再走和「导入批注」同一个对话框（合并 / 覆盖，且可撤销）
+                        val f = java.io.File(cacheDir, "webdav-restore.moye")
+                        f.writeBytes(bytes)
+                        Outcome("", true) { showImportMode(Uri.fromFile(f)) }
+                    }
+                }
+            }
+            // 打开时顺带看一眼云端有没有备份（配置已存才查）
+            val saved = sessionRepo.webDavUrl()
+            if (saved.isNotEmpty()) workScope.launch {
+                val t = try {
+                    val info = WebDavClient(saved, sessionRepo.webDavUser(), sessionRepo.webDavPass()).head()
+                    if (info == null) getString(R.string.webdav_remote_none)
+                    else getString(
+                        R.string.webdav_remote_info,
+                        if (info.modified > 0) java.text.DateFormat.getDateTimeInstance(
+                            java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT
+                        ).format(java.util.Date(info.modified)) else "—",
+                        android.text.format.Formatter.formatShortFileSize(this@MainActivity, info.size.coerceAtLeast(0))
+                    )
+                } catch (e: WebDavException) { webDavErrorText(e) } catch (e: Exception) { "" }
+                withContext(Dispatchers.Main) {
+                    if (d.isShowing && !busy && status.text.isEmpty()) status.text = t
+                }
+            }
+        }
         d.show()
     }
 

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="cd_webdav">WebDAV 同步</string>
+    <string name="webdav_title">WebDAV 备份同步</string>
+    <string name="webdav_url_hint">文件夹地址，如 https://dav.example.com/dav/墨页/</string>
+    <string name="webdav_user_hint">账号</string>
+    <string name="webdav_pass_hint">密码 / 应用专用密码</string>
+    <string name="webdav_help">只支持 https；网盘里的文件夹要先建好。备份文件名固定为 moye-backup.moye，上传会覆盖云端旧文件。</string>
+    <string name="webdav_upload">上传备份</string>
+    <string name="webdav_download">下载恢复</string>
+    <string name="webdav_close">关闭</string>
+    <string name="webdav_remote_none">云端还没有备份</string>
+    <string name="webdav_remote_info">云端备份：%1$s · %2$s</string>
+    <string name="webdav_busy">处理中…</string>
+    <string name="webdav_up_ok">已上传到云端</string>
+    <string name="webdav_down_none">云端没有备份文件</string>
+    <string name="webdav_fill_url">请先填写文件夹地址（https）</string>
+    <string name="webdav_err_auth">账号或密码不对（坚果云等需要「应用密码」）</string>
+    <string name="webdav_err_net">连不上服务器，检查网络和地址</string>
+    <string name="webdav_err_url">地址不合法，必须以 https:// 开头</string>
+    <string name="webdav_err_notbackup">云端这个文件不是墨页备份</string>
+    <string name="webdav_err_toobig">云端文件太大，已放弃</string>
+    <string name="webdav_err_dir">文件夹不存在，请先在网盘里建好</string>
+    <string name="webdav_err_redirect">服务器要求跳转，请把地址改成最终地址</string>
+    <string name="webdav_err_http">服务器返回错误 %1$d</string>
+</resources>
