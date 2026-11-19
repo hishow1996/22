@@ -263,7 +263,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val visibleLayers: Set<Int> get() = state.visibleLayers
     override val store: InkStore get() = inkStore
     override val ioScope: CoroutineScope get() = workScope
-    override fun onFocus(key: String) { focusKey = key }
+    override fun onFocus(key: String) { focusKey = key; loupeSyncPage() }
     // 一笔跨页：两页各提交一次，合成撤销历史里的一步（同一页多次提交取首个 before、末个 after）
     private var inkGrouping = false
     private val groupChanges = ArrayList<InkHistory.Change>()
@@ -529,6 +529,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 refreshBookmark()
                 saveSessionNow()
                 timerStart(); timerSave(false)
+                loupeSyncPage()
             }
         })
 
@@ -1550,6 +1551,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun showHome() {
         dropFindState()
+        closeLoupe()
         if (openingDocument) {
             openGeneration++
             openingDocument = false
@@ -1870,6 +1872,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val generation = ++openGeneration
         // 先把当前页已完成/正在结束的笔迹快照排进旧文档队列，再卸载旧页面。
         activeViews.values.toList().forEach { it.persistForDocumentSwitch() }
+        closeLoupe()
         pager.adapter = null
         adapter = null
         activeViews.clear()
@@ -2061,6 +2064,107 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         for ((k, v) in activeViews) v.restoreLocal(inkStore.load(k))
     }
 
+    // ----- v48：局部放大书写窗 -----
+    private var loupePanel: LinearLayout? = null
+    private var loupeView: LoupeView? = null
+    private var loupePageShown = -1
+
+    /** 书写窗对应的逻辑页：跟着当前焦点（单页 p<n>、双页 d<n>）。 */
+    private fun loupePage(): Int =
+        focusKey.drop(1).toIntOrNull()?.coerceIn(0, ((repo?.count ?: 1) - 1).coerceAtLeast(0))
+            ?: currentPage()
+
+    private fun toggleLoupe() {
+        if (loupePanel != null) closeLoupe() else openLoupe()
+    }
+
+    private fun openLoupe() {
+        val r = repo ?: return
+        if (openingDocument && r.count <= 0) return
+        val host = root as? FrameLayout ?: return
+        val src = object : LoupeView.Source {
+            override val marks: List<Mark>
+                get() = activeViews[focusKey]?.marksSnapshot() ?: emptyList()
+            override val tint: Int get() = state.tint
+            override val visibleLayers: Set<Int> get() = state.visibleLayers.toSet()
+            override val inkColor: Int get() = this@MainActivity.inkColor
+            override val inkWidth: Float get() = this@MainActivity.inkWidth
+            override val inkAlpha: Int get() = this@MainActivity.inkAlpha
+            override val activeLayer: Int get() = this@MainActivity.activeLayer
+            override val stylusOnly: Boolean get() = state.stylusOnly
+            override fun renderTile(lw: Int, lh: Int, left: Int, top: Int, tw: Int, th: Int): Bitmap? {
+                val rr = repo ?: return null
+                return rr.renderTile(loupePage(), lw, lh, left, top, tw, th,
+                    state.tint, state.brightness, state.pageRotation)
+            }
+            override fun onStroke(m: Mark) {
+                if (activeViews[focusKey]?.addExternalMark(m) != true) flash(getString(R.string.loupe_rejected))
+            }
+        }
+        val lv = LoupeView(this).apply {
+            source = src
+            scope = workScope
+        }
+        val ink = ContextCompat.getColor(this, R.color.icon)
+        fun btn(label: String, desc: String, onClick: () -> Unit) = TextView(this).apply {
+            text = label
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(ink)
+            contentDescription = desc
+            setOnClickListener { onClick() }
+        }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val bw = LinearLayout.LayoutParams(0, dp(44), 1f)
+        row.addView(btn("◀", getString(R.string.cd_loupe_left)) { lv.shiftX(-1) }, bw)
+        row.addView(btn("▶", getString(R.string.cd_loupe_right)) { lv.shiftX(1) }, bw)
+        row.addView(btn("▲", getString(R.string.cd_loupe_up)) { lv.shiftY(-1) }, bw)
+        row.addView(btn("▼", getString(R.string.cd_loupe_down)) { lv.shiftY(1) }, bw)
+        row.addView(btn("↵", getString(R.string.cd_loupe_line)) { lv.newLine() }, bw)
+        row.addView(btn("＋", getString(R.string.cd_loupe_smaller)) { lv.zoom(-0.06f) }, bw)
+        row.addView(btn("－", getString(R.string.cd_loupe_bigger)) { lv.zoom(0.06f) }, bw)
+        row.addView(btn("✕", getString(R.string.cd_loupe_close)) { closeLoupe() }, bw)
+
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+            elevation = dp(8).toFloat()
+            setPadding(safeL, 0, safeR, safeB)
+            // 吞掉落在面板上的触摸，不穿到下面的页面
+            isClickable = true
+        }
+        val stripH = (resources.displayMetrics.heightPixels * 0.24f).toInt().coerceAtLeast(dp(130))
+        panel.addView(lv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stripH))
+        panel.addView(row, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        host.addView(panel, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM))
+        loupePanel = panel
+        loupeView = lv
+        loupePageShown = -1
+        loupeSyncPage()
+        flash(getString(R.string.loupe_hint))
+    }
+
+    /** 翻页 / 换焦点后让书写窗跟到新的一页（只在页变了时重置底图）。 */
+    private fun loupeSyncPage() {
+        val lv = loupeView ?: return
+        val r = repo ?: return
+        val page = loupePage()
+        if (page == loupePageShown) { lv.refresh(); return }
+        loupePageShown = page
+        lv.setPage(r.ratioWithRotation(page, state.pageRotation))
+    }
+
+    private fun closeLoupe() {
+        loupeView?.release()
+        (loupePanel?.parent as? ViewGroup)?.removeView(loupePanel)
+        loupePanel = null
+        loupeView = null
+        loupePageShown = -1
+    }
+
     // ----- 浮层菜单 -----
     private fun menuActions(): List<MenuAction> = listOf(
         MenuAction(R.drawable.ic_close, getString(R.string.cd_clear), { false }) {
@@ -2069,6 +2173,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_redo_page, getString(R.string.cd_redo_page), { false }) {
             if (activeViews[focusKey]?.redoPage() == true) flash(getString(R.string.redo_page_done))
             else flash(getString(R.string.redo_page_none))
+        },
+        MenuAction(R.drawable.ic_loupe, getString(R.string.cd_loupe), { loupePanel != null }) {
+            toggleLoupe()
         },
         MenuAction(R.drawable.ic_trash, getString(R.string.cd_clear_all), { false }) {
             confirmClearAll()

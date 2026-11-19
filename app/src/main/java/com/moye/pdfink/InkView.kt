@@ -1581,6 +1581,26 @@ class InkView @JvmOverloads constructor(
         return true
     }
 
+    /** v48：放大书写窗读本页当前笔迹（只读快照，Mark 对象与本页共用）。 */
+    fun marksSnapshot(): List<Mark> = ArrayList(marks)
+
+    /**
+     * v48：放大书写窗写好的一笔落到本页。和手写一笔一样：进撤销历史、落盘。
+     * 正在手写 / 加载中 / 没有 key 时拒绝，返回 false。
+     */
+    fun addExternalMark(m: Mark): Boolean {
+        if (host == null || loadingMarks || key.isEmpty() || gestureActive() || m.pts.size < 2) return false
+        before = ArrayList(marks)
+        marks.add(m)
+        val index = marks.lastIndex
+        if (baseTiles.ready && visible(m)) paintMark(baseTiles, m)
+        if (spatialReady) indexMark(index, m)
+        dropHiResCache()
+        commit()
+        invalidate()
+        return true
+    }
+
     private fun cancelGesture() {
         coverTapIdx = -1
         removeCallbacks(snapRunnable)

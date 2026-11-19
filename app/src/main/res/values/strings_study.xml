@@ -15,4 +15,15 @@
     <string name="timing_reset">清零计时</string>
     <string name="timing_reset_done">本文件的计时已清零</string>
     <string name="wrong_book_export">导出错题本（%1$d 页：打 ✗ 的页 + 书签页）</string>
+    <string name="cd_loupe">放大书写窗</string>
+    <string name="loupe_hint">在下面的放大条里写，字会按比例落回原页；写过右侧虚线后窗口自动右移，↵ 换行，右上小图点一下可跳到别处</string>
+    <string name="cd_loupe_left">窗口左移</string>
+    <string name="cd_loupe_right">窗口右移</string>
+    <string name="cd_loupe_up">窗口上移</string>
+    <string name="cd_loupe_down">窗口下移</string>
+    <string name="cd_loupe_line">换行（回到这一行的起点并下移）</string>
+    <string name="cd_loupe_smaller">放得更大</string>
+    <string name="cd_loupe_bigger">放得小一点</string>
+    <string name="cd_loupe_close">关闭放大书写窗</string>
+    <string name="loupe_rejected">这一笔没能落到页上，请稍后再写</string>
 </resources>
