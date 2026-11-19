@@ -9,4 +9,9 @@
     <string name="cd_redo_page">重做本页（清作答，留标记）</string>
     <string name="redo_page_done">已清掉本页作答，可撤销</string>
     <string name="redo_page_none">本页没有可清的作答</string>
+    <string name="nav_timing_title">做题用时</string>
+    <string name="timing_summary">合计 %1$s · 平均每页 %2$s</string>
+    <string name="timing_row">第 %1$d 页（用时最久）</string>
+    <string name="timing_reset">清零计时</string>
+    <string name="timing_reset_done">本文件的计时已清零</string>
 </resources>

@@ -108,6 +108,14 @@
                 android:orientation="vertical"
                 android:visibility="gone" />
 
+            <!-- v48：做题用时；由 MainActivity.showNav 同步填充，没有计时数据时保持隐藏 -->
+            <LinearLayout
+                android:id="@+id/navTiming"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/navShelf"
                 android:layout_width="match_parent"

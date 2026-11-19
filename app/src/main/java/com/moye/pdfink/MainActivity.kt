@@ -103,6 +103,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var recents: Recents
     private lateinit var sessionRepo: SessionRepository
     private lateinit var snapshots: SnapshotKeeper
+    // v48 做题计时
+    private lateinit var timingStore: TimingStore
+    private var pageTimer = PageTimer()
+    private var timerFp = ""
+    private var timerSavedAt = 0L
     private var repo: PageSource? = null
     private var adapter: PagesAdapter? = null
     private var openGeneration = 0
@@ -423,6 +428,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         recents = Recents(this)
         sessionRepo = SessionRepository(this)
         snapshots = SnapshotKeeper(java.io.File(filesDir, "snapshots"))
+        timingStore = TimingStore(java.io.File(filesDir, "timing"))
         vm.attach(sessionRepo)
         vm.createdPage = savedInstanceState?.getInt("moye_page", -1) ?: -1
         loadPrefs()
@@ -522,6 +528,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 updatePagerInput(position)
                 refreshBookmark()
                 saveSessionNow()
+                timerStart(); timerSave(false)
             }
         })
 
@@ -1891,6 +1898,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun finishOpenUri(r: PageSource, fp: String) {
         openingDocument = false
+        // v48：先把上一个文件的计时存好，再换成这个文件的计时
+        if (timerFp.isNotEmpty()) {
+            pageTimer.pause(nowMs())
+            timingStore.save(timerFp, pageTimer)
+        }
+        timerFp = fp
+        pageTimer = timingStore.load(fp)
+        timerStart()
         // v45：文字缓存按内容指纹落盘；停稳几秒后在后台把全文先提取好，
         // 之后点查找就是秒出（已有缓存时这一步只是读一个小文件）。
         r.attachFingerprint(fp)
@@ -2476,6 +2491,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 }
             }
         }
+        // v48：做题用时——数据都在内存里，同步填；没有计时数据时保持隐藏。
+        fillTimingSection(v.findViewById(R.id.navTiming), dialog)
         // v46：批注汇总——读盘放后台；没有批注时这一块保持隐藏，面板与以前一致。
         val annotBox = v.findViewById<LinearLayout>(R.id.navAnnots)
         val annotLayers = state.visibleLayers.toSet()
@@ -3430,6 +3447,87 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         super.onResume()
         PdfBitmapCache.restore()
         hideSystemBars()
+        if (timerFp.isNotEmpty()) pageTimer.resume(nowMs())
+    }
+
+    // ----- v48：做题计时 -----
+    private fun nowMs(): Long = android.os.SystemClock.elapsedRealtime()
+
+    private fun timerStart() {
+        if (timerFp.isEmpty() || repo == null) return
+        pageTimer.start(currentPage(), nowMs())
+    }
+
+    /** force=false 时 20 秒内不重复写盘，翻页再快也不会频繁碰文件。 */
+    private fun timerSave(force: Boolean) {
+        if (timerFp.isEmpty()) return
+        val n = nowMs()
+        if (!force && n - timerSavedAt < 20_000L) return
+        pageTimer.snapshot(n)          // 把正在走的这一段结算进去
+        if (!pageTimer.dirty) return
+        timerSavedAt = n
+        timingStore.save(timerFp, pageTimer)
+    }
+
+    private fun fillTimingSection(box: LinearLayout, dialog: android.app.Dialog) {
+        val now = nowMs()
+        val snap = pageTimer.snapshot(now)
+        val total = snap.values.sum()
+        if (total < 5_000L) return
+        val ink = ContextCompat.getColor(this, R.color.icon)
+        val muted = ContextCompat.getColor(this, R.color.page_text)
+        val accent = ContextCompat.getColor(this, R.color.accent)
+        box.visibility = View.VISIBLE
+        box.addView(TextView(this).apply {
+            text = getString(R.string.nav_timing_title)
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(muted)
+            setPadding(dp(8), dp(10), dp(8), dp(4))
+        })
+        val counted = snap.values.count { it > 0 }.coerceAtLeast(1)
+        box.addView(TextView(this).apply {
+            text = getString(R.string.timing_summary,
+                PageTimer.format(total), PageTimer.format(total / counted))
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(ink)
+            setPadding(dp(8), dp(2), dp(8), dp(6))
+        })
+        for ((p, ms) in pageTimer.slowest(now, 5)) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(9), dp(8), dp(9))
+                setOnClickListener { goToPage(p); dialog.dismiss() }
+            }
+            row.addView(TextView(this).apply {
+                text = getString(R.string.timing_row, p + 1)
+                textSize = 13f
+                setTextColor(ink)
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(TextView(this).apply {
+                text = PageTimer.format(ms)
+                textSize = 13f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(accent)
+            })
+            box.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        box.addView(TextView(this).apply {
+            text = getString(R.string.timing_reset)
+            textSize = 12f
+            setTextColor(muted)
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            setOnClickListener {
+                pageTimer.reset()
+                timerStart()
+                timerSave(true)
+                dialog.dismiss()
+                flash(getString(R.string.timing_reset_done))
+            }
+        })
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -3460,6 +3558,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             activeViews.values.forEach { it.flush() }
             inkStore.flush()
             saveSessionNow()
+            if (timerFp.isNotEmpty()) {
+                pageTimer.pause(nowMs())
+                timerSave(true)
+            }
         } catch (e: Exception) { }
         super.onStop()
     }
