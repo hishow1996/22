@@ -72,6 +72,7 @@
     <string name="cd_dark">跟随系统深浅色</string>
     <string name="cd_autocrop">自动裁白边</string>
     <string name="cd_holdsnap">按住拉直 / 规整图形</string>
+    <string name="cd_anysnap">任意位置规整图形（抬笔把画的圈 / 框 / 线变规整）</string>
     <string name="cd_textsnap">文字吸附（划线 / 圈字自动贴到文字上）</string>
     <string name="cd_confirm_yes">确认</string>
     <string name="cd_confirm_no">取消</string>
