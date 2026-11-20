@@ -622,16 +622,142 @@ class InkView @JvmOverloads constructor(
             !h.browseMode
         ) h.fingerOffsetPx else 0
         if (off <= 0) {
+            abortAim()
             hideCursor()
             return handleRawTouch(raw)
         }
         val shifted = MotionEvent.obtain(raw)
         shifted.offsetLocation(0f, -off.toFloat())
         try {
+            // v48：落笔类工具（笔 / 荧光笔 / 形状）先瞄准再出墨；橡皮 / 套索照旧立即响应
+            if (h != null && (aimGate.active() ||
+                    h.tool == Tools.PEN || h.tool == Tools.HIGHLIGHT || h.tool == Tools.SHAPE)
+            ) {
+                return aimTouch(shifted, raw, off)
+            }
             updateCursor(shifted, off)
             return handleRawTouch(shifted)
         } finally {
             shifted.recycle()
+        }
+    }
+
+    // ---------- v48：先瞄准、再落笔 ----------
+    private val aimGate = AimGate(AimGate.SLOP_DP * resources.displayMetrics.density, AimGate.TAP_MS)
+    private var aimDown: MotionEvent? = null
+    private val aimBuf = ArrayList<MotionEvent>()
+    private var aiming = false
+    private val lingerHide = Runnable { hideCursor() }
+
+    private fun clearAimBuffers() {
+        aimDown?.recycle(); aimDown = null
+        for (e in aimBuf) e.recycle()
+        aimBuf.clear()
+    }
+
+    /** 手势被中断（设置变了 / 视图脱离）：丢掉瞄准状态。 */
+    private fun abortAim() {
+        if (!aimGate.active() && aimDown == null && aimBuf.isEmpty() && !aiming) return
+        removeCallbacks(lingerHide)
+        aimGate.reset()
+        clearAimBuffers()
+        aiming = false
+    }
+
+    override fun onDetachedFromWindow() {
+        abortAim()
+        removeCallbacks(snapRunnable)
+        super.onDetachedFromWindow()
+    }
+
+    /** 把瞄准期间攒下的按下点 + 移动点一次补发给书写处理。 */
+    private fun replayAim() {
+        val d = aimDown ?: return
+        aiming = false
+        handleRawTouch(d)
+        for (e in aimBuf) handleRawTouch(e)
+        clearAimBuffers()
+    }
+
+    private fun aimTouch(ev: MotionEvent, raw: MotionEvent, off: Int): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                removeCallbacks(lingerHide)
+                clearAimBuffers()
+                if (blocked(ev)) { hideCursor(); return false }
+                if (loadingMarks) return true
+                try { requestUnbufferedDispatch(raw) } catch (_: Throwable) { }
+                aimGate.down(ev.x, ev.y, ev.eventTime)
+                aimDown = MotionEvent.obtain(ev)
+                aiming = true
+                updateCursor(ev, off)
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                when (aimGate.move(ev.x, ev.y)) {
+                    AimGate.Action.HOLD -> {
+                        if (aimGate.phase == AimGate.Phase.AIMING) {
+                            aimBuf.add(MotionEvent.obtain(ev))
+                            if (aimBuf.size > AimGate.MAX_BUFFER) aimBuf.removeAt(0).recycle()
+                        }
+                        return true
+                    }
+                    AimGate.Action.START -> {
+                        aimBuf.add(MotionEvent.obtain(ev))
+                        replayAim()
+                        updateCursor(ev, off)
+                        return true
+                    }
+                    else -> {
+                        updateCursor(ev, off)
+                        return handleRawTouch(ev)
+                    }
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                when (aimGate.up(ev.eventTime)) {
+                    AimGate.Action.TAP -> {
+                        val d = aimDown
+                        if (d != null) {
+                            aiming = false
+                            handleRawTouch(d)
+                            val up = MotionEvent.obtain(ev)
+                            up.setLocation(d.x, d.y)
+                            try { handleRawTouch(up) } finally { up.recycle() }
+                        }
+                        clearAimBuffers()
+                        hideCursor()
+                        return true
+                    }
+                    AimGate.Action.DISCARD -> {
+                        // 只是瞄准：什么都不画，瞄准环再留一会儿，方便看清位置
+                        clearAimBuffers()
+                        removeCallbacks(lingerHide)
+                        postDelayed(lingerHide, AimGate.LINGER_MS)
+                        return true
+                    }
+                    AimGate.Action.PASS -> {
+                        updateCursor(ev, off)
+                        return handleRawTouch(ev)
+                    }
+                    else -> { clearAimBuffers(); hideCursor(); return true }
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                val a = aimGate.cancel()
+                clearAimBuffers()
+                updateCursor(ev, off)
+                return if (a == AimGate.Action.PASS) handleRawTouch(ev) else true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                return when (aimGate.secondPointer()) {
+                    AimGate.Action.PASS -> { updateCursor(ev, off); handleRawTouch(ev) }
+                    else -> { clearAimBuffers(); hideCursor(); true }
+                }
+            }
+            else -> {
+                return if (aimGate.phase == AimGate.Phase.INKING) handleRawTouch(ev) else true
+            }
         }
     }
 
@@ -643,7 +769,7 @@ class InkView @JvmOverloads constructor(
     private val cursorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private fun invalidateCursorArea() {
-        val r = 11f * density
+        val r = 14f * density
         invalidate(
             (cursorX - r).toInt(), (cursorY - r).toInt(),
             (cursorX + r).toInt() + 1, (cursorFingerY + 2f * density).toInt() + 1
@@ -666,6 +792,7 @@ class InkView @JvmOverloads constructor(
     }
 
     private fun hideCursor() {
+        aiming = false
         if (!cursorOn) return
         invalidateCursorArea()
         cursorOn = false
@@ -673,7 +800,8 @@ class InkView @JvmOverloads constructor(
 
     /** 光标环：中间留空，不遮住正在落下的笔迹；白色外圈保证深色背景上也看得见。 */
     private fun drawCursor(canvas: Canvas) {
-        val r = 7f * density
+        // v48：瞄准期（还没出墨）环更大、中间带实心点，一眼能分清「还没落笔」
+        val r = (if (aiming) 10f else 7f) * density
         cursorPaint.style = Paint.Style.STROKE
         // 落点到指尖的淡线：说明「笔迹在手指上方」
         cursorPaint.strokeWidth = 1f * density
@@ -685,6 +813,11 @@ class InkView @JvmOverloads constructor(
         cursorPaint.strokeWidth = 1.5f * density
         cursorPaint.color = 0xFF2F6FED.toInt()
         canvas.drawCircle(cursorX, cursorY, r, cursorPaint)
+        if (aiming) {
+            cursorPaint.style = Paint.Style.FILL
+            canvas.drawCircle(cursorX, cursorY, 2f * density, cursorPaint)
+            cursorPaint.style = Paint.Style.STROKE
+        }
     }
 
     private fun handleRawTouch(ev: MotionEvent): Boolean {
