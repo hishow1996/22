@@ -250,6 +250,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val fingerOffsetPx: Int get() = dp(FingerOffset.dp(state.fingerOffset))
     override val holdToSnap: Boolean get() = state.holdSnap
     override val textSnap: Boolean get() = state.textSnap
+    override val lineShrink: Int get() = state.lineShrink
     override val pressureLevel: Int get() = state.pressureLevel
     override val topEdgeGuardPx: Int
         get() {
@@ -589,6 +590,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.autoCrop = p.getBoolean("autoCrop", false)
         state.holdSnap = p.getBoolean("holdSnap", true)
         state.textSnap = p.getBoolean("textSnap", true)
+        state.loupeFrac = p.getFloat("loupeFrac", LoupeMath.fracOf(3f))
+        state.lineShrink = LineShrink.clamp(p.getInt("lineShrink", LineShrink.OFF))
         state.brightness = p.getFloat("brightness", 0f)
         // v16：默认浏览。老版本存过 false 的也算升级首次，强制回浏览；
         // 之后用户切到做题会写进偏好，重开保持上次模式。
@@ -667,6 +670,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("autoCrop", state.autoCrop)
             putBoolean("holdSnap", state.holdSnap)
             putBoolean("textSnap", state.textSnap)
+            putFloat("loupeFrac", state.loupeFrac)
+            putInt("lineShrink", state.lineShrink)
         }.apply()
         sessionRepo.setRotation(state.pageRotation)
         sessionRepo.setVolumeFlip(state.volumeFlip)
@@ -1830,6 +1835,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_text_snap, getString(R.string.cd_textsnap), { state.textSnap }) {
             state.textSnap = !state.textSnap; savePrefs()
         },
+        MenuAction(R.drawable.ic_shrink, getString(R.string.cd_line_shrink), { state.lineShrink != LineShrink.OFF }) {
+            // v52：关 → 60% → 50% → 40% → 关
+            state.lineShrink = LineShrink.next(state.lineShrink)
+            savePrefs()
+            flash(getString(when (state.lineShrink) {
+                1 -> R.string.line_shrink_60
+                2 -> R.string.line_shrink_50
+                3 -> R.string.line_shrink_40
+                else -> R.string.line_shrink_off
+            }))
+        },
         MenuAction(R.drawable.ic_stylus, getString(R.string.cd_stylus), {
             state.stylusOnly
         }) {
@@ -2132,10 +2148,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             override fun onStroke(m: Mark) {
                 if (activeViews[focusKey]?.addExternalMark(m) != true) flash(getString(R.string.loupe_rejected))
             }
+            override fun onZoomChanged(frac: Float) { state.loupeFrac = frac; savePrefs() }
         }
         val lv = LoupeView(this).apply {
             source = src
             scope = workScope
+            setFrac(state.loupeFrac)
         }
         val ink = ContextCompat.getColor(this, R.color.icon)
         fun btn(label: String, desc: String, onClick: () -> Unit) = TextView(this).apply {
@@ -2153,8 +2171,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         row.addView(btn("▲", getString(R.string.cd_loupe_up)) { lv.shiftY(-1) }, bw)
         row.addView(btn("▼", getString(R.string.cd_loupe_down)) { lv.shiftY(1) }, bw)
         row.addView(btn("↵", getString(R.string.cd_loupe_line)) { lv.newLine() }, bw)
-        row.addView(btn("＋", getString(R.string.cd_loupe_smaller)) { lv.zoom(-0.06f) }, bw)
-        row.addView(btn("－", getString(R.string.cd_loupe_bigger)) { lv.zoom(0.06f) }, bw)
+        // v52：倍数三档 2× / 3× / 4×，点一下轮换，按钮上显示当前倍数
+        val zoomBtn = btn(LoupeMath.zoomLabel(lv.frac), getString(R.string.cd_loupe_zoom)) { }
+        zoomBtn.textSize = 16f
+        zoomBtn.setOnClickListener { zoomBtn.text = lv.cycleZoom() }
+        row.addView(zoomBtn, bw)
         row.addView(btn("✕", getString(R.string.cd_loupe_close)) { closeLoupe() }, bw)
 
         val panel = LinearLayout(this).apply {
@@ -2350,6 +2371,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_text_snap, getString(R.string.cd_textsnap), { state.textSnap }) {
             state.textSnap = !state.textSnap; savePrefs()
+        },
+        MenuAction(R.drawable.ic_shrink, getString(R.string.cd_line_shrink), { state.lineShrink != LineShrink.OFF }) {
+            // v52：关 → 60% → 50% → 40% → 关
+            state.lineShrink = LineShrink.next(state.lineShrink)
+            savePrefs()
+            flash(getString(when (state.lineShrink) {
+                1 -> R.string.line_shrink_60
+                2 -> R.string.line_shrink_50
+                3 -> R.string.line_shrink_40
+                else -> R.string.line_shrink_off
+            }))
         },
         MenuAction(R.drawable.ic_history, getString(R.string.cd_snapshots), { false }) {
             showSnapshots()

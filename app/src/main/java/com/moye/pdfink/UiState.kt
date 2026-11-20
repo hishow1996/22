@@ -40,6 +40,10 @@ class UiState {
     /** v46：按住拉直 / 规整图形，默认开。 */
     @Volatile var holdSnap = true
     @Volatile var textSnap = true
+    /** v52：放大书写条的倍数（窗口宽占整页宽的比例），默认 3×。 */
+    @Volatile var loupeFrac = LoupeMath.fracOf(3f)
+    /** v52：写完自动缩小档位，0 关 / 1 → 60% / 2 → 50% / 3 → 40%，见 [LineShrink]。 */
+    @Volatile var lineShrink = LineShrink.OFF
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true

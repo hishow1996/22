@@ -52,6 +52,8 @@ class InkView @JvmOverloads constructor(
         val holdToSnap: Boolean get() = false
         /** v48：抬笔时，压在文字上的直线 / 圈自动贴到文字上（下划线 / 删除线 / 高亮 / 框住字）。 */
         val textSnap: Boolean get() = false
+        /** v52：写完自动缩小档位，0 关，见 [LineShrink]。 */
+        val lineShrink: Int get() = LineShrink.OFF
         /**
          * 屏幕最上沿这么高（像素，屏幕坐标）以内不接受落笔。
          * 系统的「顶边下拉呼出状态栏」只看手指是不是从顶边起手，应用拦不住；
@@ -176,6 +178,11 @@ class InkView @JvmOverloads constructor(
     private var snapFrozen = false
     /** v49：本笔已被吸成三角形 / 斜四边形（仍是自由笔迹的折线），之后的移动不再改它。 */
     private var polySnapped = false
+
+    // ----- v52：写完自动缩小：连着写的几笔（相邻两笔间隔 < IDLE）算一段，停笔 IDLE 后整段缩小 -----
+    private val burst = ArrayList<Mark>()
+    private var burstAt = 0L
+    private val shrinkRunnable = Runnable { applyShrink() }
     private val snapRunnable = Runnable { trySnap() }
     private var liveLayer = Layers.ANSWER
     private var lastX = 0f
@@ -672,6 +679,8 @@ class InkView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         abortAim()
         removeCallbacks(snapRunnable)
+        removeCallbacks(shrinkRunnable)
+        burst.clear()
         super.onDetachedFromWindow()
     }
 
@@ -1788,6 +1797,47 @@ class InkView @JvmOverloads constructor(
         }
     }
 
+    private fun noteBurst(m: Mark, h: Host, textSnapped: Boolean) {
+        val ok = h.lineShrink != LineShrink.OFF && h.tool == Tools.PEN && m.shape == Shapes.FREE &&
+            !textSnapped && !polySnapped && liveShape == Shapes.FREE
+        if (!ok) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - burstAt > LineShrink.IDLE_MS * 3 / 2) burst.clear()   // 上一段已经过期
+        burst.add(m)
+        burstAt = now
+        removeCallbacks(shrinkRunnable)
+        postDelayed(shrinkRunnable, LineShrink.IDLE_MS)
+    }
+
+    /** 停笔 IDLE 后：整段缩小，一步可撤销。正在写 / 选区中 / 笔迹被动过就放弃或顺延。 */
+    private fun applyShrink() {
+        val h = host ?: run { burst.clear(); return }
+        if (burst.isEmpty()) return
+        if (drawing) { postDelayed(shrinkRunnable, LineShrink.IDLE_MS); return }
+        if (selection != null || loadingMarks || key.isEmpty() || h.lineShrink == LineShrink.OFF ||
+            width <= 0 || height <= 0) { burst.clear(); return }
+        val idx = ArrayList<Int>()
+        for (b in burst) {
+            var at = -1
+            for (i in marks.indices.reversed()) if (marks[i] === b) { at = i; break }
+            if (at < 0) { burst.clear(); return }          // 其中一笔被擦 / 撤销了：这一段不动
+            idx.add(at)
+        }
+        burst.clear()
+        val w = width.toFloat(); val hh = height.toFloat()
+        val plan = LineShrink.plan(idx.map { marks[it].pts }, w, hh, density, h.lineShrink) ?: return
+        before = ArrayList(marks)
+        for (i in idx) {
+            val o = marks[i]
+            marks[i] = o.copyWith(
+                pts = LineShrink.scale(o.pts, plan, w, hh),
+                width = LineShrink.scaledWidth(o.width, plan.s))
+        }
+        rebuild()
+        commit()
+        try { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) } catch (_: Throwable) { }
+    }
+
     private fun finishMark() {
         if (!drawing) return
         removeCallbacks(snapRunnable)
@@ -1828,6 +1878,7 @@ class InkView @JvmOverloads constructor(
         }
         if (changed) commit()
         invalidate()
+        if (changed && m != null && h != null) noteBurst(m, h, textSnapped)
         if (changed && textSnapped) {
             try { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) } catch (_: Throwable) { }
         }

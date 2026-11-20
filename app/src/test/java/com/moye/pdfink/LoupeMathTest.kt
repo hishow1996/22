@@ -57,4 +57,40 @@ class LoupeMathTest {
         assertFalse(LoupeMath.covered(100f, 450f, 300f, 100f, 0f, 0f, 1000f, 500f))
         assertNotNull(LoupeMath.nextLine(0f, 0f, 0.4f, 0.1f))
     }
+
+    @Test
+    fun zoomPresetsCycleTwoThreeFour() {
+        assertEquals("3×", LoupeMath.zoomLabel(0.34f))          // 旧默认 0.34 ≈ 3×
+        assertEquals(0.25f, LoupeMath.nextFrac(LoupeMath.fracOf(3f)), 1e-6f)
+        assertEquals(0.5f, LoupeMath.nextFrac(LoupeMath.fracOf(4f)), 1e-6f)
+        assertEquals(LoupeMath.fracOf(3f), LoupeMath.nextFrac(LoupeMath.fracOf(2f)), 1e-6f)
+        assertEquals("2×", LoupeMath.zoomLabel(0.5f))
+    }
+
+    @Test
+    fun advanceMovesRightThenWrapsAtPageEdge() {
+        val ww = 0.34f; val wh = 0.08f
+        // 没写过虚线：不动
+        assertNull(LoupeMath.advance(0.1f, 0.2f, 0.04f, ww, wh, 0.1f + ww * 0.5f))
+        // 写过虚线：右移半个窗
+        val r = LoupeMath.advance(0.1f, 0.2f, 0.04f, ww, wh, 0.1f + ww * 0.8f)!!
+        assertEquals(0.1f + ww * 0.5f, r.first, 1e-5f)
+        assertEquals(0.2f, r.second, 1e-6f)
+        // 已经在页右边缘：换行（x 回行起点，y 下移 0.6 窗高）
+        val edge = 1f - ww
+        val w = LoupeMath.advance(edge, 0.2f, 0.04f, ww, wh, edge + ww * 0.9f)!!
+        assertEquals(0.04f, w.first, 1e-5f)
+        assertEquals(0.2f + wh * LoupeMath.LINE_STEP, w.second, 1e-5f)
+        // 页底也到了：不动
+        assertNull(LoupeMath.advance(edge, 1f - wh, 0.04f, ww, wh, edge + ww * 0.9f))
+    }
+
+    @Test
+    fun palmAndFingerAfterStylusAreIgnored() {
+        assertTrue(LoupeMath.isPalm(100f, 3f))      // 100px / 3 ≈ 33dp
+        assertFalse(LoupeMath.isPalm(60f, 3f))      // 20dp 的指腹
+        assertTrue(LoupeMath.fingerIgnored(10_500L, 10_000L))
+        assertFalse(LoupeMath.fingerIgnored(12_000L, 10_000L))
+        assertFalse(LoupeMath.fingerIgnored(5_000L, 0L))
+    }
 }

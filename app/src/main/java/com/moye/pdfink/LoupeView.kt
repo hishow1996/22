@@ -39,6 +39,8 @@ class LoupeView(context: Context) : View(context) {
         fun onStroke(m: Mark)
         /** 窗口位置变了（用来记住 / 刷新按钮状态）。 */
         fun onWindowMoved() {}
+        /** v52：倍数档变了（用来记住用户选的倍数）。 */
+        fun onZoomChanged(frac: Float) {}
     }
 
     var source: Source? = null
@@ -76,6 +78,7 @@ class LoupeView(context: Context) : View(context) {
     private var miniDrag = false
     private var lastPx = 0f
     private var lastPy = 0f
+    private var lastStylusAt = 0L
 
     private fun sw() = width.toFloat()
     private fun sh() = height.toFloat()
@@ -121,15 +124,23 @@ class LoupeView(context: Context) : View(context) {
         ensureTile(); invalidate(); source?.onWindowMoved()
     }
 
-    fun zoom(delta: Float) {
+    /** v52：设置倍数（窗口宽占整页宽的比例），保持窗口中心不动。 */
+    fun setFrac(f: Float) {
         val cx = winX + ww() / 2f
         val cy = winY + wh() / 2f
-        frac = (frac + delta).coerceIn(LoupeMath.MIN_FRAC, LoupeMath.MAX_FRAC)
+        frac = f.coerceIn(LoupeMath.MIN_FRAC, LoupeMath.MAX_FRAC)
         gen++
         tile?.recycle(); tile = null
         val (x, y) = LoupeMath.centerOn(cx, cy, ww(), wh())
         winX = x; winY = y; rowStartX = x
         ensureTile(); invalidate(); source?.onWindowMoved()
+        source?.onZoomChanged(frac)
+    }
+
+    /** v52：2× → 3× → 4× 轮换，返回新倍数的文字。 */
+    fun cycleZoom(): String {
+        setFrac(LoupeMath.nextFrac(frac))
+        return LoupeMath.zoomLabel(frac)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -262,18 +273,33 @@ class LoupeView(context: Context) : View(context) {
                     miniMoveTo(ev.x, ev.y)
                     return true
                 }
+                val isStylus = ev.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS
+                if (isStylus) lastStylusAt = ev.eventTime
                 // 只用触控笔时，手指落在条上什么都不做（也不穿透到页面）
-                if (s.stylusOnly && ev.getToolType(0) != MotionEvent.TOOL_TYPE_STYLUS) return true
+                if (s.stylusOnly && !isStylus) return true
+                // v52：防手掌——用过笔 1.5 秒内的手指、接触面过大（手掌 / 手侧）的触摸不出墨
+                if (!isStylus && (LoupeMath.fingerIgnored(ev.eventTime, lastStylusAt) ||
+                        LoupeMath.isPalm(ev.getTouchMajor(0), dp))) return true
                 activeId = ev.getPointerId(0)
                 live.clear()
                 addPoint(ev.x, ev.y, true)
                 invalidate()
                 return true
             }
+            // v52：写字时又有一根手指 / 手掌压上来：这一笔作废（避免混进一道乱线）
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (activeId >= 0 && !miniDrag) { live.clear(); activeId = -1; invalidate() }
+                return true
+            }
             MotionEvent.ACTION_MOVE -> {
                 if (miniDrag) { miniMoveTo(ev.x, ev.y); return true }
                 val idx = ev.findPointerIndex(activeId)
                 if (idx < 0) return true
+                if (!ev.getToolType(idx).let { it == MotionEvent.TOOL_TYPE_STYLUS } &&
+                    LoupeMath.isPalm(ev.getTouchMajor(idx), dp)) {
+                    live.clear(); activeId = -1; invalidate(); return true      // 写到一半手掌压实了
+                }
+                if (ev.getToolType(idx) == MotionEvent.TOOL_TYPE_STYLUS) lastStylusAt = ev.eventTime
                 for (i in 0 until ev.historySize) {
                     addPoint(ev.getHistoricalX(idx, i), ev.getHistoricalY(idx, i), false)
                 }
@@ -314,7 +340,11 @@ class LoupeView(context: Context) : View(context) {
                 pts, FloatArray(n) { 1f }, s.activeLayer))
             val lastX = pts[pts.size - 2]
             live.clear()
-            LoupeMath.advancedX(winX, ww(), lastX)?.let { move(it, winY, false) }
+            LoupeMath.advance(winX, winY, rowStartX, ww(), wh(), lastX)?.let { (nx, ny) ->
+                // 换行时 rowStartX 不变；只是右移时也不改行起点
+                winX = LoupeMath.clampX(nx, ww()); winY = LoupeMath.clampY(ny, wh())
+                ensureTile(); source?.onWindowMoved()
+            }
         }
         live.clear()
         invalidate()

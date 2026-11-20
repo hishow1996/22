@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v52：放大书写条倍数、写完自动缩小 -->
+    <string name="cd_loupe_zoom">放大倍数（点一下轮换 2× / 3× / 4×）</string>
+    <string name="cd_line_shrink">写完自动缩小（写大字，停笔 1 秒缩小这一段）</string>
+    <string name="line_shrink_off">写完自动缩小：关</string>
+    <string name="line_shrink_60">写完自动缩小：缩到 60%，停笔 1 秒后缩，一步可撤销</string>
+    <string name="line_shrink_50">写完自动缩小：缩到 50%，停笔 1 秒后缩，一步可撤销</string>
+    <string name="line_shrink_40">写完自动缩小：缩到 40%，停笔 1 秒后缩，一步可撤销</string>
+</resources>
