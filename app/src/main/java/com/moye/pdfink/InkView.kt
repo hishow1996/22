@@ -174,6 +174,8 @@ class InkView @JvmOverloads constructor(
     private var holdAnchorY = 0f
     /** 已吸附成椭圆后固定形状，笔再动也不改（直线则继续跟着笔尖调端点）。 */
     private var snapFrozen = false
+    /** v49：本笔已被吸成三角形 / 斜四边形（仍是自由笔迹的折线），之后的移动不再改它。 */
+    private var polySnapped = false
     private val snapRunnable = Runnable { trySnap() }
     private var liveLayer = Layers.ANSWER
     private var lastX = 0f
@@ -1039,6 +1041,7 @@ class InkView @JvmOverloads constructor(
         tailX = x * width; tailY = y * height
         nextSeg = 1
         snapFrozen = false
+        polySnapped = false
         removeCallbacks(snapRunnable)
         holdAnchorX = ev.x; holdAnchorY = ev.y
         liveShape = if (h.tool == Tools.SHAPE) h.inkShape else Shapes.FREE
@@ -1097,6 +1100,7 @@ class InkView @JvmOverloads constructor(
         fun take(x: Float, y: Float, t: Long, pressure: Float) {
             val nx = (x / width).coerceIn(0f, 1f)
             val ny = (y / height).coerceIn(0f, 1f)
+            if (polySnapped) return          // v49：已吸成多边形，之后的移动不再改它
             if (liveShape != Shapes.FREE) {
                 if (snapFrozen) return
                 liveShapePoints[2] = nx
@@ -1124,7 +1128,7 @@ class InkView @JvmOverloads constructor(
         }
         take(ev.x, ev.y, ev.eventTime, ev.pressure)
         if (liveShape == Shapes.FREE) drawNewSegments(h) else if (!snapFrozen) drawShapeLive(h)
-        drawPrediction(h)
+        if (!polySnapped) drawPrediction(h)
         // v46：笔离开锚点 6dp 以上才算「动了」，重新计时；停在原地（含笔尖抖动）满 550ms 触发吸附。
         if (h.holdToSnap && liveShape == Shapes.FREE &&
             hypot(ev.x - holdAnchorX, ev.y - holdAnchorY) > 6f * density
@@ -1135,11 +1139,36 @@ class InkView @JvmOverloads constructor(
         }
     }
 
-    /** 按住够久：看这一笔像不像直线 / 圈，像就换成对应图形（可继续拖动直线端点）。 */
+    /** v49：把这一笔换成加密后的闭合折线（三角形 / 斜四边形），重画实时层并给一下触感。 */
+    private fun snapPolygon(h: Host, poly: FloatArray) {
+        val dense = ShapeSnap.polygonStroke(poly, width.toFloat(), height.toFloat())
+        if (dense.size < 8) return
+        livePts.clear(); liveWs.clear()
+        for (v in dense) livePts.add(v)
+        for (i in 0 until dense.size / 2) liveWs.add(1f)
+        polySnapped = true
+        snapFrozen = true
+        nextSeg = 1
+        tailX = livePts[0] * width; tailY = livePts[1] * height
+        liveTiles.clear()
+        predictionVisible = false
+        predictionBoundsValid = false; liveDirty = null
+        invalidate()                       // 整页刷一次，把徒手线擦掉
+        drawNewSegments(h)
+        invalidate()
+        try { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) } catch (_: Throwable) { }
+    }
+
+    /** 按住够久：看这一笔像不像直线 / 圈 / 长方形 / 三角形，像就换成对应图形（可继续拖动直线端点）。 */
     private fun trySnap() {
         val h = host ?: return
-        if (!drawing || liveShape != Shapes.FREE || !h.holdToSnap || livePts.size < 16) return
+        if (!drawing || liveShape != Shapes.FREE || polySnapped || !h.holdToSnap || livePts.size < 16) return
         val r = ShapeSnap.detect(livePts.toFloatArray(), width.toFloat(), height.toFloat()) ?: return
+        // v49：三角形 / 斜四边形仍保存为自由笔迹（加密后的折线），这样橡皮、套索、移动、导出都不用改
+        if (r is ShapeSnap.Result.Poly) {
+            snapPolygon(h, r.pts)
+            return
+        }
         when (r) {
             is ShapeSnap.Result.Line -> {
                 liveShape = Shapes.LINE
@@ -1153,6 +1182,13 @@ class InkView @JvmOverloads constructor(
                 liveShapePoints[2] = r.r; liveShapePoints[3] = r.b
                 snapFrozen = true
             }
+            is ShapeSnap.Result.Rect -> {
+                liveShape = Shapes.RECT
+                liveShapePoints[0] = r.l; liveShapePoints[1] = r.t
+                liveShapePoints[2] = r.r; liveShapePoints[3] = r.b
+                snapFrozen = true
+            }
+            is ShapeSnap.Result.Poly -> return          // 上面已处理，这里只为 when 穷尽
         }
         liveShapeWidths[0] = 1f; liveShapeWidths[1] = 1f
         liveMark = Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
@@ -1696,6 +1732,28 @@ class InkView @JvmOverloads constructor(
                 Mark(m.color, m.width, m.alpha, Shapes.OVAL,
                     floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
             }
+            // v49：框字的长方形 / 正方形，贴成刚好框住文字的矩形
+            is ShapeSnap.Result.Rect -> {
+                if (highlighter) return null
+                val o = TextSnap.pickRect(layout, r.l, r.t, r.r, r.b, w, hh) ?: return null
+                Mark(m.color, m.width, m.alpha, Shapes.RECT,
+                    floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
+            }
+            // v49：压在文字上的三角形 / 斜四边形，规整成干净的折线（不贴字）
+            is ShapeSnap.Result.Poly -> {
+                if (highlighter) return null
+                var pl = 1f; var pt = 1f; var pr = 0f; var pb = 0f
+                var i = 0
+                while (i + 1 < r.pts.size) {
+                    pl = min(pl, r.pts[i]); pr = max(pr, r.pts[i])
+                    pt = min(pt, r.pts[i + 1]); pb = max(pb, r.pts[i + 1])
+                    i += 2
+                }
+                if (!TextSnap.hasTextIn(layout, pl, pt, pr, pb)) return null
+                val dense = ShapeSnap.polygonStroke(r.pts, w, hh)
+                Mark(m.color, m.width, m.alpha, Shapes.FREE, dense,
+                    FloatArray(dense.size / 2) { 1f }, m.layer)
+            }
             // detect 可返回 null（没识别成线/圈），吸附失败时笔迹保持原样
             else -> null
         }
@@ -1716,7 +1774,7 @@ class InkView @JvmOverloads constructor(
         }
         // v48：压在文字上的直线 / 圈，贴到文字上
         var textSnapped = false
-        if (m != null && h != null) {
+        if (m != null && h != null && !polySnapped) {
             val tm = textSnapMark(m, h)
             if (tm != null) { m = tm; textSnapped = true }
         }

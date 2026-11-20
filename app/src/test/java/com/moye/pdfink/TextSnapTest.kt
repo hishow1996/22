@@ -95,4 +95,29 @@ class TextSnapTest {
         assertNotNull(TextSnap.textOf(l, 0, 1))
         assertNull(TextSnap.textOf(l, 20, 21))   // 只有换行
     }
+
+    // ---------- v49：框字的长方形 ----------
+
+    @Test
+    fun rectangleAroundWordsBecomesTightRect() {
+        // 框住第 1 行第 3..8 个字（x 0.16..0.34、y 0.30..0.32）；手画的框比字略大一圈，
+        // 左右各留出不到半个字的空，两侧相邻字的中心都在框外
+        val r = TextSnap.pickRect(layout(), 0.165f, 0.285f, 0.335f, 0.335f, W, H)!!
+        assertTrue(r[0] < 0.16f && r[0] > 0.14f)
+        assertTrue(r[2] > 0.34f && r[2] < 0.36f)
+        assertTrue(r[1] < 0.30f && r[3] > 0.32f)
+    }
+
+    @Test
+    fun rectangleOnBlankAreaOrWildlyDifferentSizeIsNotSnapped() {
+        assertNull(TextSnap.pickRect(layout(), 0.10f, 0.60f, 0.40f, 0.70f, W, H))
+        // 框住整两行 40 个字的大框，却只画了一个很小的框压在边缘：大小差太多
+        assertNull(TextSnap.pickRect(layout(), 0.100f, 0.300f, 0.112f, 0.304f, W, H))
+    }
+
+    @Test
+    fun hasTextInTellsWhetherThePolygonSitsOnText() {
+        assertTrue(TextSnap.hasTextIn(layout(), 0.2f, 0.29f, 0.3f, 0.33f))
+        assertTrue(!TextSnap.hasTextIn(layout(), 0.2f, 0.60f, 0.3f, 0.70f))
+    }
 }

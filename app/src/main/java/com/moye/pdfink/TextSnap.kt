@@ -141,6 +141,55 @@ object TextSnap {
         )
     }
 
+    /**
+     * v49：一个闭合的长方形（归一化外接矩形）→ 刚好框住框里文字的长方形外接矩形 l,t,r,b。
+     * 和 [pickOval] 同样的口径：框里没有字、或者框出来的大小和手画的差太多，返回 null。
+     * 判框里的字时比椭圆宽松：字的中心落在手画矩形（四周放宽 6%）内就算。
+     */
+    fun pickRect(
+        l: PageTextLayout, rl: Float, rt: Float, rr: Float, rb: Float, w: Float, h: Float
+    ): FloatArray? {
+        val a = rr - rl
+        val b = rb - rt
+        if (a <= 0f || b <= 0f) return null
+        val sx = 0.06f * a
+        val sy = 0.06f * b
+        var n = 0
+        var ul = 1f; var ut = 1f; var ur = 0f; var ub = 0f
+        var hSum = 0f
+        for (i in 0 until l.length) {
+            if (!solid(l, i)) continue
+            val x0 = l.boxes[4 * i]; val y0 = l.boxes[4 * i + 1]
+            val x1 = l.boxes[4 * i + 2]; val y1 = l.boxes[4 * i + 3]
+            val cx = (x0 + x1) * 0.5f
+            val cy = (y0 + y1) * 0.5f
+            if (cx < rl - sx || cx > rr + sx || cy < rt - sy || cy > rb + sy) continue
+            n++
+            ul = min(ul, x0); ut = min(ut, y0); ur = max(ur, x1); ub = max(ub, y1)
+            hSum += y1 - y0
+        }
+        if (n == 0) return null
+        val lh = hSum / n
+        val padY = 0.35f * lh
+        val padX = padY * h / w
+        val nl = ul - padX; val nr = ur + padX
+        val nt = ut - padY; val nb = ub + padY
+        val ratio = ((nr - nl) * (nb - nt)) / (a * b)
+        if (ratio > 2.5f || ratio < 0.35f) return null
+        return floatArrayOf(nl.coerceAtLeast(0f), nt.coerceAtLeast(0f), nr.coerceAtMost(1f), nb.coerceAtMost(1f))
+    }
+
+    /** v49：归一化外接矩形里有没有文字（至少一个字的中心在里面）。多边形压在文字上时用。 */
+    fun hasTextIn(l: PageTextLayout, rl: Float, rt: Float, rr: Float, rb: Float): Boolean {
+        for (i in 0 until l.length) {
+            if (!solid(l, i)) continue
+            val cx = (l.boxes[4 * i] + l.boxes[4 * i + 2]) * 0.5f
+            val cy = (l.boxes[4 * i + 1] + l.boxes[4 * i + 3]) * 0.5f
+            if (cx in rl..rr && cy in rt..rb) return true
+        }
+        return false
+    }
+
     /** 被选字的原文，供批注汇总 / 导出用。 */
     fun textOf(l: PageTextLayout, start: Int, end: Int): String? =
         l.text.substring(start.coerceIn(0, l.length), end.coerceIn(0, l.length))
