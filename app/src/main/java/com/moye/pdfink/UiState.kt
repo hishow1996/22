@@ -40,8 +40,6 @@ class UiState {
     /** v46：按住拉直 / 规整图形，默认开。 */
     @Volatile var holdSnap = true
     @Volatile var textSnap = true
-    /** v52：不压在文字上 / 没有文字层的页面，抬笔也把圈 / 框 / 线规整成图形，默认关。 */
-    @Volatile var anySnap = false
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true

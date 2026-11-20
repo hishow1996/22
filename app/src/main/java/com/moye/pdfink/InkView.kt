@@ -52,8 +52,6 @@ class InkView @JvmOverloads constructor(
         val holdToSnap: Boolean get() = false
         /** v48：抬笔时，压在文字上的直线 / 圈自动贴到文字上（下划线 / 删除线 / 高亮 / 框住字）。 */
         val textSnap: Boolean get() = false
-        /** v52：任何位置（不压文字、没有文字层）抬笔都把圈 / 框 / 线规整成干净图形。 */
-        val anySnap: Boolean get() = false
         /**
          * 屏幕最上沿这么高（像素，屏幕坐标）以内不接受落笔。
          * 系统的「顶边下拉呼出状态栏」只看手指是不是从顶边起手，应用拦不住；
@@ -1709,31 +1707,6 @@ class InkView @JvmOverloads constructor(
     }
     var textSnapSource: TextSnapSource? = null
 
-    /**
-     * v52：「任意位置规整图形」。笔抬起时，一笔自由笔迹若像直线 / 圈 / 框 / 三角形，
-     * 就按你画的大小和位置规整成干净的图形（不放大、不贴文字）；文字吸附没接手时才会走到这里。
-     * 只对「笔」生效，荧光笔不动；识别不出来返回 null，笔迹原样。
-     */
-    private fun anySnapMark(m: Mark, h: Host): Mark? {
-        if (!h.anySnap || m.shape != Shapes.FREE || m.pts.size < 16 || h.tool != Tools.PEN) return null
-        val w = width.toFloat(); val hh = height.toFloat()
-        if (w <= 0f || hh <= 0f) return null
-        val one = floatArrayOf(1f, 1f)
-        return when (val r = ShapeSnap.detect(m.pts, w, hh)) {
-            is ShapeSnap.Result.Line -> Mark(m.color, m.width, m.alpha, Shapes.LINE,
-                floatArrayOf(r.x0, r.y0, r.x1, r.y1), one, m.layer)
-            is ShapeSnap.Result.Oval -> Mark(m.color, m.width, m.alpha, Shapes.OVAL,
-                floatArrayOf(r.l, r.t, r.r, r.b), one, m.layer)
-            is ShapeSnap.Result.Rect -> Mark(m.color, m.width, m.alpha, Shapes.RECT,
-                floatArrayOf(r.l, r.t, r.r, r.b), one, m.layer)
-            is ShapeSnap.Result.Poly -> {
-                val dense = ShapeSnap.polygonStroke(r.pts, w, hh)
-                Mark(m.color, m.width, m.alpha, Shapes.FREE, dense, FloatArray(dense.size / 2) { 1f }, m.layer)
-            }
-            null -> null
-        }
-    }
-
     /** v51：按笔迹自己的圈选出被圈的字，落成紧贴字的框（rect=true 长方形，否则圆角框折线）；选不准返回 null。 */
     private fun enclose(layout: PageTextLayout, m: Mark, w: Float, hh: Float, rect: Boolean): Mark? {
         val e = TextSnap.pickEnclosure(layout, m.pts, w, hh) ?: return null
@@ -1831,7 +1804,7 @@ class InkView @JvmOverloads constructor(
         // v48：压在文字上的直线 / 圈，贴到文字上
         var textSnapped = false
         if (m != null && h != null && !polySnapped) {
-            val tm = textSnapMark(m, h) ?: anySnapMark(m, h)
+            val tm = textSnapMark(m, h)
             if (tm != null) { m = tm; textSnapped = true }
         }
         // 原来这里会把最后一段补画到实时层，但紧接着整层就被清空、中间没有刷新，
