@@ -1696,6 +1696,8 @@ class InkView @JvmOverloads constructor(
                 Mark(m.color, m.width, m.alpha, Shapes.OVAL,
                     floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
             }
+            // detect 可返回 null（没识别成线/圈），吸附失败时笔迹保持原样
+            else -> null
         }
     }
 
