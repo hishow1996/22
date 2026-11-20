@@ -60,7 +60,7 @@ object TextSnap {
     ): Pick? {
         val dx = (x1 - x0) * w
         val dy = (y1 - y0) * h
-        if (abs(dx) < 1f || abs(dy) > 0.2f * abs(dx)) return null     // 超过约 11° 不当作贴字线
+        if (abs(dx) < 1f || abs(dy) > 0.32f * abs(dx)) return null     // 超过约 18° 不当作贴字线
         val xa = min(x0, x1); val xb = max(x0, x1)
         val y = (y0 + y1) * 0.5f
         var best: TLine? = null
@@ -73,7 +73,7 @@ object TextSnap {
                 if (y < ln.t - 0.3f * lh || y > ln.b + 0.3f * lh) continue
                 score = abs(y - (ln.t + ln.b) * 0.5f)
             } else {
-                if (y < ln.t + 0.3f * lh || y > ln.b + 0.6f * lh) continue
+                if (y < ln.t + 0.3f * lh || y > ln.b + 0.9f * lh) continue
                 score = abs(y - (ln.b + 0.05f * lh))
             }
             if (score < bestScore) { bestScore = score; best = ln }

@@ -227,4 +227,59 @@ class ShapeSnapTest {
         val r = ShapeSnap.detect(norm(loop(rectVerts(200f, 500f, 900f, 580f), jitter = 1.5f)), W, H)
         assertTrue(r is ShapeSnap.Result.Rect)
     }
+
+    // ---------- v49b：放宽后的识别（仿手画） ----------
+
+    @Test
+    fun tiltedEllipseBecomesSmoothClosedPolylineNotPolygon() {
+        // 斜 35° 的椭圆：以前会被误当成菱形 / 三角形；现在给一圈等距点（走多边形那条路落成光滑椭圆）
+        val px = ellipseTilt(500f, 600f, 220f, 110f, Math.toRadians(35.0), noise = 3f)
+        val r = ShapeSnap.detect(norm(px), W, H)
+        assertTrue(r is ShapeSnap.Result.Poly)
+        r as ShapeSnap.Result.Poly
+        assertTrue("应是加密的椭圆采样点，而不是 3~4 个顶点", r.pts.size / 2 >= 48)
+    }
+
+    private fun ellipseTilt(cx: Float, cy: Float, a: Float, b: Float, th: Double, noise: Float = 3f, n: Int = 70) =
+        (0..n).map { i ->
+            val t = 2 * PI * i / n
+            val j = if (i % 2 == 0) noise else -noise
+            val u = (a + j) * cos(t); val v = (b + j) * sin(t)
+            Pair((cx + u * cos(th) - v * sin(th)).toFloat(), (cy + u * sin(th) + v * cos(th)).toFloat())
+        }
+
+    @Test
+    fun sloppyCircleWithWobbleAndGapStaysAnOvalNotAPolygon() {
+        // 低频起伏 + 没封口 + 多画一截
+        val px = (0..70).map { i ->
+            val t = 2 * PI * 1.06 * i / 70
+            val rad = 1.0 + 0.06 * sin(2 * t + 0.7) + 0.04 * sin(3 * t + 2.0)
+            Pair((500f + 130f * rad * cos(t)).toFloat(), (600f + 130f * rad * sin(t)).toFloat())
+        }
+        val r = ShapeSnap.detect(norm(px), W, H)
+        assertTrue("圆应识别成圆，实际 $r", r is ShapeSnap.Result.Oval)
+    }
+
+    @Test
+    fun gentlyBowedLineAndLineWithEndHookAreStillLines() {
+        val bow = (0..40).map { i ->
+            val u = i / 40f
+            Pair(100f + 400f * u, 300f + 36f * sin(PI * u).toFloat())            // 弯 9% 弦长
+        }
+        assertTrue(ShapeSnap.detect(norm(bow), W, H) is ShapeSnap.Result.Line)
+        val hook = (0..40).map { i ->
+            val u = i / 40f
+            Pair(100f + 400f * u, 300f + if (u > 0.95f) 28f * (u - 0.95f) / 0.05f else 0f)
+        }
+        assertTrue(ShapeSnap.detect(norm(hook), W, H) is ShapeSnap.Result.Line)
+    }
+
+    @Test
+    fun clearlyCurvedStrokeIsStillNotALine() {
+        val arc = (0..40).map { i ->
+            val u = i / 40f
+            Pair(100f + 400f * u, 300f + 150f * sin(PI * u).toFloat())            // 弯 37%
+        }
+        assertNull(ShapeSnap.detect(norm(arc), W, H))
+    }
 }

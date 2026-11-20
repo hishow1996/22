@@ -1721,21 +1721,36 @@ class InkView @JvmOverloads constructor(
         if (w <= 0f || hh <= 0f) return null
         return when (val r = ShapeSnap.detect(m.pts, w, hh)) {
             is ShapeSnap.Result.Line -> {
-                val pick = TextSnap.pickLine(layout, r.x0, r.y0, r.x1, r.y1, w, hh, highlighter) ?: return null
+                val pick = TextSnap.pickLine(layout, r.x0, r.y0, r.x1, r.y1, w, hh, highlighter)
+                if (pick == null) {
+                    // 对不上某一行字：只要这条线压在文字上，就至少拉直成干净的直线
+                    if (highlighter) return null
+                    val padY = 0.012f
+                    val onText = TextSnap.hasTextIn(layout, min(r.x0, r.x1), min(r.y0, r.y1) - padY,
+                        max(r.x0, r.x1), max(r.y0, r.y1) + padY)
+                    if (!onText) return null
+                    return Mark(m.color, m.width, m.alpha, Shapes.LINE,
+                        floatArrayOf(r.x0, r.y0, r.x1, r.y1), floatArrayOf(1f, 1f), m.layer)
+                }
                 val text = TextSnap.textOf(layout, pick.start, pick.end)
                 val width = if (pick.shape == Shapes.TEXT_HL) 0.0028f else max(0.0028f, m.width)
                 Mark(m.color, width, m.alpha, pick.shape, pick.rect, null, m.layer, text)
             }
             is ShapeSnap.Result.Oval -> {
                 if (highlighter) return null
-                val o = TextSnap.pickOval(layout, r.l, r.t, r.r, r.b, w, hh) ?: return null
+                // 框不准字（圈得太大 / 太小）：压在文字上就退一步，规整成你画的那个椭圆
+                val o = TextSnap.pickOval(layout, r.l, r.t, r.r, r.b, w, hh)
+                    ?: if (TextSnap.hasTextIn(layout, r.l, r.t, r.r, r.b))
+                        floatArrayOf(r.l, r.t, r.r, r.b) else return null
                 Mark(m.color, m.width, m.alpha, Shapes.OVAL,
                     floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
             }
             // v49：框字的长方形 / 正方形，贴成刚好框住文字的矩形
             is ShapeSnap.Result.Rect -> {
                 if (highlighter) return null
-                val o = TextSnap.pickRect(layout, r.l, r.t, r.r, r.b, w, hh) ?: return null
+                val o = TextSnap.pickRect(layout, r.l, r.t, r.r, r.b, w, hh)
+                    ?: if (TextSnap.hasTextIn(layout, r.l, r.t, r.r, r.b))
+                        floatArrayOf(r.l, r.t, r.r, r.b) else return null
                 Mark(m.color, m.width, m.alpha, Shapes.RECT,
                     floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
             }

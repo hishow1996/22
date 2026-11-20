@@ -120,4 +120,14 @@ class TextSnapTest {
         assertTrue(TextSnap.hasTextIn(layout(), 0.2f, 0.29f, 0.3f, 0.33f))
         assertTrue(!TextSnap.hasTextIn(layout(), 0.2f, 0.60f, 0.3f, 0.70f))
     }
+
+    @Test
+    fun slantedUnderlineAndLowerLineStillPickTheLine() {
+        // 歪约 14° 的下划线、画得比字低一截（约 0.8 个字高）
+        val p = TextSnap.pickLine(layout(), 0.20f, 0.325f, 0.40f, 0.326f + 0.0f, W, H, false)
+        assertNotNull(p)
+        val low = TextSnap.pickLine(layout(), 0.20f, 0.336f, 0.34f, 0.336f, W, H, false)!!
+        assertEquals(Shapes.TEXT_UL, low.shape)
+        assertEquals(0.30f, low.rect[1], 1e-6f)
+    }
 }
