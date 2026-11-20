@@ -20,6 +20,7 @@ import android.view.MotionEvent
 import android.view.View
 import kotlinx.coroutines.CoroutineScope
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 
 /** MotionEvent.CLASSIFICATION_PALM：API 34 的 flag-gated 常量，公开 android.jar 不含该字段，按 AOSP 取字面值 0x2 */
@@ -49,6 +50,8 @@ class InkView @JvmOverloads constructor(
         val pressureLevel: Int get() = PressureCurve.DEFAULT
         /** v46：画完停住不抬笔，自动把直线 / 圈规整成直线 / 椭圆。 */
         val holdToSnap: Boolean get() = false
+        /** v48：抬笔时，压在文字上的直线 / 圈自动贴到文字上（下划线 / 删除线 / 高亮 / 框住字）。 */
+        val textSnap: Boolean get() = false
         /**
          * 屏幕最上沿这么高（像素，屏幕坐标）以内不接受落笔。
          * 系统的「顶边下拉呼出状态栏」只看手指是不是从顶边起手，应用拦不住；
@@ -1040,6 +1043,8 @@ class InkView @JvmOverloads constructor(
         holdAnchorX = ev.x; holdAnchorY = ev.y
         liveShape = if (h.tool == Tools.SHAPE) h.inkShape else Shapes.FREE
         liveLayer = h.activeLayer
+        // v48：文字吸附要用本页文字层；落笔时先让它在后台读起来，抬笔时通常已经好了
+        if (h.textSnap && liveShape == Shapes.FREE) textSnapSource?.ensure()
         livePts.clear(); liveWs.clear()
         liveMark = if (liveShape == Shapes.FREE) {
             // v43：起笔点也按 DOWN 的压力定宽，不再固定 1f。
@@ -1658,18 +1663,60 @@ class InkView @JvmOverloads constructor(
         }
     }
 
+    /** v48：本页文字层的来源（由 PagesAdapter 注入）。layout 还没读到 / 不能吸附时返回 null。 */
+    interface TextSnapSource {
+        fun layout(): PageTextLayout?
+        /** 触发后台读取文字层（读到之前 layout() 为 null）。 */
+        fun ensure()
+    }
+    var textSnapSource: TextSnapSource? = null
+
+    /**
+     * v48：自由笔迹抬笔时，看它是不是一条贴字的线 / 一个圈住字的圈；是就换成贴着文字的标注。
+     * 只对「笔」和「荧光笔」、且文字层已读到时生效；任何一步对不上都返回 null，笔迹保持原样。
+     */
+    private fun textSnapMark(m: Mark, h: Host): Mark? {
+        if (!h.textSnap || m.shape != Shapes.FREE || m.pts.size < 16) return null
+        val highlighter = h.tool == Tools.HIGHLIGHT
+        if (h.tool != Tools.PEN && !highlighter) return null
+        val layout = textSnapSource?.layout() ?: return null
+        if (layout.length == 0) return null
+        val w = width.toFloat(); val hh = height.toFloat()
+        if (w <= 0f || hh <= 0f) return null
+        return when (val r = ShapeSnap.detect(m.pts, w, hh)) {
+            is ShapeSnap.Result.Line -> {
+                val pick = TextSnap.pickLine(layout, r.x0, r.y0, r.x1, r.y1, w, hh, highlighter) ?: return null
+                val text = TextSnap.textOf(layout, pick.start, pick.end)
+                val width = if (pick.shape == Shapes.TEXT_HL) 0.0028f else max(0.0028f, m.width)
+                Mark(m.color, width, m.alpha, pick.shape, pick.rect, null, m.layer, text)
+            }
+            is ShapeSnap.Result.Oval -> {
+                if (highlighter) return null
+                val o = TextSnap.pickOval(layout, r.l, r.t, r.r, r.b, w, hh) ?: return null
+                Mark(m.color, m.width, m.alpha, Shapes.OVAL,
+                    floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
+            }
+        }
+    }
+
     private fun finishMark() {
         if (!drawing) return
         removeCallbacks(snapRunnable)
         drawing = false
         val h = host
-        val m = if (liveShape == Shapes.FREE && h != null) {
+        var m = if (liveShape == Shapes.FREE && h != null) {
             Mark(h.inkColor, h.inkWidth, h.inkAlpha, liveShape,
                 livePts.toFloatArray(), liveWs.toFloatArray(), liveLayer)
         } else {
             liveMark?.let {
                 it.copyWith(pts = it.pts.copyOf(), ws = it.ws?.copyOf())
             }
+        }
+        // v48：压在文字上的直线 / 圈，贴到文字上
+        var textSnapped = false
+        if (m != null && h != null) {
+            val tm = textSnapMark(m, h)
+            if (tm != null) { m = tm; textSnapped = true }
         }
         // 原来这里会把最后一段补画到实时层，但紧接着整层就被清空、中间没有刷新，
         // 补画从来不可见（整笔随后完整画进已落笔层），所以直接清空。
@@ -1692,6 +1739,9 @@ class InkView @JvmOverloads constructor(
         }
         if (changed) commit()
         invalidate()
+        if (changed && textSnapped) {
+            try { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) } catch (_: Throwable) { }
+        }
     }
 
     /**

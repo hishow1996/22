@@ -39,6 +39,7 @@ class UiState {
     @Volatile var autoCrop = false
     /** v46：按住拉直 / 规整图形，默认开。 */
     @Volatile var holdSnap = true
+    @Volatile var textSnap = true
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
     @Volatile var landscape = true

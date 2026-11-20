@@ -249,6 +249,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     override val palmGuard: Boolean get() = state.palmGuard
     override val fingerOffsetPx: Int get() = dp(FingerOffset.dp(state.fingerOffset))
     override val holdToSnap: Boolean get() = state.holdSnap
+    override val textSnap: Boolean get() = state.textSnap
     override val pressureLevel: Int get() = state.pressureLevel
     override val topEdgeGuardPx: Int
         get() {
@@ -587,6 +588,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.tint = p.getInt("tint", PageFilter.WHITE).coerceIn(0, 2)
         state.autoCrop = p.getBoolean("autoCrop", false)
         state.holdSnap = p.getBoolean("holdSnap", true)
+        state.textSnap = p.getBoolean("textSnap", true)
         state.brightness = p.getFloat("brightness", 0f)
         // v16：默认浏览。老版本存过 false 的也算升级首次，强制回浏览；
         // 之后用户切到做题会写进偏好，重开保持上次模式。
@@ -664,6 +666,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("showCorrection", state.showCorrection)
             putBoolean("autoCrop", state.autoCrop)
             putBoolean("holdSnap", state.holdSnap)
+            putBoolean("textSnap", state.textSnap)
         }.apply()
         sessionRepo.setRotation(state.pageRotation)
         sessionRepo.setVolumeFlip(state.volumeFlip)
@@ -1795,6 +1798,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_snap, getString(R.string.cd_holdsnap), { state.holdSnap }) {
             state.holdSnap = !state.holdSnap; savePrefs()
         },
+        MenuAction(R.drawable.ic_text_snap, getString(R.string.cd_textsnap), { state.textSnap }) {
+            state.textSnap = !state.textSnap; savePrefs()
+        },
         MenuAction(R.drawable.ic_stylus, getString(R.string.cd_stylus), {
             state.stylusOnly
         }) {
@@ -2312,6 +2318,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         },
         MenuAction(R.drawable.ic_snap, getString(R.string.cd_holdsnap), { state.holdSnap }) {
             state.holdSnap = !state.holdSnap; savePrefs()
+        },
+        MenuAction(R.drawable.ic_text_snap, getString(R.string.cd_textsnap), { state.textSnap }) {
+            state.textSnap = !state.textSnap; savePrefs()
         },
         MenuAction(R.drawable.ic_history, getString(R.string.cd_snapshots), { false }) {
             showSnapshots()

@@ -316,6 +316,9 @@ class PagesAdapter(
             ink.addTextMarkup(shape, rects, color, alpha, overlay.selectedText())
         }
         h.zoom.onTextNotReady = { onTextNotReady?.invoke() }
+        // v48：文字吸附——笔迹抬笔时用本页文字层把线 / 圈贴到文字上（页面转 90° 时不吸附）
+        h.ink.textSnapSource = overlayTextSource(h.textOverlay)
+        h.secondInk.textSnapSource = overlayTextSource(h.secondTextOverlay)
 
         // v31：三态对齐表。v29 的「非 FIT 一律顶部对齐」把「适应宽度」也
         // 贴到栏下、底部堆出约 455px 空白；现在 FIT / WIDTH 回垂直居中，
@@ -471,6 +474,14 @@ class PagesAdapter(
     }
 
     private val loadingText = HashSet<PageTextOverlay>()
+
+    private fun overlayTextSource(o: PageTextOverlay) = object : InkView.TextSnapSource {
+        override fun layout(): PageTextLayout? =
+            if (state.pageRotation % 180 != 0) null else o.layout
+        override fun ensure() {
+            if (o.layout == null && state.pageRotation % 180 == 0) o.loader?.invoke()
+        }
+    }
 
     /** 后台读取一页的文字层，回到主线程时确认这个 holder 还绑着同一页。 */
     private fun loadTextLayout(h: VH, o: PageTextOverlay, page: Int, token: Int, position: Int) {
