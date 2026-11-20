@@ -1586,8 +1586,21 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             2 -> matched.sortedWith(
                 compareByDescending<Recents.Item> { it.star }
                     .thenByDescending<Recents.Item> { it.time })
-            else -> matched
+            else -> matched.sortedByDescending { it.time }
         }
+        // v48：最近打开 / 收藏优先 两档按「1 小时内 / 今天内 / 7 天内 / 更早」分段（收藏优先档先有一段「收藏」）；
+        // 按名称档不分段。每个文件只在一段里出现。
+        val bucketOfFp: Map<String, HomeBuckets.Bucket>? = if (homeSortMode == 1) null else {
+            val now = System.currentTimeMillis()
+            val sod = HomeBuckets.startOfToday(now)
+            val map = HashMap<String, HomeBuckets.Bucket>()
+            for ((b, list) in HomeBuckets.group(
+                items, { it.time }, if (homeSortMode == 2) { x -> x.star } else null, now, sod
+            )) for (x in list) map[x.fp] = b
+            map
+        }
+        val bucketCount = bucketOfFp?.values?.groupingBy { it }?.eachCount() ?: emptyMap()
+        var lastBucket: HomeBuckets.Bucket? = null
         val stage = homeStage.layoutParams as LinearLayout.LayoutParams
         val scroll = homeScroll.layoutParams as LinearLayout.LayoutParams
         // 两态只由「有没有记录」决定：搜索无结果仍是书架，不会误显示居中导入图标
@@ -1612,6 +1625,25 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         homeScroll.layoutParams = scroll
 
         for (item in items) {
+            val bk = bucketOfFp?.get(item.fp)
+            if (bk != null && bk != lastBucket) {
+                lastBucket = bk
+                homeShelf.addView(TextView(this).apply {
+                    text = getString(
+                        when (bk) {
+                            HomeBuckets.Bucket.STARRED -> R.string.home_bucket_star
+                            HomeBuckets.Bucket.HOUR -> R.string.home_bucket_hour
+                            HomeBuckets.Bucket.TODAY -> R.string.home_bucket_today
+                            HomeBuckets.Bucket.WEEK -> R.string.home_bucket_week
+                            HomeBuckets.Bucket.EARLIER -> R.string.home_bucket_earlier
+                        }, bucketCount[bk] ?: 0)
+                    textSize = 12f
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(ContextCompat.getColor(this@MainActivity, R.color.page_text))
+                    setPadding(dp(8), dp(12), dp(8), dp(2))
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
             val u = Uri.parse(item.uri)
             val card = layoutInflater.inflate(
                 R.layout.item_home_card, homeShelf, false)
