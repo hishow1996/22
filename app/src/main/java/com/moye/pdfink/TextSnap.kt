@@ -98,85 +98,123 @@ object TextSnap {
         return Pick(shape, s, e, floatArrayOf(L, ln.t, R, ln.b))
     }
 
+    /** 圈住的字：下标 [first, last)、贴字外框 rect = l,t,r,b（归一化，已留好边距），lh = 平均字高（归一化 y）。 */
+    class Enclosure(val first: Int, val last: Int, val rect: FloatArray, val lh: Float)
+
     /**
-     * 一个闭合的圈（归一化外接矩形）→ 刚好框住圈里文字的椭圆外接矩形 l,t,r,b。
-     * 圈里没有字、或者框出来的大小和手画的差太多（多半不是圈字），返回 null。
+     * v51：圈字，按「这一笔画出的圈」精确选字，不放大、不多圈。
+     *
+     * 圈（笔迹点，归一化 x,y 交错，首尾自动连起来）里盖住字框 ≥ 50% 的字才算被圈到
+     * （字框里取 4×3 个点，用非零环绕数判点在圈内），被圈边线切掉一半以上的邻字不算。
+     *  - 最多跨 3 行；每行取被圈字的首尾，中间的字一并算；
+     *  - 所有行的外框合起来之后，里面不能再有没被圈到的字（否则圈得有歧义，返回 null 让调用方退回手画的形状）；
+     *  - 外框四周只留一点边距（上下 0.13 字高、左右 0.08 字高），框紧紧贴着字，不会盖住邻行 / 邻字。
      */
-    fun pickOval(
-        l: PageTextLayout, ol: Float, ot: Float, or: Float, ob: Float, w: Float, h: Float
-    ): FloatArray? {
-        val cx = (ol + or) * 0.5f
-        val cy = (ot + ob) * 0.5f
-        val a = (or - ol) * 0.5f
-        val b = (ob - ot) * 0.5f
-        if (a <= 0f || b <= 0f) return null
-        var n = 0
-        var ul = 1f; var ut = 1f; var ur = 0f; var ub = 0f
-        var hSum = 0f
+    fun pickEnclosure(l: PageTextLayout, pts: FloatArray, w: Float, h: Float): Enclosure? {
+        val n0 = pts.size / 2
+        if (n0 < 4 || w <= 0f || h <= 0f) return null
+        // 抽稀到 ≤ 128 点，算得快
+        val step = max(1, n0 / 128)
+        val px = ArrayList<Float>(); val py = ArrayList<Float>()
+        var i0 = 0
+        while (i0 < n0) { px.add(pts[2 * i0]); py.add(pts[2 * i0 + 1]); i0 += step }
+        val n = px.size
+        var bl = 1f; var bt = 1f; var br = 0f; var bb = 0f
+        for (i in 0 until n) { bl = min(bl, px[i]); br = max(br, px[i]); bt = min(bt, py[i]); bb = max(bb, py[i]) }
+        if (br <= bl || bb <= bt) return null
+
+        fun inside(x: Float, y: Float): Boolean {
+            var wn = 0
+            for (i in 0 until n) {
+                val j = if (i + 1 == n) 0 else i + 1
+                val y0 = py[i]; val y1 = py[j]
+                if ((y0 <= y) != (y1 <= y)) {
+                    val t = (y - y0) / (y1 - y0)
+                    val xc = px[i] + t * (px[j] - px[i])
+                    if (xc > x) { if (y1 > y0) wn++ else wn-- }
+                }
+            }
+            return wn != 0
+        }
+
+        val chosen = BooleanArray(l.length)
+        var any = false
         for (i in 0 until l.length) {
             if (!solid(l, i)) continue
             val x0 = l.boxes[4 * i]; val y0 = l.boxes[4 * i + 1]
             val x1 = l.boxes[4 * i + 2]; val y1 = l.boxes[4 * i + 3]
-            val dx = ((x0 + x1) * 0.5f - cx) / a
-            val dy = ((y0 + y1) * 0.5f - cy) / b
-            if (dx * dx + dy * dy > 1.1f) continue
-            n++
-            ul = min(ul, x0); ut = min(ut, y0); ur = max(ur, x1); ub = max(ub, y1)
-            hSum += y1 - y0
+            if (x1 < bl || x0 > br || y1 < bt || y0 > bb) continue
+            var hit = 0
+            for (gy in 0 until 3) for (gx in 0 until 4) {
+                val sx = x0 + (x1 - x0) * (gx + 0.5f) / 4f
+                val sy = y0 + (y1 - y0) * (gy + 0.5f) / 3f
+                if (inside(sx, sy)) hit++
+            }
+            if (hit >= 6) { chosen[i] = true; any = true }
         }
-        if (n == 0) return null
-        val lh = hSum / n                              // 平均字高（归一化 y）
-        val padY = 0.35f * lh
-        val padX = padY * h / w                        // 同样的像素距离换到 x 方向
-        val k = 1.4142f                                // 椭圆要罩住矩形，半轴放大 √2
-        val na = (ur - ul) * 0.5f * k + padX
-        val nb = (ub - ut) * 0.5f * k + padY
-        val ncx = (ul + ur) * 0.5f
-        val ncy = (ut + ub) * 0.5f
-        val ratio = (na * nb) / (a * b)
-        if (ratio > 2.5f || ratio < 0.35f) return null
-        return floatArrayOf(
-            (ncx - na).coerceAtLeast(0f), (ncy - nb).coerceAtLeast(0f),
-            (ncx + na).coerceAtMost(1f), (ncy + nb).coerceAtMost(1f)
+        if (!any) return null
+
+        val lns = lines(l)
+        var ul = 1f; var ut = 1f; var ur = 0f; var ub = 0f
+        var hSum = 0f; var hN = 0
+        var first = Int.MAX_VALUE; var last = -1
+        var used = 0
+        val ranges = ArrayList<IntArray>()
+        for (ln in lns) {
+            var s = -1; var e = -1
+            for (i in ln.first..ln.last) if (chosen[i]) { if (s < 0) s = i; e = i }
+            if (s < 0) continue
+            if (++used > 3) return null
+            ranges.add(intArrayOf(s, e))
+            first = min(first, s); last = max(last, e)
+            for (i in s..e) {
+                if (!solid(l, i)) continue
+                ul = min(ul, l.boxes[4 * i]); ut = min(ut, l.boxes[4 * i + 1])
+                ur = max(ur, l.boxes[4 * i + 2]); ub = max(ub, l.boxes[4 * i + 3])
+                hSum += l.boxes[4 * i + 3] - l.boxes[4 * i + 1]; hN++
+            }
+        }
+        if (hN == 0 || ur <= ul) return null
+        // 外框里不能有没被圈到的字（多行时首行行尾 / 末行行首的半截最容易这样）
+        for (i in 0 until l.length) {
+            if (!solid(l, i)) continue
+            if (ranges.any { i >= it[0] && i <= it[1] }) continue
+            val x0 = l.boxes[4 * i]; val y0 = l.boxes[4 * i + 1]
+            val x1 = l.boxes[4 * i + 2]; val y1 = l.boxes[4 * i + 3]
+            val ox = min(x1, ur) - max(x0, ul); val oy = min(y1, ub) - max(y0, ut)
+            if (ox > 0f && oy > 0f && ox * oy >= 0.5f * (x1 - x0) * (y1 - y0)) return null
+        }
+        val lh = hSum / hN
+        val padY = 0.13f * lh
+        val padX = 0.08f * lh * h / w
+        return Enclosure(
+            first, last + 1,
+            floatArrayOf((ul - padX).coerceAtLeast(0f), (ut - padY).coerceAtLeast(0f),
+                (ur + padX).coerceAtMost(1f), (ub + padY).coerceAtMost(1f)),
+            lh
         )
     }
 
     /**
-     * v49：一个闭合的长方形（归一化外接矩形）→ 刚好框住框里文字的长方形外接矩形 l,t,r,b。
-     * 和 [pickOval] 同样的口径：框里没有字、或者框出来的大小和手画的差太多，返回 null。
-     * 判框里的字时比椭圆宽松：字的中心落在手画矩形（四周放宽 6%）内就算。
+     * 圆角矩形折线（归一化 x,y 交错，闭合不重复首点），圆角半径 radius 给的是「字高」的倍数换算后的像素。
+     * 框字用：比椭圆紧得多，不会盖到邻字。
      */
-    fun pickRect(
-        l: PageTextLayout, rl: Float, rt: Float, rr: Float, rb: Float, w: Float, h: Float
-    ): FloatArray? {
-        val a = rr - rl
-        val b = rb - rt
-        if (a <= 0f || b <= 0f) return null
-        val sx = 0.06f * a
-        val sy = 0.06f * b
-        var n = 0
-        var ul = 1f; var ut = 1f; var ur = 0f; var ub = 0f
-        var hSum = 0f
-        for (i in 0 until l.length) {
-            if (!solid(l, i)) continue
-            val x0 = l.boxes[4 * i]; val y0 = l.boxes[4 * i + 1]
-            val x1 = l.boxes[4 * i + 2]; val y1 = l.boxes[4 * i + 3]
-            val cx = (x0 + x1) * 0.5f
-            val cy = (y0 + y1) * 0.5f
-            if (cx < rl - sx || cx > rr + sx || cy < rt - sy || cy > rb + sy) continue
-            n++
-            ul = min(ul, x0); ut = min(ut, y0); ur = max(ur, x1); ub = max(ub, y1)
-            hSum += y1 - y0
+    fun roundedRect(rect: FloatArray, radiusPx: Float, w: Float, h: Float): FloatArray {
+        val l = rect[0] * w; val t = rect[1] * h; val r = rect[2] * w; val b = rect[3] * h
+        val rad = min(radiusPx, min((r - l), (b - t)) / 2f)
+        val out = ArrayList<Float>()
+        val seg = 6
+        fun arc(cx: Float, cy: Float, a0: Double) {
+            for (k in 0..seg) {
+                val a = a0 + Math.PI / 2 * k / seg
+                out.add((cx + rad * Math.cos(a).toFloat()) / w); out.add((cy + rad * Math.sin(a).toFloat()) / h)
+            }
         }
-        if (n == 0) return null
-        val lh = hSum / n
-        val padY = 0.35f * lh
-        val padX = padY * h / w
-        val nl = ul - padX; val nr = ur + padX
-        val nt = ut - padY; val nb = ub + padY
-        val ratio = ((nr - nl) * (nb - nt)) / (a * b)
-        if (ratio > 2.5f || ratio < 0.35f) return null
-        return floatArrayOf(nl.coerceAtLeast(0f), nt.coerceAtLeast(0f), nr.coerceAtMost(1f), nb.coerceAtMost(1f))
+        arc(r - rad, t + rad, -Math.PI / 2)          // 右上角：从上边到右边
+        arc(r - rad, b - rad, 0.0)                    // 右下
+        arc(l + rad, b - rad, Math.PI / 2)            // 左下
+        arc(l + rad, t + rad, Math.PI)                // 左上
+        return out.toFloatArray()
     }
 
     /** v49：归一化外接矩形里有没有文字（至少一个字的中心在里面）。多边形压在文字上时用。 */

@@ -71,21 +71,99 @@ class TextSnapTest {
         assertEquals(0.36f, p.rect[1], 1e-6f)
     }
 
-    @Test
-    fun loopAroundWordsBecomesTightOval() {
-        // 手画的圈：围着第 1 行第 5..8 个字（x 0.22..0.34），圈比字大
-        val o = TextSnap.pickOval(layout(), 0.19f, 0.285f, 0.37f, 0.335f, W, H)!!
-        // 结果应该罩住这些字，且中心在字的中心
-        assertTrue(o[0] <= 0.22f && o[2] >= 0.34f)
-        assertTrue(o[1] <= 0.30f && o[3] >= 0.32f)
-        assertEquals((0.22f + 0.34f) / 2f, (o[0] + o[2]) / 2f, 0.016f)
+    /** 椭圆折线（归一化 x,y 交错），中心 (cx,cy)，半轴 a,b，逆时针，首尾留一点缝，略带抖动。 */
+    private fun ellipseLoop(cx: Float, cy: Float, a: Float, b: Float, rnd: java.util.Random? = null, jit: Float = 0f): FloatArray {
+        val n = 60
+        val out = FloatArray(2 * n)
+        for (i in 0 until n) {
+            val t = 2 * Math.PI * i / n * 0.97
+            val jx = if (rnd != null) (rnd.nextFloat() - 0.5f) * 2 * jit else 0f
+            val jy = if (rnd != null) (rnd.nextFloat() - 0.5f) * 2 * jit else 0f
+            out[2 * i] = cx + a * Math.cos(t).toFloat() + jx
+            out[2 * i + 1] = cy + b * Math.sin(t).toFloat() + jy
+        }
+        return out
     }
 
     @Test
-    fun loopOnBlankAreaOrWildlyDifferentSizeIsNotSnapped() {
-        assertNull(TextSnap.pickOval(layout(), 0.4f, 0.6f, 0.6f, 0.7f, W, H))               // 没有字
-        // 巨大的圈只圈住极小一部分字：尺寸差太多
-        assertNull(TextSnap.pickOval(layout(), 0.05f, 0.05f, 0.95f, 0.95f, W, H))
+    fun loopAroundWordsSelectsExactlyTheCircledChars() {
+        // 围着第 1 行第 5..8 个字（下标 4..7，x 0.22..0.34）的圈，比字大一圈，邻字（下标 3、8）只被蹭到边
+        val e = TextSnap.pickEnclosure(layout(), ellipseLoop(0.28f, 0.31f, 0.07f, 0.028f), W, H)!!
+        assertEquals(4, e.first)
+        assertEquals(8, e.last)
+        // 框紧贴被圈字：比字的外框只大一点点边距，绝不比手画的圈大
+        assertTrue(e.rect[0] in 0.215f..0.22f)
+        assertTrue(e.rect[2] in 0.34f..0.345f)
+        assertTrue(e.rect[1] in 0.295f..0.30f)
+        assertTrue(e.rect[3] in 0.32f..0.325f)
+    }
+
+    @Test
+    fun loopOnBlankAreaIsNotSnapped() {
+        assertNull(TextSnap.pickEnclosure(layout(), ellipseLoop(0.5f, 0.65f, 0.1f, 0.03f), W, H))
+    }
+
+    @Test
+    fun loopThatHalfCoversNeighborsLeavesThemOut() {
+        // 圈住下标 6、7（x 0.28..0.34），左右各只盖到邻字的一小半
+        val e = TextSnap.pickEnclosure(layout(), ellipseLoop(0.31f, 0.31f, 0.04f, 0.026f), W, H)!!
+        assertEquals(6, e.first)
+        assertEquals(8, e.last)
+    }
+
+    @Test
+    fun rectangleLoopAcrossTwoLinesCoversBothLines() {
+        // 手画的长方形：两行的下标 5..9（x 0.25..0.40，y 0.29..0.39）
+        val pts = floatArrayOf(0.243f, 0.288f, 0.407f, 0.289f, 0.406f, 0.392f, 0.244f, 0.391f, 0.243f, 0.290f)
+        val e = TextSnap.pickEnclosure(layout(), pts, W, H)!!
+        assertEquals(5, e.first)
+        assertEquals(31, e.last)             // 第 2 行字下标从 21 起，第 10 个字是 30，end 开区间 = 31
+        assertTrue(e.rect[1] < 0.30f && e.rect[3] > 0.38f)
+        assertTrue(e.rect[0] in 0.245f..0.25f)
+    }
+
+    @Test
+    fun ambiguousLoopOverPartOfTwoLinesIsRejected() {
+        // L 形的圈：第 1 行行尾 3 个字 + 第 2 行整行。外框一合并，第 1 行前 17 个字没被圈到却都在框里 → 拒绝
+        val l = floatArrayOf(0.60f, 0.295f, 0.72f, 0.295f, 0.72f, 0.385f, 0.10f, 0.385f, 0.10f, 0.355f, 0.60f, 0.355f)
+        assertNull(TextSnap.pickEnclosure(layout(), l, W, H))
+    }
+
+    @Test
+    fun looseHandDrawnLoopsPickExactlyTheIntendedChars() {
+        // 随机的、略带抖动的手画圈：围住第 1 行里连续 1..8 个字，四周留 0.1~0.3 个字宽 / 0.2~0.5 个字高的空
+        val rnd = java.util.Random(7)
+        val l = layout()
+        var ok = 0
+        val trials = 400
+        repeat(trials) {
+            val k = 1 + rnd.nextInt(8)
+            val s = 1 + rnd.nextInt(18 - k)
+            val x0 = 0.10f + s * 0.03f
+            val x1 = x0 + k * 0.03f
+            val mx = (0.1f + rnd.nextFloat() * 0.2f) * 0.03f
+            val my = (0.2f + rnd.nextFloat() * 0.3f) * 0.02f
+            val cx = (x0 + x1) / 2f + (rnd.nextFloat() - 0.5f) * 0.004f
+            val cy = 0.31f + (rnd.nextFloat() - 0.5f) * 0.004f
+            val a = (x1 - x0) / 2f + mx
+            val b = (0.01f + my) * 1.3f
+            val e = TextSnap.pickEnclosure(l, ellipseLoop(cx, cy, a, b, rnd, 0.0012f), W, H)
+            if (e != null && e.first == s && e.last == s + k) ok++
+        }
+        assertTrue("exact pick rate " + ok + "/" + trials, ok >= trials * 0.9)
+    }
+
+    @Test
+    fun roundedRectStaysInsideItsRect() {
+        val r = floatArrayOf(0.2f, 0.29f, 0.4f, 0.33f)
+        val pts = TextSnap.roundedRect(r, 8f, W, H)
+        assertEquals(0, pts.size % 2)
+        var i = 0
+        while (i < pts.size) {
+            assertTrue(pts[i] >= 0.2f - 1e-5f && pts[i] <= 0.4f + 1e-5f)
+            assertTrue(pts[i + 1] >= 0.29f - 1e-5f && pts[i + 1] <= 0.33f + 1e-5f)
+            i += 2
+        }
     }
 
     @Test
@@ -94,25 +172,6 @@ class TextSnapTest {
         assertEquals("字字字", TextSnap.textOf(l, 0, 3))
         assertNotNull(TextSnap.textOf(l, 0, 1))
         assertNull(TextSnap.textOf(l, 20, 21))   // 只有换行
-    }
-
-    // ---------- v49：框字的长方形 ----------
-
-    @Test
-    fun rectangleAroundWordsBecomesTightRect() {
-        // 框住第 1 行第 3..8 个字（x 0.16..0.34、y 0.30..0.32）；手画的框比字略大一圈，
-        // 左右各留出不到半个字的空，两侧相邻字的中心都在框外
-        val r = TextSnap.pickRect(layout(), 0.165f, 0.285f, 0.335f, 0.335f, W, H)!!
-        assertTrue(r[0] < 0.16f && r[0] > 0.14f)
-        assertTrue(r[2] > 0.34f && r[2] < 0.36f)
-        assertTrue(r[1] < 0.30f && r[3] > 0.32f)
-    }
-
-    @Test
-    fun rectangleOnBlankAreaOrWildlyDifferentSizeIsNotSnapped() {
-        assertNull(TextSnap.pickRect(layout(), 0.10f, 0.60f, 0.40f, 0.70f, W, H))
-        // 框住整两行 40 个字的大框，却只画了一个很小的框压在边缘：大小差太多
-        assertNull(TextSnap.pickRect(layout(), 0.100f, 0.300f, 0.112f, 0.304f, W, H))
     }
 
     @Test

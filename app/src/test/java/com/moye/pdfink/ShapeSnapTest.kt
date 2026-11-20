@@ -282,4 +282,28 @@ class ShapeSnapTest {
         }
         assertNull(ShapeSnap.detect(norm(arc), W, H))
     }
+
+    /** 超椭圆 |x/a|^n+|y/b|^n=1：n=2 椭圆，n≈3.5 就是圈词语常见的「药丸 / 圆角框」。 */
+    private fun superEllipse(cx: Float, cy: Float, a: Float, b: Float, n: Double, noise: Float = 1.5f, m: Int = 90) =
+        (0..m).map { i ->
+            val t = 2 * PI * i / m * 0.97
+            val c = cos(t); val sn = sin(t)
+            val ex = a * Math.signum(c) * Math.pow(Math.abs(c), 2.0 / n)
+            val ey = b * Math.signum(sn) * Math.pow(Math.abs(sn), 2.0 / n)
+            val j = if (i % 2 == 0) noise else -noise
+            Pair((cx + ex + j).toFloat(), (cy + ey - j).toFloat())
+        }
+
+    @Test
+    fun pillAroundAWordIsOvalNotRectangle() {
+        // 圈词语：宽扁的药丸，四个角是圆的，不能被当成长方形 / 四边形
+        val r = ShapeSnap.detect(norm(superEllipse(400f, 300f, 130f, 34f, 3.5)), W, H)
+        assertTrue("got " + r, r is ShapeSnap.Result.Oval || (r is ShapeSnap.Result.Poly && r.round))
+    }
+
+    @Test
+    fun sharpCornerRectangleStaysRectangle() {
+        val r = ShapeSnap.detect(norm(loop(rectVerts(200f, 300f, 520f, 380f))), W, H)
+        assertTrue("got " + r, r is ShapeSnap.Result.Rect)
+    }
 }

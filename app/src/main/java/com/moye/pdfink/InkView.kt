@@ -1707,6 +1707,19 @@ class InkView @JvmOverloads constructor(
     }
     var textSnapSource: TextSnapSource? = null
 
+    /** v51：按笔迹自己的圈选出被圈的字，落成紧贴字的框（rect=true 长方形，否则圆角框折线）；选不准返回 null。 */
+    private fun enclose(layout: PageTextLayout, m: Mark, w: Float, hh: Float, rect: Boolean): Mark? {
+        val e = TextSnap.pickEnclosure(layout, m.pts, w, hh) ?: return null
+        if (rect) {
+            return Mark(m.color, m.width, m.alpha, Shapes.RECT,
+                floatArrayOf(e.rect[0], e.rect[1], e.rect[2], e.rect[3]), floatArrayOf(1f, 1f), m.layer)
+        }
+        val rr = TextSnap.roundedRect(e.rect, 0.32f * e.lh * hh, w, hh)
+        val dense = ShapeSnap.polygonStroke(rr, w, hh)
+        return Mark(m.color, m.width, m.alpha, Shapes.FREE, dense,
+            FloatArray(dense.size / 2) { 1f }, m.layer)
+    }
+
     /**
      * v48：自由笔迹抬笔时，看它是不是一条贴字的线 / 一个圈住字的圈；是就换成贴着文字的标注。
      * 只对「笔」和「荧光笔」、且文字层已读到时生效；任何一步对不上都返回 null，笔迹保持原样。
@@ -1736,25 +1749,25 @@ class InkView @JvmOverloads constructor(
                 val width = if (pick.shape == Shapes.TEXT_HL) 0.0028f else max(0.0028f, m.width)
                 Mark(m.color, width, m.alpha, pick.shape, pick.rect, null, m.layer, text)
             }
+            // v51：圈字按这一笔自己画的圈精确选字，框紧贴被圈的字、不放大；
+            // 圈得有歧义（圈到半个字 / 框里混着没圈到的字）就退回手画的大小，不替你改
             is ShapeSnap.Result.Oval -> {
                 if (highlighter) return null
-                // 框不准字（圈得太大 / 太小）：压在文字上就退一步，规整成你画的那个椭圆
-                val o = TextSnap.pickOval(layout, r.l, r.t, r.r, r.b, w, hh)
+                enclose(layout, m, w, hh, rect = false)
                     ?: if (TextSnap.hasTextIn(layout, r.l, r.t, r.r, r.b))
-                        floatArrayOf(r.l, r.t, r.r, r.b) else return null
-                Mark(m.color, m.width, m.alpha, Shapes.OVAL,
-                    floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
+                        Mark(m.color, m.width, m.alpha, Shapes.OVAL,
+                            floatArrayOf(r.l, r.t, r.r, r.b), floatArrayOf(1f, 1f), m.layer)
+                    else null
             }
-            // v49：框字的长方形 / 正方形，贴成刚好框住文字的矩形
             is ShapeSnap.Result.Rect -> {
                 if (highlighter) return null
-                val o = TextSnap.pickRect(layout, r.l, r.t, r.r, r.b, w, hh)
+                enclose(layout, m, w, hh, rect = true)
                     ?: if (TextSnap.hasTextIn(layout, r.l, r.t, r.r, r.b))
-                        floatArrayOf(r.l, r.t, r.r, r.b) else return null
-                Mark(m.color, m.width, m.alpha, Shapes.RECT,
-                    floatArrayOf(o[0], o[1], o[2], o[3]), floatArrayOf(1f, 1f), m.layer)
+                        Mark(m.color, m.width, m.alpha, Shapes.RECT,
+                            floatArrayOf(r.l, r.t, r.r, r.b), floatArrayOf(1f, 1f), m.layer)
+                    else null
             }
-            // v49：压在文字上的三角形 / 斜四边形，规整成干净的折线（不贴字）
+            // 三角形 / 斜四边形 / 菱形：规整成干净的折线（不贴字）；斜着的椭圆（round）当圈字处理
             is ShapeSnap.Result.Poly -> {
                 if (highlighter) return null
                 var pl = 1f; var pt = 1f; var pr = 0f; var pb = 0f
@@ -1765,6 +1778,7 @@ class InkView @JvmOverloads constructor(
                     i += 2
                 }
                 if (!TextSnap.hasTextIn(layout, pl, pt, pr, pb)) return null
+                if (r.round) enclose(layout, m, w, hh, rect = false)?.let { return it }
                 val dense = ShapeSnap.polygonStroke(r.pts, w, hh)
                 Mark(m.color, m.width, m.alpha, Shapes.FREE, dense,
                     FloatArray(dense.size / 2) { 1f }, m.layer)

@@ -26,7 +26,7 @@ object ShapeSnap {
          * v49：闭合多边形（三角形、斜着的四边形 / 菱形 / 梯形），归一化顶点 x,y 交错、按环绕顺序，
          * 不重复首点。要落成笔迹时用 [polygonStroke] 加密成折线。
          */
-        class Poly(val pts: FloatArray) : Result()
+        class Poly(val pts: FloatArray, val round: Boolean = false) : Result()
     }
 
     /** 太短的不识别（像素）。 */
@@ -34,6 +34,10 @@ object ShapeSnap {
     /** 闭合图形最短那条边至少多长（像素），太扁的多半是来回描的线。 */
     private const val MIN_SIDE_PX = 28f
     private const val RESAMPLE = 160
+    /** 四边形顶点到笔迹的平均距离 ÷ 最短边 ≥ 这个值，认为四个角是圆的（药丸 / 椭圆），不是长方形。 */
+    private const val ROUND_CUT = 0.09f
+    /** 三角形顶点本来就更尖、切角阈值放宽一点，免得把圆角三角形认成椭圆。 */
+    private const val ROUND_CUT_TRI = 0.14f
 
     /** 直线判定时依次试的「两头各去掉多少比例」：整笔 → 去掉小勾 → 只去头 / 只去尾。 */
     private val LINE_TRIMS = arrayOf(
@@ -161,11 +165,14 @@ object ShapeSnap {
         // 都不像椭圆、但直边也不算少（二成五以上）且拟合得上多边形，才退而认多边形。
         // 多边形的判据：直边占三成以上；或者拟合得非常贴（圆被四边形拟合的误差天生在 0.02 以上，
         // 真多边形一般在 0.015 以下）且直边不算太少。
-        val polyEvidence = polyChoice != null &&
+        // 四边形的四个角若是被「削圆」的（顶点处笔迹是空的）→ 这是圈词语的药丸 / 圆角框，不是长方形：
+        // 实测尖角长方形 / 菱形 ≤ 0.055，药丸 / 椭圆 ≥ 0.12。
+        val rounded = polyChoice != null && cornerCut(polyChoice, rx, ry) >= (if (polyChoice.v.size == 6) ROUND_CUT_TRI else ROUND_CUT)
+        val polyEvidence = polyChoice != null && !rounded &&
             (straight >= 0.30f || (polyChoice.mean <= 0.017f && straight >= 0.15f))
         if (polyEvidence) return polygonResult(polyChoice!!, w, h)
-        if (ovalOk) return ovalResult(oval, axisFit, w, h)
-        if (polyChoice != null && straight >= 0.25f) return polygonResult(polyChoice, w, h)
+        if (ovalOk || rounded) return ovalResult(oval, axisFit, w, h)
+        if (polyChoice != null && !rounded && straight >= 0.25f) return polygonResult(polyChoice, w, h)
         return null
     }
 
@@ -245,7 +252,7 @@ object ShapeSnap {
             out[2 * i] = ((o.cx + u * c - v * sn) / w).toFloat()
             out[2 * i + 1] = ((o.cy + u * sn + v * c) / h).toFloat()
         }
-        return Result.Poly(out)
+        return Result.Poly(out, round = true)
     }
 
     /**
@@ -300,6 +307,25 @@ object ShapeSnap {
             ox[k] = xs[seg - 1] + (xs[seg] - xs[seg - 1]) * tt
             oy[k] = ys[seg - 1] + (ys[seg] - ys[seg - 1]) * tt
         }
+    }
+
+    /**
+     * 四边形的「切角」程度：四个拟合顶点到笔迹最近点的平均距离 ÷ 最短边。
+     * 真长方形（尖角）≈ 0.02 以内；药丸 / 圆角框（手指圈词语最常见的形状）顶点处是空的，明显更大。
+     */
+    private fun cornerCut(f: PolyFit, rx: FloatArray, ry: FloatArray): Float {
+        val v = f.v
+        val k = v.size / 2
+        var sum = 0f
+        var minEdge = Float.MAX_VALUE
+        for (j in 0 until k) {
+            var best = Float.MAX_VALUE
+            for (i in rx.indices) best = min(best, hypot(rx[i] - v[2 * j], ry[i] - v[2 * j + 1]))
+            sum += best
+            val nx = (j + 1) % k
+            minEdge = min(minEdge, hypot(v[2 * nx] - v[2 * j], v[2 * nx + 1] - v[2 * j + 1]))
+        }
+        return if (minEdge < 1f) 0f else sum / k / minEdge
     }
 
     private fun distToSeg(px: Float, py: Float, ax: Float, ay: Float, bx: Float, by: Float): Float {
