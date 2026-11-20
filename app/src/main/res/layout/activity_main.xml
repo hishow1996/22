@@ -565,28 +565,5 @@
         android:scaleType="centerInside"
         android:src="@drawable/ic_temp_eraser" />
 
-    <!-- v43：多标签条。只有 >1 个标签、文档态且工具栏未隐藏时才显示；
-         topMargin 由 applyChrome() 按 barTop 动态设置，阅读区同步让出 tabH。 -->
-    <HorizontalScrollView
-        android:id="@+id/tabScroller"
-        android:layout_width="match_parent"
-        android:layout_height="32dp"
-        android:layout_gravity="top"
-        android:background="@color/bar"
-        android:elevation="3dp"
-        android:fillViewport="false"
-        android:scrollbars="none"
-        android:visibility="gone">
-
-        <LinearLayout
-            android:id="@+id/tabStrip"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="6dp"
-            android:paddingEnd="6dp" />
-
-    </HorizontalScrollView>
 
 </FrameLayout>

@@ -225,8 +225,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var btnBookmark: ImageButton
     private lateinit var btnZoomReset: ImageButton
     // v43：多标签条、待登记标签、压感档位
-    private lateinit var tabScroller: HorizontalScrollView
-    private lateinit var tabStrip: LinearLayout
     private lateinit var tabs: TabStripController
     private var pendingTab: Triple<String, String, String>? = null
 
@@ -493,14 +491,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnBrowse = findViewById(R.id.btnBrowse)
         btnBookmark = findViewById(R.id.btnBookmark)
         btnZoomReset = findViewById(R.id.btnZoomReset)
-        tabScroller = findViewById(R.id.tabScroller)
-        tabStrip = findViewById(R.id.tabStrip)
         tabs = TabStripController(
-            this, tabScroller, tabStrip,
+            this,
             onActivate = { item -> if (!openAny(Uri.parse(item.uri))) flash("!") },
             onAdd = { openDoc.launch(arrayOf("*/*")) },
-            onEmpty = { goHome() }
+            onEmpty = { goHome() },
+            onChanged = { updateOpenButton() }
         )
+        updateOpenButton()
 
         buildDots()
         buildBrushSlots()
@@ -858,9 +856,21 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnBookmark.isSelected = on
     }
 
+    /** 多于一个文件：顶栏最左按钮换成「多标签」图标；否则还是「打开」文件夹。 */
+    private fun updateOpenButton() {
+        if (!::tabs.isInitialized) return
+        val multi = tabs.visible()
+        val b = findViewById<ImageButton>(R.id.btnOpen)
+        b.setImageResource(if (multi) R.drawable.ic_tabs else R.drawable.ic_folder)
+        b.contentDescription = getString(if (multi) R.string.cd_tabs else R.string.cd_open)
+    }
+
     private fun setupClicks() {
         val open = View.OnClickListener { openDoc.launch(arrayOf("application/pdf")) }
-        findViewById<ImageButton>(R.id.btnOpen).setOnClickListener(open)
+        // v48：多于一个文件时，这个按钮是「多标签」，点开文件列表；单文件仍是打开文件。
+        findViewById<ImageButton>(R.id.btnOpen).setOnClickListener {
+            if (::tabs.isInitialized && tabs.visible()) tabs.showSwitcher() else open.onClick(it)
+        }
         findViewById<ImageButton>(R.id.btnOpenEmpty).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
         btnHomeMore.setOnClickListener { showHomeMenu() }
@@ -1118,11 +1128,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val cutBottom = cm.cutBottom               // v11 悬浮按钮沿用
         val homeCutTop = cm.cutTop                // 首页 header 同一份刘海避让
         val inDoc = repo != null && pager.visibility == View.VISIBLE
-        // v43：多于一个标签、文档态、栏未隐藏时，标签条占顶栏下沿 32dp；
-        // 单文档或沉浸态完全不占位，界面与 v42 一致。
-        val showTabs = inDoc && !barsHidden &&
-            ::tabs.isInitialized && tabs.visible()
-        val tabH = if (showTabs) dp(32) else 0
+        // v48：标签不再单独占一行（见 updateOpenButton / TabStripController.showSwitcher）。
 
         val lpTop = topBar.layoutParams as FrameLayout.LayoutParams
         lpTop.height = barTop
@@ -1142,7 +1148,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             barsHidden = barsHidden,
             safeLeft = safeL,
             safeRight = safeR,
-            toolbarTop = barTop + tabH,
+            toolbarTop = barTop,
             toolbarBottom = barBottom,
             hiddenSafeTop = cm.hiddenPagerTop
         )
@@ -1159,14 +1165,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         bottomBar.visibility = barVis
         btnShow.visibility =
             if (barsHidden && inDoc) View.VISIBLE else View.GONE
-        // v43：标签条贴在顶栏下沿，左右与阅读区同避让；显示时阅读区
-        // 已通过 toolbarTop = barTop + tabH 让出高度，不遮纸页。
-        val tl = tabScroller.layoutParams as FrameLayout.LayoutParams
-        tl.topMargin = barTop
-        tl.leftMargin = viewportInsets.left
-        tl.rightMargin = viewportInsets.right
-        tabScroller.layoutParams = tl
-        tabScroller.visibility = if (showTabs) View.VISIBLE else View.GONE
         // v11：barsHidden 不参与，隐藏栏后右下角仍常驻橡皮
         refreshTempEraser()
         emptyState.setPadding(safeL, 0, safeR, safeB)
@@ -1181,7 +1179,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         for (v in listOf(shapeBar, selectionBar)) {
             val lp = v.layoutParams as FrameLayout.LayoutParams
-            lp.topMargin = barTop + tabH + dp(2)
+            lp.topMargin = barTop + dp(2)
             v.layoutParams = lp
         }
 
@@ -1568,7 +1566,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         refreshTempEraser()
         edgeLeft.visibility = View.GONE
         edgeRight.visibility = View.GONE
-        tabScroller.visibility = View.GONE
         emptyState.setPadding(safeL, 0, safeR, safeB)
         renderHomeShelf()
     }
@@ -2027,7 +2024,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
 
         // v43：打开成功后登记标签；>1 个标签时标签条才占位，
-        // 阅读区由 applyChrome() 的 toolbarTop 同步让出 tabH。
+        // v48 起标签不占行，阅读区不再为标签让高度。
         pendingTab?.let { (u, n, k) -> tabs.opened(u, n, k) }
         pendingTab = null
         applyChrome()
@@ -2217,9 +2214,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_tabs, getString(R.string.cd_tabs), {
             ::tabs.isInitialized && tabs.visible()
         }) {
-            // 再开一份内嵌文档即出现第二个标签，标签条自动占位；
-            // 标签之间的切换、关闭都在标签条上完成。
-            openDoc.launch(arrayOf("*/*"))
+            // 多于一个文件时直接弹文件列表（切换 / 关闭 / 新开）；只有一个文件就去打开另一份。
+            if (tabs.visible()) tabs.showSwitcher() else openDoc.launch(arrayOf("*/*"))
         },
         MenuAction(R.drawable.ic_pressure, getString(R.string.cd_pressure), {
             state.pressureLevel != PressureCurve.OFF

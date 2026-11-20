@@ -1,16 +1,20 @@
 package com.moye.pdfink
 
 import android.content.Context
-import android.graphics.drawable.GradientDrawable
-import android.widget.HorizontalScrollView
-import android.widget.ImageButton
+import android.text.TextUtils
+import android.view.Gravity
+import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import kotlin.math.roundToInt
 
 /**
- * v43 多标签：顶栏下方一条横向标签条。
+ * v43 多标签。v48 起不再占一行标签条：多于一个文件时，顶栏最左的按钮变成「多标签」，
+ * 点开弹出文件列表（当前的打 ✓，可切换 / 关闭 / 新开）。
  *
  * 同一时刻只实例一个 PageSource。标签只记 Uri / 名称 / 类型；切走前由
  * MainActivity 保存会话，切回来靠 InkStore 与 SessionRepository 按内容指纹
@@ -18,11 +22,11 @@ import kotlin.math.roundToInt
  */
 class TabStripController(
     private val activity: AppCompatActivity,
-    private val scroller: HorizontalScrollView,
-    private val strip: LinearLayout,
     private val onActivate: (TabItem) -> Unit,
     private val onAdd: () -> Unit,
-    private val onEmpty: () -> Unit
+    private val onEmpty: () -> Unit,
+    /** 标签集合 / 当前项变了（用来刷新顶栏按钮图标）。 */
+    private val onChanged: () -> Unit = {}
 ) {
     private val prefs = activity.getSharedPreferences("moye", Context.MODE_PRIVATE)
     private var items: List<TabItem> = TabModels.decode(prefs.getString("tabs", "").orEmpty())
@@ -82,36 +86,60 @@ class TabStripController(
         prefs.edit().putString("tabs", TabModels.encode(items)).apply()
     }
 
-    private fun tabBg(selected: Boolean) = GradientDrawable().apply {
-        cornerRadius = dp(6).toFloat()
-        setColor(if (selected) 0x222F6FED else 0x0A000000)
-        setStroke(dp(1), if (selected) 0x66349CFF.toInt() else 0x22000000)
-    }
+    private fun render() { onChanged() }
 
-    private fun render() {
-        strip.removeAllViews()
+    /** 文件列表：点名字切换，点 × 关闭，最后一行新开文件。 */
+    fun showSwitcher() {
+        if (items.isEmpty()) { onAdd(); return }
+        val ink = ContextCompat.getColor(activity, R.color.icon)
+        val accent = ContextCompat.getColor(activity, R.color.accent)
+        val box = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        var dialog: AlertDialog? = null
         for ((i, t) in items.withIndex()) {
-            val v = activity.layoutInflater.inflate(R.layout.item_tab, strip, false)
-            val name = v.findViewById<TextView>(R.id.tabName)
-            val btnClose = v.findViewById<ImageButton>(R.id.tabClose)
-            name.text = TabModels.shortName(t.name.ifBlank { "文档" })
-            name.contentDescription = t.name
-            v.background = tabBg(i == active)
-            name.setOnClickListener { activate(i) }
-            btnClose.setOnClickListener { close(i) }
-            btnClose.contentDescription = activity.getString(R.string.cd_tab_close)
-            strip.addView(v)
+            val row = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), 0, dp(4), 0)
+            }
+            row.addView(TextView(activity).apply {
+                text = if (i == active) "✓" else ""
+                textSize = 15f
+                setTextColor(accent)
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(22), ViewGroup.LayoutParams.WRAP_CONTENT))
+            row.addView(TextView(activity).apply {
+                text = t.name.ifBlank { "文档" }
+                textSize = 15f
+                setTextColor(if (i == active) accent else ink)
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.MIDDLE
+                setPadding(dp(6), 0, dp(8), 0)
+                contentDescription = t.name
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(TextView(activity).apply {
+                text = "✕"
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setTextColor(ink)
+                contentDescription = activity.getString(R.string.cd_tab_close)
+                setOnClickListener { dialog?.dismiss(); close(i) }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
+            row.setOnClickListener { dialog?.dismiss(); activate(i) }
+            box.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(52)))
         }
-        val add = ImageButton(activity).apply {
-            setImageResource(R.drawable.ic_tab_add)
-            setColorFilter(0xFF3B4250.toInt())
-            background = null
-            contentDescription = activity.getString(R.string.cd_tab_add)
-            setOnClickListener { onAdd() }
-        }
-        strip.addView(add, LinearLayout.LayoutParams(dp(32), dp(30)).apply {
-            marginStart = dp(4)
-        })
-        scroller.post { scroller.fullScroll(HorizontalScrollView.FOCUS_RIGHT) }
+        box.addView(TextView(activity).apply {
+            text = "＋  " + activity.getString(R.string.tab_open_new)
+            textSize = 15f
+            setTextColor(accent)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), 0, dp(16), 0)
+            setOnClickListener { dialog?.dismiss(); onAdd() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)))
+        val scroll = ScrollView(activity).apply { addView(box) }
+        dialog = AlertDialog.Builder(activity)
+            .setTitle(activity.getString(R.string.tab_switch_title, items.size))
+            .setView(scroll)
+            .show()
     }
 }

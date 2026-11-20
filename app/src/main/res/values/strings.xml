@@ -108,7 +108,8 @@
     <string name="lasso_hidden_layer">圈中的笔迹在隐藏图层</string>
     <!-- v43：多标签 / 全文搜索 / 页面文字复制 / 压感 -->
     <string name="cd_tabs">多标签</string>
-    <string name="cd_tab_add">新增标签</string>
+    <string name="tab_switch_title">已打开 %1$d 个文件</string>
+    <string name="tab_open_new">打开新文件</string>
     <string name="cd_tab_close">关闭此标签</string>
     <string name="cd_doc_search">全文搜索</string>
     <string name="cd_doc_copy_page">查看本页文字，长按选中后用系统菜单复制</string>
