@@ -23,7 +23,11 @@ class AnnotInput(
     val alpha: Int,
     val width: Float,
     val pts: FloatArray,
-    val text: String? = null
+    val text: String? = null,
+    /** FREETEXT：字形轮廓折线（归一化展示坐标，闭合）；用轮廓而不是字体，中文也能原样显示，不必内嵌字体。 */
+    val contours: List<FloatArray>? = null,
+    /** FREETEXT：是否画半透明白底。 */
+    val fill: Boolean = false
 ) {
     companion object {
         const val INK = 0
@@ -35,6 +39,8 @@ class AnnotInput(
         const val HIGHLIGHT = 6
         const val UNDERLINE = 7
         const val STRIKE = 8
+        /** v53：键盘输入的文字批注框。pts = 外框 l,t,r,b（展示归一化），text = 文字。 */
+        const val FREETEXT = 9
     }
 }
 
@@ -499,6 +505,7 @@ internal object AnnotBuilder {
         AnnotInput.LINE, AnnotInput.ARROW -> line(a, g)
         AnnotInput.RECT, AnnotInput.OVAL -> box(a, g)
         AnnotInput.NOTE -> note(a, g)
+        AnnotInput.FREETEXT -> freeText(a, g)
         AnnotInput.HIGHLIGHT, AnnotInput.UNDERLINE, AnnotInput.STRIKE -> textMarkup(a, g)
         else -> null
     }
@@ -626,6 +633,44 @@ internal object AnnotBuilder {
         val dict = "/Subtype /Text /Rect [${nums(b)}] /Contents ${pdfString(txt)} /Name /Comment " +
             "/C [1 0.86 0.2] /Open false /F 28"
         return PdfAnnotWriter.Built(dict, PdfAnnotWriter.Ap(b, "<< >>", "q\n$sb" + "Q\n"))
+    }
+
+    /**
+     * 文字批注框 → FreeText。外观流里画的是字形轮廓（填充），不依赖任何字体，中文也一样；
+     * /Contents 放原文，别的阅读器里还能点开看 / 改文字。
+     */
+    private fun freeText(a: AnnotInput, g: PdfAnnotWriter.Geom): PdfAnnotWriter.Built? {
+        val txt = a.text ?: return null
+        val cs = a.contours ?: return null
+        if (a.pts.size < 4) return null
+        val p = FloatArray(2); val q = FloatArray(2)
+        g.toPdf(a.pts[0], a.pts[1], p); g.toPdf(a.pts[2], a.pts[3], q)
+        val b = floatArrayOf(min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1]))
+        val ink = rgb(a.color)
+        val sb = StringBuilder()
+        if (a.fill) {
+            sb.append("q /G0 gs 1 1 1 rg ").append(f(b[0])).append(' ').append(f(b[1])).append(' ')
+                .append(f(b[2] - b[0])).append(' ').append(f(b[3] - b[1])).append(" re f Q\n")
+            sb.append("q ").append(nums(ink)).append(" RG 0.6 w ").append(f(b[0])).append(' ')
+                .append(f(b[1])).append(' ').append(f(b[2] - b[0])).append(' ')
+                .append(f(b[3] - b[1])).append(" re S Q\n")
+        }
+        sb.append(nums(ink)).append(" rg\n")
+        val t = FloatArray(2)
+        for (c in cs) {
+            val n = c.size / 2
+            if (n < 3) continue
+            for (i in 0 until n) {
+                g.toPdf(c[2 * i], c[2 * i + 1], t)
+                sb.append(f(t[0])).append(' ').append(f(t[1])).append(if (i == 0) " m\n" else " l\n")
+            }
+            sb.append("h\n")
+        }
+        sb.append("f\n")
+        val da = "(/Helv 12 Tf ${nums(ink)} rg)"
+        val dict = "/Subtype /FreeText /Rect [${nums(b)}] /Contents ${pdfString(txt)} /DA $da /F 4"
+        val res = "<< /ExtGState << /G0 << /CA 0.88 /ca 0.88 >> >> >>"
+        return PdfAnnotWriter.Built(dict, PdfAnnotWriter.Ap(b, res, "q\n$sb" + "Q\n"))
     }
 
     private fun textMarkup(a: AnnotInput, g: PdfAnnotWriter.Geom): PdfAnnotWriter.Built? {

@@ -30,6 +30,13 @@ object Shapes {
     const val STAMP_BAD = 11
     const val STAMP_Q = 12
 
+    /**
+     * v53 文字批注框（键盘输入）：pts 是两个角点（x0,y0,x1,y1，归一化；宽 = x1-x0，y1 是上次排版时的底边，
+     * 实际高度由自动换行后的文字决定）；width = 字号（页面短边的比例）；ws[0] = 底色（1 半透明白底 / 0 无底）。
+     * 比便签 [NOTE]（固定小字、不换行、不能移动）好用，旧便签照常显示。
+     */
+    const val TEXTBOX = 13
+
     fun isStamp(shape: Int): Boolean = shape == STAMP_OK || shape == STAMP_BAD || shape == STAMP_Q
 }
 

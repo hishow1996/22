@@ -52,6 +52,11 @@ class InkView @JvmOverloads constructor(
         val holdToSnap: Boolean get() = false
         /** v48：抬笔时，压在文字上的直线 / 圈自动贴到文字上（下划线 / 删除线 / 高亮 / 框住字）。 */
         val textSnap: Boolean get() = false
+        /**
+         * v53：在页面上原地输入文字批注。实现者浮出编辑器并在结束时回调 cb（取消传 null），返回 true；
+         * 不支持返回 false，调用方退回旧的对话框便签。
+         */
+        fun onEditTextBox(req: TextBoxRequest, cb: (TextBoxResult?) -> Unit): Boolean = false
         /** v52：写完自动缩小档位，0 关，见 [LineShrink]。 */
         val lineShrink: Int get() = LineShrink.OFF
         /**
@@ -372,6 +377,17 @@ class InkView @JvmOverloads constructor(
     private fun markPixelBounds(m: Mark, out: FloatArray) {
         val w = width.toFloat()
         val h = height.toFloat()
+        if (m.shape == Shapes.TEXTBOX) {
+            val box = TextBoxGeometry.rect(m, w, h)
+            if (box != null) {
+                val pad = 4f * density
+                out[0] = box[0] - pad
+                out[1] = box[1] - pad
+                out[2] = box[2] + pad
+                out[3] = box[3] + pad
+                return
+            }
+        }
         if (m.shape == Shapes.NOTE) {
             val box = InkGeometry.noteBox(m, w, h, textPaint)
             if (box != null) {
@@ -950,6 +966,7 @@ class InkView @JvmOverloads constructor(
                     coverLastX = ev.x; coverLastY = ev.y
                     return true
                 }
+                if (tbIdx >= 0) { moveTextBox(ev); return true }
                 if (drawing) addPoints(ev)
                 else if (erasing) erasePoints(ev)
                 else if (lassoing) addLassoPoints(ev)
@@ -964,6 +981,7 @@ class InkView @JvmOverloads constructor(
                     if (hypot(ev.x - coverDownX, ev.y - coverDownY) <= 8f * density) toggleCover(idx)
                     return true
                 }
+                if (tbIdx >= 0) { finishTextBoxTouch(ev, h); return true }
                 finish()
                 return true
             }
@@ -1680,10 +1698,130 @@ class InkView @JvmOverloads constructor(
         return best
     }
 
+    // ----- v53：文字批注框：点空白处新建、点已有框改字、拖已有框移动 -----
+    private var tbIdx = -1
+    private var tbOrig: Mark? = null
+    private var tbDownX = 0f
+    private var tbDownY = 0f
+    private var tbMoved = false
+    private var tbLastRebuild = 0L
+
+    /** 点中了哪个文字框（最上面的那个），没有返回 -1。命中范围外扩 6dp。 */
+    private fun textBoxHit(px: Float, py: Float): Int {
+        val w = width.toFloat(); val h = height.toFloat()
+        val slop = 6f * density
+        for (i in marks.indices.reversed()) {
+            val m = marks[i]
+            if (m.shape != Shapes.TEXTBOX || !visible(m)) continue
+            val b = TextBoxGeometry.rect(m, w, h) ?: continue
+            if (px >= b[0] - slop && px <= b[2] + slop && py >= b[1] - slop && py <= b[3] + slop) return i
+        }
+        return -1
+    }
+
     private fun requestNote(ev: MotionEvent, h: Host) {
         val x = (ev.x / width).coerceIn(0f, 1f)
         val y = (ev.y / height).coerceIn(0f, 1f)
+        val tb = textBoxHit(ev.x, ev.y)
+        if (tb >= 0) {
+            // 已有的框：抬手时没拖动 = 编辑；拖动了 = 移动
+            tbIdx = tb; tbOrig = marks[tb]
+            tbDownX = ev.x; tbDownY = ev.y; tbMoved = false; tbLastRebuild = 0L
+            return
+        }
         val idx = noteAt(x, y)
+        if (!editTextBox(h, idx, x, y)) legacyNote(h, x, y, idx)
+    }
+
+    private fun findZoomHost(): ZoomHost? {
+        var p = parent
+        while (p != null) {
+            if (p is ZoomHost) return p
+            p = p.parent
+        }
+        return null
+    }
+
+    /** 页面归一化点 → 屏幕坐标；拿不到页面几何返回 false。 */
+    private fun screenPoint(nx: Float, ny: Float, out: FloatArray): Boolean {
+        val zh = findZoomHost() ?: return false
+        val pv = parent as? View ?: return false
+        val p = FloatArray(2)
+        if (!zh.pagePointInHost(pv, nx, ny, p)) return false
+        val loc = IntArray(2)
+        zh.getLocationOnScreen(loc)
+        out[0] = loc[0] + p[0]
+        out[1] = loc[1] + p[1]
+        return true
+    }
+
+    /**
+     * 原地输入。idx = 已有文字框 / 旧便签的下标，-1 = 新建（nx, ny 是点的位置）。
+     * 浮出编辑器失败（拿不到屏幕位置 / 宿主不支持）返回 false。
+     */
+    private fun editTextBox(h: Host, idx: Int, nx: Float, ny: Float): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val w = width.toFloat(); val hh = height.toFloat()
+        val old = if (idx >= 0) marks.getOrNull(idx) else null
+        val isBox = old != null && old.shape == Shapes.TEXTBOX
+        val sizeIdx = if (isBox) TextBoxMath.nearestSize(old!!.width) else TextBoxMath.DEFAULT_SIZE
+        val bg = if (isBox) TextBoxMath.hasBg(old!!.ws) else true
+        val color = old?.color ?: h.inkColor
+        val x0: Float; val y0: Float; val wn: Float
+        if (isBox) {
+            val b = TextBoxGeometry.rect(old!!, w, hh)
+                ?: floatArrayOf(old.pts[0] * w, old.pts[1] * hh, old.pts[2] * w, old.pts[3] * hh)
+            x0 = b[0] / w; y0 = b[1] / hh; wn = (b[2] - b[0]) / w
+        } else if (old != null) {                       // 旧便签：原位置，换成默认宽的文字框
+            wn = TextBoxMath.initialW(old.pts[0])
+            x0 = TextBoxMath.clampX(old.pts[0], wn); y0 = old.pts[1]
+        } else {
+            wn = TextBoxMath.initialW(nx)
+            x0 = TextBoxMath.clampX(nx, wn); y0 = (ny - 0.012f).coerceIn(0f, 0.95f)
+        }
+        val a = FloatArray(2); val b2 = FloatArray(2)
+        if (!screenPoint(x0, y0, a) || !screenPoint(x0 + 1f, y0, b2)) return false
+        val scale = (b2[0] - a[0]) / w
+        if (!(scale > 0f)) return false
+        val req = TextBoxRequest(
+            a[0], a[1], wn * w * scale, scale, w, min(w, hh),
+            old?.text ?: "", sizeIdx, bg, color, old == null
+        )
+        val oldMark = old
+        return h.onEditTextBox(req) { res ->
+            if (res != null) applyTextBoxResult(h, idx, oldMark, res, x0, y0)
+        }
+    }
+
+    /** 编辑器结束：落成 / 改 / 删一个文字框，进撤销历史、落盘。 */
+    private fun applyTextBoxResult(h: Host, idx0: Int, old: Mark?, res: TextBoxResult, x0: Float, y0: Float) {
+        if (loadingMarks || key.isEmpty()) return
+        // 编辑期间笔迹可能变过：用对象身份找回下标
+        var idx = -1
+        if (old != null) for (i in marks.indices) if (marks[i] === old) { idx = i; break }
+        if (old != null && idx < 0) return
+        before = ArrayList(marks)
+        val blank = res.text.isBlank()
+        if (res.delete || blank) {
+            if (idx < 0) return
+            marks.removeAt(idx)
+        } else {
+            val w = width.toFloat(); val hh = height.toFloat()
+            val wn = TextBoxMath.clampW(res.widthNorm)
+            val nx = TextBoxMath.clampX(x0, wn)
+            val prov = Mark(old?.color ?: h.inkColor, TextBoxMath.size(res.sizeIdx), 255, Shapes.TEXTBOX,
+                floatArrayOf(nx, y0, nx + wn, (y0 + 0.05f).coerceAtMost(1f)),
+                TextBoxMath.bgWs(res.bg), old?.layer ?: h.activeLayer, res.text.trimEnd())
+            // 按真实排版算出外框，y1 记成排版后的底边（外接矩形、擦除、套索都靠它）
+            val b = TextBoxGeometry.rect(prov, w, hh)
+            val m = if (b != null) prov.copyWith(pts = floatArrayOf(b[0] / w, b[1] / hh, b[2] / w, b[3] / hh)) else prov
+            if (idx >= 0) marks[idx] = m else marks.add(m)
+        }
+        rebuild()
+        commit()
+    }
+
+    private fun legacyNote(h: Host, x: Float, y: Float, idx: Int) {
         h.onRequestNote(x, y, if (idx >= 0) marks[idx].text else null) { txt ->
             if (txt.isNullOrBlank()) return@onRequestNote
             val m = Mark(h.inkColor, h.inkWidth, 255, Shapes.NOTE,
@@ -1692,6 +1830,53 @@ class InkView @JvmOverloads constructor(
             rebuild()
             commit()
         }
+    }
+
+    private fun moveTextBox(ev: MotionEvent) {
+        val dx = ev.x - tbDownX; val dy = ev.y - tbDownY
+        if (!tbMoved && hypot(dx, dy) <= 8f * density) return
+        tbMoved = true
+        if (ev.eventTime - tbLastRebuild < 40L) return      // 每动一下重画整页太费，约 25 帧/秒够跟手
+        tbLastRebuild = ev.eventTime
+        placeTextBox(tbIdx, dx, dy)
+    }
+
+    private fun placeTextBox(idx: Int, dx: Float, dy: Float) {
+        val o = tbOrig ?: return
+        if (idx < 0 || idx >= marks.size) return
+        val bw = o.pts[2] - o.pts[0]; val bh = o.pts[3] - o.pts[1]
+        val nx = TextBoxMath.clampX(o.pts[0] + dx / width, bw)
+        val ny = (o.pts[1] + dy / height).coerceIn(0f, (1f - bh).coerceAtLeast(0f))
+        marks[idx] = o.copyWith(pts = floatArrayOf(nx, ny, nx + bw, ny + bh))
+        rebuild()
+    }
+
+    private fun finishTextBoxTouch(ev: MotionEvent, h: Host) {
+        val idx = tbIdx
+        val o = tbOrig
+        tbIdx = -1; tbOrig = null
+        if (idx < 0 || o == null || idx >= marks.size) return
+        if (tbMoved) {
+            tbIdx = idx; tbOrig = o
+            placeTextBox(idx, ev.x - tbDownX, ev.y - tbDownY)
+            tbIdx = -1; tbOrig = null
+            commit()                                          // before 在落笔时已记下
+        } else {
+            val x = (ev.x / width).coerceIn(0f, 1f)
+            val y = (ev.y / height).coerceIn(0f, 1f)
+            if (!editTextBox(h, idx, x, y)) legacyNote(h, x, y, idx)
+        }
+    }
+
+    private fun cancelTextBoxTouch() {
+        val idx = tbIdx
+        val o = tbOrig
+        tbIdx = -1; tbOrig = null
+        if (tbMoved && o != null && idx in marks.indices) {
+            marks[idx] = o
+            rebuild()
+        }
+        tbMoved = false
     }
 
     // ---------- 收尾 / 历史 ----------
@@ -1926,6 +2111,7 @@ class InkView @JvmOverloads constructor(
 
     private fun cancelGesture() {
         coverTapIdx = -1
+        cancelTextBoxTouch()
         removeCallbacks(snapRunnable)
         drawing = false; erasing = false; lassoing = false; dragMode = 0
         lassoScreenPts.clear()

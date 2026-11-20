@@ -58,7 +58,7 @@ object AnnotSummary {
                     Shapes.TEXT_HL -> out.add(Entry(p, HIGHLIGHT, snippet(m.text)))
                     Shapes.TEXT_UL -> out.add(Entry(p, UNDERLINE, snippet(m.text)))
                     Shapes.TEXT_STRIKE -> out.add(Entry(p, STRIKE, snippet(m.text)))
-                    Shapes.NOTE -> if (!m.text.isNullOrBlank()) out.add(Entry(p, NOTE, snippet(m.text)))
+                    Shapes.NOTE, Shapes.TEXTBOX -> if (!m.text.isNullOrBlank()) out.add(Entry(p, NOTE, snippet(m.text)))
                     Shapes.FREE -> if (m.pts.isNotEmpty()) strokes++
                     Shapes.LINE, Shapes.RECT, Shapes.OVAL, Shapes.ARROW -> shapes++
                     Shapes.STAMP_OK -> ok++

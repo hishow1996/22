@@ -17,7 +17,7 @@
     <string name="cd_redo">重做</string>
     <string name="cd_more">更多</string>
     <string name="cd_lasso">套索</string>
-    <string name="cd_note">便签</string>
+    <string name="cd_note">文字批注（点页面打字，点已有的框改字，拖动移位）</string>
     <string name="cd_bookmark">书签</string>
     <string name="cd_nav">导航与书架</string>
     <string name="cd_jump">跳转</string>

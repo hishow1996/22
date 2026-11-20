@@ -293,6 +293,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     // v41：只在「一条都没选中」时出现，瞬时提示，不是常驻小字
     override fun onLassoNoHit() { flash(getString(R.string.lasso_no_hit)) }
     override fun onLassoHiddenLayer() { flash(getString(R.string.lasso_hidden_layer)) }
+    /** v53：页面上原地键盘输入文字批注（编辑器浮在页面上方）。 */
+    override fun onEditTextBox(req: TextBoxRequest, cb: (TextBoxResult?) -> Unit): Boolean {
+        val host = findViewById<ViewGroup>(android.R.id.content) ?: return false
+        TextBoxEditor(this, host, req, cb).show()
+        return true
+    }
+
     override fun onRequestNote(x: Float, y: Float, existing: String?, cb: (String?) -> Unit) {
         val et = EditText(this).apply {
             setText(existing ?: "")
@@ -396,7 +403,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         r: PageSource, uri: Uri, layers: Set<Int>, rotation: Int
     ): Boolean? {
         val src = r.sourceBytes() ?: return null
-        val perPage = AnnotExport.collect(r.count, layers) { p -> inkStore.load("p$p") }
+        // v53：文字批注框导出成 FreeText，外观流画字形轮廓；参考页面宽 1000，高按展示宽高比
+        val outline: (Int, Mark) -> TextBoxOutline? = { p, m ->
+            val ratio = r.ratioWithRotation(p, rotation).takeIf { it.isFinite() && it > 0f } ?: 0.75f
+            TextBoxGeometry.outline(m, 1000f, 1000f / ratio)
+        }
+        val perPage = AnnotExport.collect(r.count, layers, outline) { p -> inkStore.load("p$p") }
         val out = contentResolver.openOutputStream(uri) ?: return false
         out.use { o ->
             if (perPage.isEmpty()) {

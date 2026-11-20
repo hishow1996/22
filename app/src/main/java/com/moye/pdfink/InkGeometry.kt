@@ -39,6 +39,11 @@ object InkGeometry {
             return
         }
 
+        if (m.shape == Shapes.TEXTBOX) {
+            TextBoxGeometry.draw(c, m, w, h, argb, bgPaint, colorTransform)
+            return
+        }
+
         if (Shapes.isTextMarkup(m.shape)) {
             drawTextMarkup(c, m, w, h, base, argb, paint)
             return

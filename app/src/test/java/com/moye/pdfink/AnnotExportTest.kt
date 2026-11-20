@@ -75,4 +75,24 @@ class AnnotExportTest {
         val cover = Mark(CoverGeometry.COLOR, 0.004f, 255, Shapes.COVER, floatArrayOf(0f, 0f, 1f, 1f))
         assertNull(AnnotExport.toInput(cover))
     }
+
+    @Test
+    fun textBoxExportsAsFreeTextWhenOutlineKnownElseAsNote() {
+        val m = Mark(0xFF123456.toInt(), 0.026f, 255, Shapes.TEXTBOX,
+            floatArrayOf(0.1f, 0.2f, 0.7f, 0.3f), TextBoxMath.bgWs(true), 0, "你好")
+        // 没有轮廓：退回便签，位置 = 框左上角
+        val n = AnnotExport.toInput(m)!!
+        assertEquals(AnnotInput.NOTE, n.kind)
+        assertEquals(0.1f, n.pts[0], 0f)
+        assertEquals("你好", n.text)
+        // 有轮廓：FreeText，外框 / 轮廓 / 底色带上
+        val o = TextBoxOutline(floatArrayOf(0.1f, 0.2f, 0.7f, 0.25f), listOf(floatArrayOf(0.1f, 0.2f, 0.2f, 0.2f, 0.2f, 0.3f)))
+        val f = AnnotExport.toInput(m) { o }!!
+        assertEquals(AnnotInput.FREETEXT, f.kind)
+        assertTrue(f.fill)
+        assertEquals(0.25f, f.pts[3], 0f)
+        assertEquals(1, f.contours!!.size)
+        // 空文字不导出
+        assertNull(AnnotExport.toInput(Mark(0, 0.026f, 255, Shapes.TEXTBOX, floatArrayOf(0f, 0f, 0.5f, 0.1f), null, 0, " ")))
+    }
 }

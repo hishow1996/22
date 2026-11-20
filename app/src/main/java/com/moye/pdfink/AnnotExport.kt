@@ -45,9 +45,23 @@ object AnnotExport {
         }
     }
 
-    fun toInput(m: Mark): AnnotInput? {
+    /**
+     * @param outline v53：文字批注框的字形轮廓（Android 上才能算，所以由调用方给）。
+     *  给 null / 算不出来就退回成一枚便签图标，文字放在批注里。
+     */
+    fun toInput(m: Mark, outline: ((Mark) -> TextBoxOutline?)? = null): AnnotInput? {
         if (m.pts.isEmpty()) return null
         if (Shapes.isStamp(m.shape)) return stampToInput(m)
+        if (m.shape == Shapes.TEXTBOX) {
+            if (m.text.isNullOrBlank() || m.pts.size < 4) return null
+            val o = outline?.invoke(m)
+            if (o != null && o.contours.isNotEmpty()) {
+                return AnnotInput(AnnotInput.FREETEXT, m.color, m.alpha, 0f, o.box, m.text,
+                    o.contours, TextBoxMath.hasBg(m.ws))
+            }
+            return AnnotInput(AnnotInput.NOTE, m.color, m.alpha, meanWidth(m),
+                floatArrayOf(m.pts[0], m.pts[1]), m.text)
+        }
         val kind = when (m.shape) {
             Shapes.FREE -> AnnotInput.INK
             Shapes.LINE -> AnnotInput.LINE
@@ -68,13 +82,14 @@ object AnnotExport {
     fun collect(
         pageCount: Int,
         layers: Set<Int>,
+        outline: ((page: Int, m: Mark) -> TextBoxOutline?)? = null,
         load: (Int) -> List<Mark>
     ): Map<Int, List<AnnotInput>> {
         val out = LinkedHashMap<Int, List<AnnotInput>>()
         for (p in 0 until pageCount) {
             val list = load(p).asSequence()
                 .filter { it.layer in layers }
-                .mapNotNull { toInput(it) }
+                .mapNotNull { m -> toInput(m, outline?.let { f -> { mk: Mark -> f(p, mk) } }) }
                 .toList()
             if (list.isNotEmpty()) out[p] = list
         }

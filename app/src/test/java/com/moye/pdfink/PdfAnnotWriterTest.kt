@@ -202,4 +202,32 @@ class PdfAnnotWriterTest {
         assertTrue(nb.trimEnd().endsWith(">>"))
         assertNull(PdfAnnotWriter.pageWithAnnots("not a dict", null, "7 0 R"))
     }
+
+    @Test
+    fun freeTextBuildsFilledGlyphOutlinesAndKeepsTheText() {
+        val g = PdfAnnotWriter.Geom(0f, 0f, 200f, 100f, 0)
+        // 一个三角形「字形」+ 一个方块「字形」
+        val tri = floatArrayOf(0.2f, 0.2f, 0.3f, 0.2f, 0.25f, 0.3f)
+        val sq = floatArrayOf(0.4f, 0.2f, 0.5f, 0.2f, 0.5f, 0.3f, 0.4f, 0.3f)
+        val a = AnnotInput(AnnotInput.FREETEXT, 0xFF112233.toInt(), 255, 0f,
+            floatArrayOf(0.1f, 0.1f, 0.6f, 0.4f), "批注 abc", listOf(tri, sq), true)
+        val b = AnnotBuilder.build(a, g)!!
+        assertTrue(b.dict.contains("/Subtype /FreeText"))
+        assertTrue(b.dict.contains("/DA"))
+        assertTrue(b.dict.contains("/Contents <FEFF"))       // 中文：UTF-16BE 十六进制
+        val ap = b.ap!!
+        assertTrue(ap.content.contains(" m\n"))
+        assertTrue(ap.content.contains("h\nf\n") || ap.content.contains("h\n"))
+        assertTrue(ap.content.trimEnd().endsWith("Q"))
+        assertTrue(ap.resources.contains("/G0"))             // 半透明白底用到
+        // 外框 = 0.1..0.6 × 0.1..0.4：x 20..120，y（翻转）60..90
+        assertArrayEquals(floatArrayOf(20f, 60f, 120f, 90f), ap.bbox, 0.01f)
+    }
+
+    @Test
+    fun freeTextWithoutContoursIsSkipped() {
+        val g = PdfAnnotWriter.Geom(0f, 0f, 200f, 100f, 0)
+        val a = AnnotInput(AnnotInput.FREETEXT, 0, 255, 0f, floatArrayOf(0.1f, 0.1f, 0.6f, 0.4f), "x")
+        assertNull(AnnotBuilder.build(a, g))
+    }
 }
