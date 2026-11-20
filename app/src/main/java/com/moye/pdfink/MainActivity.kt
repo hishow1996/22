@@ -859,21 +859,18 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnBookmark.isSelected = on
     }
 
-    /** 多于一个文件：顶栏最左按钮换成「多标签」图标；否则还是「打开」文件夹。 */
+    /** 顶栏最左始终是「打开」文件夹；多于一个文件时长按它弹出文件列表（也可从菜单「多标签」进）。 */
     private fun updateOpenButton() {
         if (!::tabs.isInitialized) return
-        val multi = tabs.visible()
         val b = findViewById<ImageButton>(R.id.btnOpen)
-        b.setImageResource(if (multi) R.drawable.ic_tabs else R.drawable.ic_folder)
-        b.contentDescription = getString(if (multi) R.string.cd_tabs else R.string.cd_open)
+        b.setOnLongClickListener {
+            if (tabs.visible()) { tabs.showSwitcher(); true } else false
+        }
     }
 
     private fun setupClicks() {
         val open = View.OnClickListener { openDoc.launch(arrayOf("application/pdf")) }
-        // v48：多于一个文件时，这个按钮是「多标签」，点开文件列表；单文件仍是打开文件。
-        findViewById<ImageButton>(R.id.btnOpen).setOnClickListener {
-            if (::tabs.isInitialized && tabs.visible()) tabs.showSwitcher() else open.onClick(it)
-        }
+        findViewById<ImageButton>(R.id.btnOpen).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnOpenEmpty).setOnClickListener(open)
         findViewById<ImageButton>(R.id.btnHomeOpen).setOnClickListener(open)
         btnHomeMore.setOnClickListener { showHomeMenu() }
