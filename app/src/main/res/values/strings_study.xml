@@ -6,7 +6,7 @@
     <string name="cd_stamp_q">批改：存疑</string>
     <string name="annot_stamp">批改</string>
     <string name="annot_stamp_total">批改合计：✓ %1$d · ✗ %2$d · ？%3$d</string>
-    <string name="cd_redo_page">重做本页（清作答，留标记）</string>
+    <string name="cd_redo_page">清作答（清掉本页作答，保留读题标记，可撤销）</string>
     <string name="redo_page_done">已清掉本页作答，可撤销</string>
     <string name="redo_page_none">本页没有可清的作答</string>
     <string name="nav_timing_title">做题用时</string>

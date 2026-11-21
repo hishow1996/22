@@ -31,7 +31,7 @@
     <string name="m_pdf_page">本页PDF</string>
     <string name="m_pressure">压感</string>
     <string name="m_print_page">打印</string>
-    <string name="m_redo_page">重做本页</string>
+    <string name="m_redo_page">清作答</string>
     <string name="m_restore">导入</string>
     <string name="m_rotate">旋转</string>
     <string name="m_share_page">分享</string>
@@ -49,4 +49,20 @@
     <string name="mt_note">文字</string>
     <string name="mt_highlighter">荧光</string>
     <string name="mt_redo">重做</string>
+    <!-- v57：分组标题与状态角标 -->
+    <string name="mt_sec_pen">画笔 · 颜色 / 粗细 / 常用笔（长按存当前笔）</string>
+    <string name="mt_sec_write">手写</string>
+    <string name="mt_sec_read">阅读</string>
+    <string name="mt_sec_view">显示</string>
+    <string name="mt_sec_export">导出与同步</string>
+    <string name="mt_sec_clear">清除</string>
+    <string name="mt_on">开</string>
+    <string name="mt_off">关</string>
+    <string name="mt_soft">弱</string>
+    <string name="mt_normal">中</string>
+    <string name="mt_strong">强</string>
+    <string name="mt_tint_white">白</string>
+    <string name="mt_tint_warm">暖</string>
+    <string name="mt_tint_night">夜</string>
+    <string name="mt_clear_done">已清空本页，可撤销</string>
 </resources>

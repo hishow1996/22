@@ -142,29 +142,92 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private fun shortLabel(long: String): String =
         menuShortNames[long] ?: if (long.length <= 4) long else long.substring(0, 4)
 
+    /** v57：菜单项种类——决定点完关不关菜单、有没有角标、什么颜色。 */
+    private enum class MK {
+        ACTION,        // 点一下做一件事，关菜单
+        TOGGLE,        // 开关：点完菜单留着，角标 开/关
+        TOGGLE_CLOSE,  // 开关，但生效会重建界面，点完关菜单
+        SHEET,         // 弹设置面板：关菜单，角标显示当前值
+        DANGER         // 清除类：红色，关菜单
+    }
+
+    private class MenuItem(
+        val a: MenuAction, val kind: MK = MK.ACTION,
+        val value: (() -> String)? = null
+    )
+
+    private class MenuSection(
+        val title: String, val items: List<MenuItem>,
+        val segment: List<MenuItem> = emptyList()
+    )
+
+    private fun badgeBg(c: Int, fill: Boolean): GradientDrawable = GradientDrawable().apply {
+        cornerRadius = dp(7).toFloat()
+        if (fill) setColor(c) else { setColor(Color.TRANSPARENT); setStroke(dp(1), c) }
+    }
+
     /**
-     * v56：一格菜单 = 上面图标、下面短名。选中（active）时图标和文字都变蓝。
-     * 长名放在 contentDescription 里，长按弹出。
+     * v56/v57：一格菜单 = 上图标、下短名，右上角角标（开关 开/关；有档位的显示当前值）。
+     * 选中（active）图标和文字变蓝；DANGER 一律红色。长名在 contentDescription，长按弹出。
      */
-    private fun menuCell(parent: ViewGroup, a: MenuAction, on: Int, off: Int): View {
+    private fun menuCell(parent: ViewGroup, item: MenuItem, on: Int, off: Int): View {
+        val a = item.a
         val v = layoutInflater.inflate(R.layout.item_menu, parent, false)
         v.findViewById<ImageView>(R.id.menuIcon).setImageResource(a.icon)
         v.findViewById<TextView>(R.id.menuLabel).text = shortLabel(a.label)
         v.contentDescription = a.label
-        tintMenuCell(v, a.active(), on, off)
+        tintMenuCell(v, item, on, off)
         v.setOnLongClickListener { flash(a.label); true }
         return v
     }
 
-    private fun tintMenuCell(v: View, active: Boolean, on: Int, off: Int) {
-        val c = if (active) on else off
+    private fun tintMenuCell(v: View, item: MenuItem, on: Int, off: Int) {
+        val active = item.a.active()
+        val c = when {
+            item.kind == MK.DANGER -> MENU_DANGER
+            active -> on
+            else -> off
+        }
         v.findViewById<ImageView>(R.id.menuIcon).setColorFilter(c)
         v.findViewById<TextView>(R.id.menuLabel).setTextColor(c)
+        val badge = v.findViewById<TextView>(R.id.menuBadge)
+        val text = when {
+            item.value != null -> item.value.invoke()
+            item.kind == MK.TOGGLE || item.kind == MK.TOGGLE_CLOSE ->
+                getString(if (active) R.string.mt_on else R.string.mt_off)
+            else -> null
+        }
+        if (text.isNullOrEmpty()) { badge.visibility = View.GONE; return }
+        badge.visibility = View.VISIBLE
+        badge.text = text
+        badge.setTextColor(if (active) Color.WHITE else off)
+        badge.background = badgeBg(if (active) on else (off and 0x00FFFFFF) or 0x66000000, active)
+    }
+
+    /** v57：分段选择一格（页面显示：适应屏 / 适宽 / 铺满|双页）。 */
+    private fun segmentCell(item: MenuItem, on: Int, off: Int): TextView =
+        TextView(this).apply {
+            text = shortLabel(item.a.label)
+            gravity = Gravity.CENTER
+            textSize = 13f
+            contentDescription = item.a.label
+            setBackgroundResource(R.drawable.tool_bg)
+            setOnLongClickListener { flash(item.a.label); true }
+            tag = item
+        }
+
+    private fun tintSegment(t: TextView, on: Int, off: Int) {
+        val item = t.tag as MenuItem
+        val active = item.a.active()
+        t.isSelected = active
+        t.setTextColor(if (active) on else off)
+        t.typeface = if (active) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
     }
 
     private companion object MenuMetrics {
         const val MENU_CELL_W = 55      // 5 列 × 55 = 275dp，贴合 276dp 的浮层宽
-        const val MENU_CELL_H = 58      // 图标 24 + 短名 12 + 上下留白
+        const val MENU_CELL_H = 58      // 图标 26 + 短名 12 + 上下留白
+        const val MENU_DANGER = 0xFFD93025.toInt()
     }
 
     private val colors = intArrayOf(
@@ -1873,7 +1936,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val on = ContextCompat.getColor(this, R.color.accent)
         val off = ContextCompat.getColor(this, R.color.icon)
         for (a in homeMenuActions()) {
-            val b = menuCell(grid, a, on, off)
+            val b = menuCell(grid, MenuItem(a), on, off)
             b.layoutParams = GridLayout.LayoutParams().apply {
                 width = dp(MENU_CELL_W); height = dp(MENU_CELL_H)
             }
@@ -2303,7 +2366,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     // ----- 浮层菜单 -----
     private fun menuActions(): List<MenuAction> = listOf(
         MenuAction(R.drawable.ic_close, getString(R.string.cd_clear), { false }) {
-            activeViews[focusKey]?.clearPage()
+            if (activeViews[focusKey]?.clearPage() == true) flash(getString(R.string.mt_clear_done))
         },
         MenuAction(R.drawable.ic_redo_page, getString(R.string.cd_redo_page), { false }) {
             if (activeViews[focusKey]?.redoPage() == true) flash(getString(R.string.redo_page_done))
@@ -2496,6 +2559,74 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     )
 
     /**
+     * v57：⋯ 菜单分组。每个功能仍由 menuActions() 提供（用长名当键），这里只负责
+     * 归到哪一组、是开关 / 弹面板 / 危险、角标显示什么。
+     */
+    private fun menuSections(): List<MenuSection> {
+        val all = menuActions().associateBy { it.label }
+        fun mi(id: Int, kind: MK = MK.ACTION, value: (() -> String)? = null): MenuItem? =
+            all[getString(id)]?.let { MenuItem(it, kind, value) }
+        fun offOr(on: Boolean, v: String) = if (on) v else getString(R.string.mt_off)
+
+        val pressure = mi(R.string.cd_pressure, MK.SHEET) {
+            when (PressureCurve.coerce(state.pressureLevel)) {
+                PressureCurve.SOFT -> getString(R.string.mt_soft)
+                PressureCurve.NORMAL -> getString(R.string.mt_normal)
+                PressureCurve.STRONG -> getString(R.string.mt_strong)
+                else -> getString(R.string.mt_off)
+            }
+        }
+        val finger = mi(R.string.cd_finger_offset, MK.SHEET) {
+            when (FingerOffset.clamp(state.fingerOffset)) {
+                1 -> getString(R.string.finger_level_small)
+                2 -> getString(R.string.finger_level_medium)
+                3 -> getString(R.string.finger_level_large)
+                else -> getString(R.string.mt_off)
+            }
+        }
+        val shrink = mi(R.string.cd_line_shrink, MK.SHEET) {
+            offOr(state.lineShrink != LineShrink.OFF, "${LineShrink.clamp(state.lineShrink)}%")
+        }
+        val tint = mi(R.string.cd_tint, MK.SHEET) {
+            when (state.tint.coerceIn(0, 2)) {
+                1 -> getString(R.string.mt_tint_warm)
+                2 -> getString(R.string.mt_tint_night)
+                else -> getString(R.string.mt_tint_white)
+            }
+        }
+        val rotate = mi(R.string.cd_rotate, MK.ACTION) {
+            if (state.pageRotation != 0) "${state.pageRotation}°" else ""
+        }
+
+        val write = MenuSection(getString(R.string.mt_sec_write), listOfNotNull(
+            mi(R.string.cd_loupe), pressure, finger,
+            mi(R.string.cd_palm, MK.TOGGLE), mi(R.string.cd_stylus, MK.TOGGLE),
+            mi(R.string.cd_hand, MK.TOGGLE), mi(R.string.cd_holdsnap, MK.TOGGLE),
+            mi(R.string.cd_textsnap, MK.TOGGLE), shrink,
+            mi(R.string.cd_temp_eraser, MK.TOGGLE),
+            mi(R.string.cd_layer, MK.TOGGLE), mi(R.string.cd_hide_layer, MK.TOGGLE)))
+        val read = MenuSection(getString(R.string.mt_sec_read), listOfNotNull(
+            mi(R.string.cd_overview), mi(R.string.cd_nav), mi(R.string.cd_doc_search),
+            mi(R.string.cd_ocr), mi(R.string.cd_tabs), mi(R.string.cd_snapshots),
+            mi(R.string.cd_home), mi(R.string.cd_immersive),
+            mi(R.string.cd_edge, MK.TOGGLE), mi(R.string.cd_volume, MK.TOGGLE)))
+        val view = MenuSection(getString(R.string.mt_sec_view), listOfNotNull(
+            mi(R.string.cd_spread, MK.TOGGLE), rotate,
+            mi(R.string.cd_autocrop, MK.TOGGLE), tint,
+            mi(R.string.cd_dark, MK.TOGGLE_CLOSE), mi(R.string.cd_awake, MK.TOGGLE)),
+            segment = listOfNotNull(
+                mi(R.string.cd_fit_screen), mi(R.string.cd_fit_width),
+                mi(if (state.landscape) R.string.cd_double_page else R.string.cd_fill_screen)))
+        val export = MenuSection(getString(R.string.mt_sec_export), listOfNotNull(
+            mi(R.string.cd_export), mi(R.string.cd_pdf_page), mi(R.string.cd_pdf_all),
+            mi(R.string.cd_backup), mi(R.string.cd_restore), mi(R.string.cd_webdav)))
+        val clear = MenuSection(getString(R.string.mt_sec_clear), listOfNotNull(
+            mi(R.string.cd_clear, MK.DANGER), mi(R.string.cd_redo_page, MK.DANGER),
+            mi(R.string.cd_clear_all, MK.DANGER)))
+        return listOf(write, read, view, export, clear)
+    }
+
+    /**
      * v36：浮层第一行 4 个工具的选中态与顶栏 refreshTools() 用同一口径。
      * 旧版写成 currentTool == t，漏了 !state.browse —— 浏览态下仍显示上次工具的
      * 淡蓝方块底，看着像「一直关不掉」。这里统一补上。
@@ -2514,7 +2645,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
 
     private fun showMenu() {
         val pv = layoutInflater.inflate(R.layout.popup_menu, null)
-        val grid = pv.findViewById<GridLayout>(R.id.menuGrid)
+        val sections = pv.findViewById<LinearLayout>(R.id.menuSections)
         val on = ContextCompat.getColor(this, R.color.accent)
         val off = ContextCompat.getColor(this, R.color.icon)
         val popup = PopupWindow(pv, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -2552,15 +2683,68 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             inkWrap.visibility = View.VISIBLE
             buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow), popup)
         }
-        for (a in menuActions()) {
-            val b = menuCell(grid, a, on, off)
-            val lp = GridLayout.LayoutParams().apply { width = dp(MENU_CELL_W); height = dp(MENU_CELL_H) }
-            b.setOnClickListener {
-                popup.dismiss()
-                a.run()
-                tintMenuCell(b, a.active(), on, off)
+        // v57：分组 + 开关不关菜单。所有格子登记在 refreshers 里，开关点完统一刷新状态
+        val refreshers = ArrayList<() -> Unit>()
+        fun refreshAll() {
+            refreshers.forEach { it() }
+            refreshMenuToolRow(tr)
+            mRedo.alpha = if (history.canRedo) 1f else 0.32f
+        }
+        fun title(t: String) {
+            sections.addView(TextView(this).apply {
+                text = t; textSize = 11f; alpha = 0.6f
+                setTextColor(off)
+                includeFontPadding = false
+                setPadding(dp(4), dp(10), 0, dp(2))
+            })
+        }
+        val brightRow = pv.findViewById<View>(R.id.menuBrightRow)
+        for (sec in menuSections()) {
+            if (sec.items.isEmpty() && sec.segment.isEmpty()) continue
+            title(sec.title)
+            if (sec.segment.isNotEmpty()) {
+                val seg = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(10).toFloat(); setColor(0x14000000)
+                    }
+                    setPadding(dp(2), dp(2), dp(2), dp(2))
+                }
+                for (item in sec.segment) {
+                    val t = segmentCell(item, on, off)
+                    t.setOnClickListener { popup.dismiss(); item.a.run() }
+                    seg.addView(t, LinearLayout.LayoutParams(0, dp(34), 1f))
+                    refreshers.add { tintSegment(t, on, off) }
+                    tintSegment(t, on, off)
+                }
+                sections.addView(seg, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(2); bottomMargin = dp(2) })
             }
-            grid.addView(b, lp)
+            val grid = GridLayout(this).apply { columnCount = 5 }
+            for (item in sec.items) {
+                val b = menuCell(grid, item, on, off)
+                b.setOnClickListener {
+                    if (item.kind == MK.TOGGLE) {
+                        item.a.run()
+                        refreshAll()
+                    } else {
+                        popup.dismiss()
+                        item.a.run()
+                    }
+                }
+                grid.addView(b, GridLayout.LayoutParams().apply {
+                    width = dp(MENU_CELL_W); height = dp(MENU_CELL_H)
+                })
+                refreshers.add { tintMenuCell(b, item, on, off) }
+            }
+            sections.addView(grid)
+            // 亮度条归进「显示」组，不再孤零零挂在整个菜单最底下
+            if (sec.title == getString(R.string.mt_sec_view)) {
+                (brightRow.parent as ViewGroup).removeView(brightRow)
+                sections.addView(brightRow)
+                pv.findViewById<View>(R.id.menuBottomDivider).visibility = View.GONE
+            }
         }
         val bar = pv.findViewById<SeekBar>(R.id.brightnessBar)
         bar.progress = ((state.brightness + 1f) * 50f).toInt().coerceIn(0, 100)
