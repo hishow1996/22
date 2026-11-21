@@ -47,6 +47,7 @@ import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.SeekBar
@@ -88,6 +89,83 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val icon: Int, val label: String,
         val active: () -> Boolean, val run: () -> Unit
     )
+
+    /** v56：浮层菜单图标下的短名：长名（给长按 / 无障碍）→ 短名。没登记的取长名前 4 个字。 */
+    private val menuShortNames: Map<String, String> by lazy {
+        mapOf(
+            getString(R.string.cd_autocrop) to getString(R.string.m_autocrop),
+            getString(R.string.cd_awake) to getString(R.string.m_awake),
+            getString(R.string.cd_backup) to getString(R.string.m_backup),
+            getString(R.string.cd_clear) to getString(R.string.m_clear),
+            getString(R.string.cd_clear_all) to getString(R.string.m_clear_all),
+            getString(R.string.cd_dark) to getString(R.string.m_dark),
+            getString(R.string.cd_doc_search) to getString(R.string.m_doc_search),
+            getString(R.string.cd_double_page) to getString(R.string.m_double_page),
+            getString(R.string.cd_edge) to getString(R.string.m_edge),
+            getString(R.string.cd_export) to getString(R.string.m_export),
+            getString(R.string.cd_fill_screen) to getString(R.string.m_fill_screen),
+            getString(R.string.cd_finger_offset) to getString(R.string.m_finger_offset),
+            getString(R.string.cd_fit_screen) to getString(R.string.m_fit_screen),
+            getString(R.string.cd_fit_width) to getString(R.string.m_fit_width),
+            getString(R.string.cd_hand) to getString(R.string.m_hand),
+            getString(R.string.cd_hide_layer) to getString(R.string.m_hide_layer),
+            getString(R.string.cd_holdsnap) to getString(R.string.m_holdsnap),
+            getString(R.string.cd_home) to getString(R.string.m_home),
+            getString(R.string.cd_immersive) to getString(R.string.m_immersive),
+            getString(R.string.cd_layer) to getString(R.string.m_layer),
+            getString(R.string.cd_line_shrink) to getString(R.string.m_line_shrink),
+            getString(R.string.cd_loupe) to getString(R.string.m_loupe),
+            getString(R.string.cd_nav) to getString(R.string.m_nav),
+            getString(R.string.cd_ocr) to getString(R.string.m_ocr),
+            getString(R.string.cd_overview) to getString(R.string.m_overview),
+            getString(R.string.cd_palm) to getString(R.string.m_palm),
+            getString(R.string.cd_pdf_all) to getString(R.string.m_pdf_all),
+            getString(R.string.cd_pdf_page) to getString(R.string.m_pdf_page),
+            getString(R.string.cd_pressure) to getString(R.string.m_pressure),
+            getString(R.string.cd_print_page) to getString(R.string.m_print_page),
+            getString(R.string.cd_redo_page) to getString(R.string.m_redo_page),
+            getString(R.string.cd_restore) to getString(R.string.m_restore),
+            getString(R.string.cd_rotate) to getString(R.string.m_rotate),
+            getString(R.string.cd_share_page) to getString(R.string.m_share_page),
+            getString(R.string.cd_snapshots) to getString(R.string.m_snapshots),
+            getString(R.string.cd_spread) to getString(R.string.m_spread),
+            getString(R.string.cd_stylus) to getString(R.string.m_stylus),
+            getString(R.string.cd_tabs) to getString(R.string.m_tabs),
+            getString(R.string.cd_temp_eraser) to getString(R.string.m_temp_eraser),
+            getString(R.string.cd_textsnap) to getString(R.string.m_textsnap),
+            getString(R.string.cd_tint) to getString(R.string.m_tint),
+            getString(R.string.cd_volume) to getString(R.string.m_volume),
+            getString(R.string.cd_webdav) to getString(R.string.m_webdav),
+        )
+    }
+
+    private fun shortLabel(long: String): String =
+        menuShortNames[long] ?: if (long.length <= 4) long else long.substring(0, 4)
+
+    /**
+     * v56：一格菜单 = 上面图标、下面短名。选中（active）时图标和文字都变蓝。
+     * 长名放在 contentDescription 里，长按弹出。
+     */
+    private fun menuCell(parent: ViewGroup, a: MenuAction, on: Int, off: Int): View {
+        val v = layoutInflater.inflate(R.layout.item_menu, parent, false)
+        v.findViewById<ImageView>(R.id.menuIcon).setImageResource(a.icon)
+        v.findViewById<TextView>(R.id.menuLabel).text = shortLabel(a.label)
+        v.contentDescription = a.label
+        tintMenuCell(v, a.active(), on, off)
+        v.setOnLongClickListener { flash(a.label); true }
+        return v
+    }
+
+    private fun tintMenuCell(v: View, active: Boolean, on: Int, off: Int) {
+        val c = if (active) on else off
+        v.findViewById<ImageView>(R.id.menuIcon).setColorFilter(c)
+        v.findViewById<TextView>(R.id.menuLabel).setTextColor(c)
+    }
+
+    private companion object MenuMetrics {
+        const val MENU_CELL_W = 55      // 5 列 × 55 = 275dp，贴合 276dp 的浮层宽
+        const val MENU_CELL_H = 58      // 图标 24 + 短名 12 + 上下留白
+    }
 
     private val colors = intArrayOf(
         0xFF222226.toInt(), 0xFFE5484D.toInt(), 0xFF2F6FED.toInt(),
@@ -1795,15 +1873,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val on = ContextCompat.getColor(this, R.color.accent)
         val off = ContextCompat.getColor(this, R.color.icon)
         for (a in homeMenuActions()) {
-            val b = layoutInflater.inflate(R.layout.item_menu, grid, false) as ImageButton
+            val b = menuCell(grid, a, on, off)
             b.layoutParams = GridLayout.LayoutParams().apply {
-                width = dp(52); height = dp(52)
+                width = dp(MENU_CELL_W); height = dp(MENU_CELL_H)
             }
-            b.setImageResource(a.icon)
-            b.setColorFilter(if (a.active()) on else off)
-            b.contentDescription = a.label
             b.setOnClickListener { popup.dismiss(); a.run() }
-            b.setOnLongClickListener { flash(a.label); true }
             grid.addView(b)
         }
         popup.showAsDropDown(btnHomeMore, 0, dp(6))
@@ -2479,17 +2553,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow), popup)
         }
         for (a in menuActions()) {
-            val b = layoutInflater.inflate(R.layout.item_menu, grid, false) as ImageButton
-            val lp = GridLayout.LayoutParams().apply { width = dp(52); height = dp(52) }
-            b.setImageResource(a.icon)
-            b.setColorFilter(if (a.active()) on else off)
-            b.contentDescription = a.label
+            val b = menuCell(grid, a, on, off)
+            val lp = GridLayout.LayoutParams().apply { width = dp(MENU_CELL_W); height = dp(MENU_CELL_H) }
             b.setOnClickListener {
                 popup.dismiss()
                 a.run()
-                b.setColorFilter(if (a.active()) on else off)
+                tintMenuCell(b, a.active(), on, off)
             }
-            b.setOnLongClickListener { flash(a.label); true }
             grid.addView(b, lp)
         }
         val bar = pv.findViewById<SeekBar>(R.id.brightnessBar)

@@ -11,49 +11,134 @@
     <LinearLayout
         android:id="@+id/menuToolRow"
         android:layout_width="276dp"
-        android:layout_height="40dp"
+        android:layout_height="56dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <ImageButton
-            android:id="@+id/menuShape"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            style="@style/ShapeTool"
-            android:contentDescription="@string/cd_shape"
-            android:src="@drawable/ic_shape" />
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
 
-        <ImageButton
-            android:id="@+id/menuLasso"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            style="@style/ShapeTool"
-            android:contentDescription="@string/cd_lasso"
-            android:src="@drawable/ic_lasso" />
+            <ImageButton
+                android:id="@+id/menuShape"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_shape"
+                android:src="@drawable/ic_shape" />
 
-        <ImageButton
-            android:id="@+id/menuNote"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            style="@style/ShapeTool"
-            android:contentDescription="@string/cd_note"
-            android:src="@drawable/ic_note" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/mt_shape"
+                android:textColor="@color/icon"
+                android:textSize="10sp" />
 
-        <ImageButton
-            android:id="@+id/menuHighlight"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            style="@style/ShapeTool"
-            android:contentDescription="@string/cd_highlighter"
-            android:src="@drawable/ic_highlighter" />
+        </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/menuRedo"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            style="@style/ShapeTool"
-            android:contentDescription="@string/cd_redo"
-            android:src="@drawable/ic_redo" />
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageButton
+                android:id="@+id/menuLasso"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_lasso"
+                android:src="@drawable/ic_lasso" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/mt_lasso"
+                android:textColor="@color/icon"
+                android:textSize="10sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageButton
+                android:id="@+id/menuNote"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_note"
+                android:src="@drawable/ic_note" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/mt_note"
+                android:textColor="@color/icon"
+                android:textSize="10sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageButton
+                android:id="@+id/menuHighlight"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_highlighter"
+                android:src="@drawable/ic_highlighter" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/mt_highlighter"
+                android:textColor="@color/icon"
+                android:textSize="10sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <ImageButton
+                android:id="@+id/menuRedo"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                style="@style/ShapeTool"
+                android:contentDescription="@string/cd_redo"
+                android:src="@drawable/ic_redo" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/mt_redo"
+                android:textColor="@color/icon"
+                android:textSize="10sp" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

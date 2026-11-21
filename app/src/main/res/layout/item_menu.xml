@@ -1,6 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ImageButton xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- v56：菜单格 = 上面图标、下面 2~4 字短名；选中态由代码给图标和文字一起着色 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/menuBtn"
-    android:layout_width="52dp"
-    android:layout_height="52dp"
-    style="@style/MenuTool" />
+    android:layout_width="55dp"
+    android:layout_height="58dp"
+    android:background="@drawable/menu_bg"
+    android:clickable="true"
+    android:contentDescription="@string/cd_menu_item"
+    android:focusable="true"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingTop="4dp"
+    android:paddingBottom="3dp">
+
+    <ImageView
+        android:id="@+id/menuIcon"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:importantForAccessibility="no"
+        android:scaleType="centerInside" />
+
+    <TextView
+        android:id="@+id/menuLabel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:importantForAccessibility="no"
+        android:maxLines="1"
+        android:paddingStart="1dp"
+        android:paddingEnd="1dp"
+        android:textColor="@color/icon"
+        android:textSize="10sp" />
+
+</LinearLayout>
