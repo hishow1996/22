@@ -296,6 +296,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     /** v53：页面上原地键盘输入文字批注（编辑器浮在页面上方）。 */
     override fun onEditTextBox(req: TextBoxRequest, cb: (TextBoxResult?) -> Unit): Boolean {
         val host = findViewById<ViewGroup>(android.R.id.content) ?: return false
+        req.palette = colors.toList().toIntArray()
         TextBoxEditor(this, host, req, cb).show()
         return true
     }

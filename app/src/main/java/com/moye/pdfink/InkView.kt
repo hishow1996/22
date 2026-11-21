@@ -1789,7 +1789,11 @@ class InkView @JvmOverloads constructor(
         )
         val oldMark = old
         return h.onEditTextBox(req) { res ->
-            if (res != null) applyTextBoxResult(h, idx, oldMark, res, x0, y0)
+            // 编辑时把框拖走了：屏幕位移换成页面归一化位移
+            if (res != null) applyTextBoxResult(
+                h, idx, oldMark, res,
+                x0 + res.dx / (scale * w), y0 + res.dy / (scale * hh)
+            )
         }
     }
 
@@ -1809,7 +1813,7 @@ class InkView @JvmOverloads constructor(
             val w = width.toFloat(); val hh = height.toFloat()
             val wn = TextBoxMath.clampW(res.widthNorm)
             val nx = TextBoxMath.clampX(x0, wn)
-            val prov = Mark(old?.color ?: h.inkColor, TextBoxMath.size(res.sizeIdx), 255, Shapes.TEXTBOX,
+            val prov = Mark(res.color, TextBoxMath.size(res.sizeIdx), 255, Shapes.TEXTBOX,
                 floatArrayOf(nx, y0, nx + wn, (y0 + 0.05f).coerceAtMost(1f)),
                 TextBoxMath.bgWs(res.bg), old?.layer ?: h.activeLayer, res.text.trimEnd())
             // 按真实排版算出外框，y1 记成排版后的底边（外接矩形、擦除、套索都靠它）
