@@ -10,7 +10,7 @@
 
     <LinearLayout
         android:id="@+id/menuToolRow"
-        android:layout_width="300dp"
+        android:layout_width="240dp"
         android:layout_height="56dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -145,14 +145,14 @@
 
     <LinearLayout
         android:id="@+id/menuInkWrap"
-        android:layout_width="300dp"
+        android:layout_width="240dp"
         android:layout_height="wrap_content"
         android:contentDescription="@string/cd_menu_ink"
         android:orientation="vertical"
         android:visibility="gone">
 
         <HorizontalScrollView
-            android:layout_width="300dp"
+            android:layout_width="240dp"
             android:layout_height="40dp"
             android:scrollbars="none">
 
@@ -161,22 +161,32 @@
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
                 android:gravity="center_vertical"
-                android:orientation="horizontal" />
+                android:orientation="horizontal"
+                android:paddingStart="4dp" />
 
         </HorizontalScrollView>
+
+        <!-- v59：窄浮层放不下一整行，粗细 5 档单独一行 -->
+        <LinearLayout
+            android:id="@+id/menuInkRow2"
+            android:layout_width="240dp"
+            android:layout_height="30dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="4dp" />
 
 
     </LinearLayout>
 
     <ScrollView
-        android:layout_width="300dp"
+        android:layout_width="240dp"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:scrollbars="none">
 
         <LinearLayout
             android:id="@+id/menuSections"
-            android:layout_width="300dp"
+            android:layout_width="240dp"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
@@ -185,8 +195,9 @@
 
     <LinearLayout
         android:id="@+id/menuBrightRow"
-        android:layout_width="300dp"
+        android:layout_width="240dp"
         android:layout_height="36dp"
+        android:layout_marginTop="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 

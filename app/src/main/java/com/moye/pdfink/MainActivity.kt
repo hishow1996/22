@@ -204,7 +204,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private companion object MenuMetrics {
-        const val MENU_CELL_W = 58      // 5 列 × 58 = 290dp，浮层内宽 300dp，两边留空
+        const val MENU_CELL_W = 60      // v59：每行 4 个 × 60 = 240dp，正好撑满浮层内宽
         const val MENU_CELL_H = 62      // 图标 26 + 短名 12 + 上下留白
         const val MENU_DANGER = 0xFFD93025.toInt()
     }
@@ -1414,8 +1414,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /** 竖屏浮层里的调色 / 粗细 / 笔刷槽，功能与主条完全一致。 */
-    private fun buildMenuInkRow(row: LinearLayout, popup: PopupWindow? = null) {
+    private fun buildMenuInkRow(row: LinearLayout, row2: LinearLayout, popup: PopupWindow? = null) {
         row.removeAllViews()
+        row2.removeAllViews()
         val items = ArrayList<Triple<View, String, Int>>()
         fun refresh() {
             for ((v, kind, i) in items) {
@@ -1444,10 +1445,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             row.addView(v)
             items.add(Triple(v, kind, i))
         }
+        // 颜色 20dp + 间距 5dp，5 个 = 125dp；分隔 + 4 个笔刷槽 ≈ 80dp，窄浮层（240dp）一行放得下
+
         colors.forEachIndexed { i, _ ->
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply {
-                    marginEnd = dp(3)
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
+                    marginEnd = dp(5)
                 }
                 contentDescription = getString(R.string.cd_color)
                 setOnClickListener {
@@ -1461,48 +1464,45 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             add(v, "c", i)
         }
-        // 5 色 + 5 档 + 分隔 + 4 笔刷槽 ≈ 258dp，276dp 浮层一屏放得下
-        for (i in 0 until widths.size + 1) {
-            if (i < widths.size) {
-                val idx = i
-                val holder = FrameLayout(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(dp(18), dp(22)).apply {
-                        marginEnd = dp(2)
-                    }
-                    contentDescription = getString(R.string.cd_width_step, i + 1)
-                    isClickable = true
-                    setOnClickListener {
-                        if (currentTool == Tools.ERASER) eraserIndex = idx
-                        else widthIndex = idx
-                        savePrefs()
-                        refreshDots()
-                        refreshTools()
-                        refresh()
-                    }
+        // 粗细 5 档：单独一行，每档 40dp 宽的好点区
+        for (i in 0 until widths.size) {
+            val idx = i
+            val holder = FrameLayout(this).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(40), dp(26))
+                contentDescription = getString(R.string.cd_width_step, i + 1)
+                isClickable = true
+                setOnClickListener {
+                    if (currentTool == Tools.ERASER) eraserIndex = idx
+                    else widthIndex = idx
+                    savePrefs()
+                    refreshDots()
+                    refreshTools()
+                    refresh()
                 }
-                val bar = View(this).apply {
-                    layoutParams = FrameLayout.LayoutParams(
-                        dp(16), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
-                }
-                holder.addView(bar)
-                row.addView(holder)
-                items.add(Triple(bar, "w", i))
-            } else {
-                val sep = View(this).apply {
-                    layoutParams = LinearLayout.LayoutParams(dp(1), dp(18)).apply {
-                        marginStart = dp(3)
-                        marginEnd = dp(3)
-                    }
-                    setBackgroundColor(ContextCompat.getColor(
-                        this@MainActivity, R.color.divider))
-                }
-                row.addView(sep)
             }
+            val bar = View(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    dp(26), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
+            }
+            holder.addView(bar)
+            row2.addView(holder)
+            items.add(Triple(bar, "w", i))
+        }
+        run {
+            val sep = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(1), dp(18)).apply {
+                    marginStart = dp(3)
+                    marginEnd = dp(8)
+                }
+                setBackgroundColor(ContextCompat.getColor(
+                    this@MainActivity, R.color.divider))
+            }
+            row.addView(sep)
         }
         for (i in 0 until 4) {
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(12), dp(12)).apply {
-                    marginEnd = dp(2)
+                layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply {
+                    marginEnd = dp(5)
                 }
                 contentDescription = getString(R.string.cd_brush_slot)
                 val idx = i
@@ -2561,12 +2561,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val read = MenuSection(getString(R.string.mt_sec_read), listOfNotNull(
             mi(R.string.cd_overview), mi(R.string.cd_nav), mi(R.string.cd_doc_search),
             mi(R.string.cd_ocr), mi(R.string.cd_tabs), mi(R.string.cd_snapshots),
-            mi(R.string.cd_home), mi(R.string.cd_immersive),
-            mi(R.string.cd_edge, MK.TOGGLE), mi(R.string.cd_volume, MK.TOGGLE)))
+            mi(R.string.cd_home), mi(R.string.cd_immersive)))
         val view = MenuSection(getString(R.string.mt_sec_view), listOfNotNull(
             mi(R.string.cd_spread, MK.TOGGLE), rotate,
             mi(R.string.cd_autocrop, MK.TOGGLE), tint,
-            mi(R.string.cd_dark, MK.TOGGLE_CLOSE), mi(R.string.cd_awake, MK.TOGGLE)),
+            mi(R.string.cd_dark, MK.TOGGLE_CLOSE), mi(R.string.cd_awake, MK.TOGGLE),
+            mi(R.string.cd_edge, MK.TOGGLE), mi(R.string.cd_volume, MK.TOGGLE)),
             segment = listOfNotNull(
                 mi(R.string.cd_fit_screen), mi(R.string.cd_fit_width),
                 mi(if (state.landscape) R.string.cd_double_page else R.string.cd_fill_screen)))
@@ -2634,7 +2634,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             inkWrap.visibility = View.GONE
         } else {
             inkWrap.visibility = View.VISIBLE
-            buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow), popup)
+            buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow),
+                pv.findViewById<LinearLayout>(R.id.menuInkRow2), popup)
         }
         // v57：分组 + 开关不关菜单。所有格子登记在 refreshers 里，开关点完统一刷新状态
         val refreshers = ArrayList<() -> Unit>()
@@ -2651,7 +2652,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 setPadding(dp(6), dp(14), 0, dp(4))
             })
         }
-        val brightRow = pv.findViewById<View>(R.id.menuBrightRow)
         for (sec in menuSections()) {
             if (sec.items.isEmpty() && sec.segment.isEmpty()) continue
             title(sec.title)
@@ -2673,7 +2673,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { topMargin = dp(4); bottomMargin = dp(6) })
             }
-            val grid = GridLayout(this).apply { columnCount = 5 }
+            val grid = GridLayout(this).apply { columnCount = 4 }
             for (item in sec.items) {
                 val b = menuCell(grid, item, on, off)
                 b.setOnClickListener {
@@ -2691,11 +2691,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 refreshers.add { tintMenuCell(b, item, on, off) }
             }
             sections.addView(grid)
-            // 亮度条归进「显示」组，不再孤零零挂在整个菜单最底下
-            if (sec.title == getString(R.string.mt_sec_view)) {
-                (brightRow.parent as ViewGroup).removeView(brightRow)
-                sections.addView(brightRow)
-            }
         }
         val bar = pv.findViewById<SeekBar>(R.id.brightnessBar)
         bar.progress = ((state.brightness + 1f) * 50f).toInt().coerceIn(0, 100)
@@ -2713,7 +2708,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 saveSessionNow()
             }
         })
-        popup.showAsDropDown(findViewById(R.id.btnMore), 0, dp(6))
+        // v59：浮层高度封顶——内容比锚点下方空间高就固定高度，中间分组区滚动，
+        // 亮度条始终钉在最底（以前整体超出屏幕，亮度条被切掉）
+        val anchor = findViewById<View>(R.id.btnMore)
+        val loc = IntArray(2)
+        anchor.getLocationOnScreen(loc)
+        val room = resources.displayMetrics.heightPixels - (loc[1] + anchor.height + dp(6)) - dp(16)
+        pv.measure(
+            View.MeasureSpec.makeMeasureSpec(resources.displayMetrics.widthPixels, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        if (pv.measuredHeight > room && room > dp(240)) popup.height = room
+        popup.showAsDropDown(anchor, 0, dp(6))
     }
 
     // ----- 总览 / 选页导出 -----
