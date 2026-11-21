@@ -2,15 +2,15 @@
 <!-- v56：菜单格 = 上面图标、下面 2~4 字短名；选中态由代码给图标和文字一起着色 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/menuBtn"
-    android:layout_width="55dp"
-    android:layout_height="58dp"
+    android:layout_width="58dp"
+    android:layout_height="62dp"
     android:background="@drawable/menu_bg"
     android:clickable="true"
     android:contentDescription="@string/cd_menu_item"
     android:focusable="true"
     android:gravity="center"
     android:orientation="vertical"
-    android:paddingTop="4dp"
+    android:paddingTop="6dp"
     android:paddingBottom="3dp">
 
     <FrameLayout
@@ -24,21 +24,6 @@
             android:layout_gravity="center"
             android:importantForAccessibility="no"
             android:scaleType="centerInside" />
-
-        <!-- v57：开关显示 开/关；有档位的显示当前值（50%、强、小…）；纯动作不显示 -->
-        <TextView
-            android:id="@+id/menuBadge"
-            android:layout_width="wrap_content"
-            android:layout_height="13dp"
-            android:layout_gravity="top|end"
-            android:gravity="center"
-            android:importantForAccessibility="no"
-            android:includeFontPadding="false"
-            android:minWidth="15dp"
-            android:paddingStart="3dp"
-            android:paddingEnd="3dp"
-            android:textSize="9sp"
-            android:visibility="gone" />
 
     </FrameLayout>
 
@@ -55,6 +40,6 @@
         android:paddingStart="1dp"
         android:paddingEnd="1dp"
         android:textColor="@color/icon"
-        android:textSize="10sp" />
+        android:textSize="11sp" />
 
 </LinearLayout>

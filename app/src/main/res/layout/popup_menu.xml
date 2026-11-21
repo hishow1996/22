@@ -10,7 +10,7 @@
 
     <LinearLayout
         android:id="@+id/menuToolRow"
-        android:layout_width="276dp"
+        android:layout_width="300dp"
         android:layout_height="56dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -142,34 +142,17 @@
 
     </LinearLayout>
 
-    <View
-        android:layout_width="276dp"
-        android:layout_height="1dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp"
-        android:background="@color/divider" />
 
     <LinearLayout
         android:id="@+id/menuInkWrap"
-        android:layout_width="276dp"
+        android:layout_width="300dp"
         android:layout_height="wrap_content"
         android:contentDescription="@string/cd_menu_ink"
         android:orientation="vertical"
         android:visibility="gone">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:alpha="0.6"
-            android:includeFontPadding="false"
-            android:paddingStart="4dp"
-            android:paddingBottom="2dp"
-            android:text="@string/mt_sec_pen"
-            android:textColor="@color/icon"
-            android:textSize="11sp" />
-
         <HorizontalScrollView
-            android:layout_width="276dp"
+            android:layout_width="300dp"
             android:layout_height="40dp"
             android:scrollbars="none">
 
@@ -182,40 +165,27 @@
 
         </HorizontalScrollView>
 
-        <View
-            android:layout_width="276dp"
-            android:layout_height="1dp"
-            android:layout_marginTop="4dp"
-            android:layout_marginBottom="4dp"
-            android:background="@color/divider" />
 
     </LinearLayout>
 
     <ScrollView
-        android:layout_width="276dp"
+        android:layout_width="300dp"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:scrollbars="none">
 
         <LinearLayout
             android:id="@+id/menuSections"
-            android:layout_width="276dp"
+            android:layout_width="300dp"
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
     </ScrollView>
 
-    <View
-        android:id="@+id/menuBottomDivider"
-        android:layout_width="276dp"
-        android:layout_height="1dp"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp"
-        android:background="@color/divider" />
 
     <LinearLayout
         android:id="@+id/menuBrightRow"
-        android:layout_width="276dp"
+        android:layout_width="300dp"
         android:layout_height="36dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">

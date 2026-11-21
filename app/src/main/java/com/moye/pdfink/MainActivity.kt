@@ -151,24 +151,16 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         DANGER         // 清除类：红色，关菜单
     }
 
-    private class MenuItem(
-        val a: MenuAction, val kind: MK = MK.ACTION,
-        val value: (() -> String)? = null
-    )
+    private class MenuItem(val a: MenuAction, val kind: MK = MK.ACTION)
 
     private class MenuSection(
         val title: String, val items: List<MenuItem>,
         val segment: List<MenuItem> = emptyList()
     )
 
-    private fun badgeBg(c: Int, fill: Boolean): GradientDrawable = GradientDrawable().apply {
-        cornerRadius = dp(7).toFloat()
-        if (fill) setColor(c) else { setColor(Color.TRANSPARENT); setStroke(dp(1), c) }
-    }
-
     /**
-     * v56/v57：一格菜单 = 上图标、下短名，右上角角标（开关 开/关；有档位的显示当前值）。
-     * 选中（active）图标和文字变蓝；DANGER 一律红色。长名在 contentDescription，长按弹出。
+     * v56/v57：一格菜单 = 上图标、下短名。开关只靠颜色区分：开=蓝、关=灰（v57 去掉了
+     * 开/关角标）；DANGER 一律红色。长名在 contentDescription，长按弹出。
      */
     private fun menuCell(parent: ViewGroup, item: MenuItem, on: Int, off: Int): View {
         val a = item.a
@@ -182,26 +174,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private fun tintMenuCell(v: View, item: MenuItem, on: Int, off: Int) {
-        val active = item.a.active()
         val c = when {
             item.kind == MK.DANGER -> MENU_DANGER
-            active -> on
+            item.a.active() -> on
             else -> off
         }
         v.findViewById<ImageView>(R.id.menuIcon).setColorFilter(c)
         v.findViewById<TextView>(R.id.menuLabel).setTextColor(c)
-        val badge = v.findViewById<TextView>(R.id.menuBadge)
-        val text = when {
-            item.value != null -> item.value.invoke()
-            item.kind == MK.TOGGLE || item.kind == MK.TOGGLE_CLOSE ->
-                getString(if (active) R.string.mt_on else R.string.mt_off)
-            else -> null
-        }
-        if (text.isNullOrEmpty()) { badge.visibility = View.GONE; return }
-        badge.visibility = View.VISIBLE
-        badge.text = text
-        badge.setTextColor(if (active) Color.WHITE else off)
-        badge.background = badgeBg(if (active) on else (off and 0x00FFFFFF) or 0x66000000, active)
     }
 
     /** v57：分段选择一格（页面显示：适应屏 / 适宽 / 铺满|双页）。 */
@@ -225,8 +204,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     private companion object MenuMetrics {
-        const val MENU_CELL_W = 55      // 5 列 × 55 = 275dp，贴合 276dp 的浮层宽
-        const val MENU_CELL_H = 58      // 图标 26 + 短名 12 + 上下留白
+        const val MENU_CELL_W = 58      // 5 列 × 58 = 290dp，浮层内宽 300dp，两边留空
+        const val MENU_CELL_H = 62      // 图标 26 + 短名 12 + 上下留白
         const val MENU_DANGER = 0xFFD93025.toInt()
     }
 
@@ -2564,39 +2543,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      */
     private fun menuSections(): List<MenuSection> {
         val all = menuActions().associateBy { it.label }
-        fun mi(id: Int, kind: MK = MK.ACTION, value: (() -> String)? = null): MenuItem? =
-            all[getString(id)]?.let { MenuItem(it, kind, value) }
-        fun offOr(on: Boolean, v: String) = if (on) v else getString(R.string.mt_off)
-
-        val pressure = mi(R.string.cd_pressure, MK.SHEET) {
-            when (PressureCurve.coerce(state.pressureLevel)) {
-                PressureCurve.SOFT -> getString(R.string.mt_soft)
-                PressureCurve.NORMAL -> getString(R.string.mt_normal)
-                PressureCurve.STRONG -> getString(R.string.mt_strong)
-                else -> getString(R.string.mt_off)
-            }
-        }
-        val finger = mi(R.string.cd_finger_offset, MK.SHEET) {
-            when (FingerOffset.clamp(state.fingerOffset)) {
-                1 -> getString(R.string.finger_level_small)
-                2 -> getString(R.string.finger_level_medium)
-                3 -> getString(R.string.finger_level_large)
-                else -> getString(R.string.mt_off)
-            }
-        }
-        val shrink = mi(R.string.cd_line_shrink, MK.SHEET) {
-            offOr(state.lineShrink != LineShrink.OFF, "${LineShrink.clamp(state.lineShrink)}%")
-        }
-        val tint = mi(R.string.cd_tint, MK.SHEET) {
-            when (state.tint.coerceIn(0, 2)) {
-                1 -> getString(R.string.mt_tint_warm)
-                2 -> getString(R.string.mt_tint_night)
-                else -> getString(R.string.mt_tint_white)
-            }
-        }
-        val rotate = mi(R.string.cd_rotate, MK.ACTION) {
-            if (state.pageRotation != 0) "${state.pageRotation}°" else ""
-        }
+        fun mi(id: Int, kind: MK = MK.ACTION): MenuItem? =
+            all[getString(id)]?.let { MenuItem(it, kind) }
+        val pressure = mi(R.string.cd_pressure)
+        val finger = mi(R.string.cd_finger_offset)
+        val shrink = mi(R.string.cd_line_shrink)
+        val tint = mi(R.string.cd_tint)
+        val rotate = mi(R.string.cd_rotate)
 
         val write = MenuSection(getString(R.string.mt_sec_write), listOfNotNull(
             mi(R.string.cd_loupe), pressure, finger,
@@ -2695,7 +2648,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 text = t; textSize = 11f; alpha = 0.6f
                 setTextColor(off)
                 includeFontPadding = false
-                setPadding(dp(4), dp(10), 0, dp(2))
+                setPadding(dp(6), dp(14), 0, dp(4))
             })
         }
         val brightRow = pv.findViewById<View>(R.id.menuBrightRow)
@@ -2705,21 +2658,20 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             if (sec.segment.isNotEmpty()) {
                 val seg = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
-                    background = GradientDrawable().apply {
-                        cornerRadius = dp(10).toFloat(); setColor(0x14000000)
-                    }
-                    setPadding(dp(2), dp(2), dp(2), dp(2))
+                    setPadding(dp(4), 0, dp(4), 0)
                 }
                 for (item in sec.segment) {
                     val t = segmentCell(item, on, off)
                     t.setOnClickListener { popup.dismiss(); item.a.run() }
-                    seg.addView(t, LinearLayout.LayoutParams(0, dp(34), 1f))
+                    seg.addView(t, LinearLayout.LayoutParams(0, dp(30), 1f).apply {
+                        marginStart = dp(2); marginEnd = dp(2)
+                    })
                     refreshers.add { tintSegment(t, on, off) }
                     tintSegment(t, on, off)
                 }
                 sections.addView(seg, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(2); bottomMargin = dp(2) })
+                ).apply { topMargin = dp(4); bottomMargin = dp(6) })
             }
             val grid = GridLayout(this).apply { columnCount = 5 }
             for (item in sec.items) {
@@ -2743,7 +2695,6 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             if (sec.title == getString(R.string.mt_sec_view)) {
                 (brightRow.parent as ViewGroup).removeView(brightRow)
                 sections.addView(brightRow)
-                pv.findViewById<View>(R.id.menuBottomDivider).visibility = View.GONE
             }
         }
         val bar = pv.findViewById<SeekBar>(R.id.brightnessBar)
