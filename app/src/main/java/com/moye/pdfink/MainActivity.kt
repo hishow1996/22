@@ -2368,15 +2368,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             state.textSnap = !state.textSnap; savePrefs()
         },
         MenuAction(R.drawable.ic_shrink, getString(R.string.cd_line_shrink), { state.lineShrink != LineShrink.OFF }) {
-            // v52：关 → 60% → 50% → 40% → 关
-            state.lineShrink = LineShrink.next(state.lineShrink)
-            savePrefs()
-            flash(getString(when (state.lineShrink) {
-                1 -> R.string.line_shrink_60
-                2 -> R.string.line_shrink_50
-                3 -> R.string.line_shrink_40
-                else -> R.string.line_shrink_off
-            }))
+            // v54：缩小比例改百分比滑块后，顶部按钮统一弹设置面板（与文件菜单对齐）
+            showLineShrinkSheet()
         },
         MenuAction(R.drawable.ic_history, getString(R.string.cd_snapshots), { false }) {
             showSnapshots()
