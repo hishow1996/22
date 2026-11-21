@@ -16,7 +16,17 @@ import kotlin.math.sqrt
  */
 object LineShrink {
     const val OFF = 0
-    const val MAX_LEVEL = 3
+
+    /**
+     * v53：缩小比例由「档位」改为直接存百分比，可在 [MIN_PCT, MAX_PCT] 内按 [STEP_PCT] 调（滑块），
+     * 0 表示关。旧版存的是 1/2/3 档（60/50/40%），由 [fromLegacyLevel] 迁移。
+     */
+    const val MIN_PCT = 30
+    const val MAX_PCT = 90
+    const val STEP_PCT = 5
+    const val DEFAULT_PCT = 50
+    /** 常用快捷值（旧三档）。 */
+    val PRESETS = intArrayOf(60, 50, 40)
 
     /** 停笔多久后缩小（毫秒）。 */
     const val IDLE_MS = 1000L
@@ -24,28 +34,35 @@ object LineShrink {
     const val MIN_H_DP = 24f
     const val MAX_H_DP = 130f
 
-    /** 档位 → 缩小到原来的比例：关 / 60% / 50% / 40%。 */
-    fun frac(level: Int): Float = when (level) {
-        1 -> 0.6f
-        2 -> 0.5f
-        3 -> 0.4f
-        else -> 1f
+    /** 把任意值规整成合法百分比：<= 0 → 关；否则夹到 [MIN, MAX] 并对齐到步长。 */
+    fun clamp(pct: Int): Int {
+        if (pct <= 0) return OFF
+        val c = pct.coerceIn(MIN_PCT, MAX_PCT)
+        return (((c + STEP_PCT / 2) / STEP_PCT) * STEP_PCT).coerceIn(MIN_PCT, MAX_PCT)
     }
 
-    fun next(level: Int): Int = if (level >= MAX_LEVEL || level < 0) OFF else level + 1
-    fun clamp(level: Int): Int = level.coerceIn(OFF, MAX_LEVEL)
+    /** 百分比 → 缩小到原来的比例；关返回 1。 */
+    fun frac(pct: Int): Float = if (clamp(pct) == OFF) 1f else clamp(pct) / 100f
+
+    /** 旧版档位（0 关 / 1→60% / 2→50% / 3→40%）→ 百分比。 */
+    fun fromLegacyLevel(level: Int): Int = when (level) {
+        1 -> 60
+        2 -> 50
+        3 -> 40
+        else -> OFF
+    }
 
     /** 缩小方案：比例 s，锚点 (ax, ay)（归一化）。 */
     class Plan(val s: Float, val ax: Float, val ay: Float)
 
     /**
      * 这一段（strokes，每笔归一化 x,y 交错）要不要缩、怎么缩。不缩返回 null：
-     *  - 档位关；没有点；
+     *  - 关（0%）；没有点；
      *  - 外框高不在 [MIN_H_DP, MAX_H_DP]（页面像素 / dp），或者外框宽超过页宽 80%（多半在画图）；
      *  - 只有一笔、而且这一笔本身是个图形 / 直线（圈、框、划线）——那是标注不是写字。
      */
-    fun plan(strokes: List<FloatArray>, w: Float, h: Float, density: Float, level: Int): Plan? {
-        if (level == OFF || strokes.isEmpty() || w <= 0f || h <= 0f) return null
+    fun plan(strokes: List<FloatArray>, w: Float, h: Float, density: Float, pct: Int): Plan? {
+        if (clamp(pct) == OFF || strokes.isEmpty() || w <= 0f || h <= 0f) return null
         var l = Float.MAX_VALUE; var t = Float.MAX_VALUE
         var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
         var n = 0
@@ -63,7 +80,7 @@ object LineShrink {
         if (hPx < MIN_H_DP * density || hPx > MAX_H_DP * density) return null
         if (wPx > 0.8f * w) return null
         if (strokes.size == 1 && ShapeSnap.detect(strokes[0], w, h) != null) return null
-        return Plan(frac(level), l, (t + b) / 2f)
+        return Plan(frac(pct), l, (t + b) / 2f)
     }
 
     /** 把点按方案缩小（在像素空间等比，再换回归一化，所以横竖比例不变）。 */

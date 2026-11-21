@@ -603,7 +603,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         state.holdSnap = p.getBoolean("holdSnap", true)
         state.textSnap = p.getBoolean("textSnap", true)
         state.loupeFrac = p.getFloat("loupeFrac", LoupeMath.fracOf(3f))
-        state.lineShrink = LineShrink.clamp(p.getInt("lineShrink", LineShrink.OFF))
+        // v53：档位改成百分比。新键没有时，用旧版的 1/2/3 档迁移（60 / 50 / 40%）
+        state.lineShrink = LineShrink.clamp(
+            if (p.contains("lineShrinkPct")) p.getInt("lineShrinkPct", LineShrink.OFF)
+            else LineShrink.fromLegacyLevel(p.getInt("lineShrink", 0))
+        )
         state.brightness = p.getFloat("brightness", 0f)
         // v16：默认浏览。老版本存过 false 的也算升级首次，强制回浏览；
         // 之后用户切到做题会写进偏好，重开保持上次模式。
@@ -683,7 +687,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             putBoolean("holdSnap", state.holdSnap)
             putBoolean("textSnap", state.textSnap)
             putFloat("loupeFrac", state.loupeFrac)
-            putInt("lineShrink", state.lineShrink)
+            putInt("lineShrinkPct", state.lineShrink)
         }.apply()
         sessionRepo.setRotation(state.pageRotation)
         sessionRepo.setVolumeFlip(state.volumeFlip)
@@ -1848,15 +1852,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             state.textSnap = !state.textSnap; savePrefs()
         },
         MenuAction(R.drawable.ic_shrink, getString(R.string.cd_line_shrink), { state.lineShrink != LineShrink.OFF }) {
-            // v52：关 → 60% → 50% → 40% → 关
-            state.lineShrink = LineShrink.next(state.lineShrink)
-            savePrefs()
-            flash(getString(when (state.lineShrink) {
-                1 -> R.string.line_shrink_60
-                2 -> R.string.line_shrink_50
-                3 -> R.string.line_shrink_40
-                else -> R.string.line_shrink_off
-            }))
+            showLineShrinkSheet()
         },
         MenuAction(R.drawable.ic_stylus, getString(R.string.cd_stylus), {
             state.stylusOnly
@@ -2288,15 +2284,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_pressure, getString(R.string.cd_pressure), {
             state.pressureLevel != PressureCurve.OFF
         }) {
-            cyclePressure()
+            showPressureSheet()
         },
         MenuAction(R.drawable.ic_eye, getString(R.string.cd_tint), { state.tint != 0 }) {
-            state.tint = (state.tint + 1) % 3
-            savePrefs()
-            activeViews.values.forEach { it.setPageLook(state.tint) }
-            adapter?.invalidateRenderCache()
-            adapter?.notifyDataSetChanged()
-            saveSessionNow()
+            showTintSheet()
         },
         MenuAction(R.drawable.ic_spread, getString(R.string.cd_spread), { state.spread }) {
             state.spread = !state.spread
@@ -2334,15 +2325,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         MenuAction(R.drawable.ic_finger_offset, getString(R.string.cd_finger_offset), {
             state.fingerOffset != FingerOffset.OFF
         }) {
-            // v47：关 → 小 → 中 → 大 → 关；落笔点上移到手指上方，光标环标出落点
-            state.fingerOffset = FingerOffset.next(state.fingerOffset)
-            savePrefs()
-            flash(getString(when (state.fingerOffset) {
-                1 -> R.string.finger_offset_small
-                2 -> R.string.finger_offset_medium
-                3 -> R.string.finger_offset_large
-                else -> R.string.finger_offset_off
-            }))
+            showFingerOffsetSheet()
         },
         MenuAction(R.drawable.ic_edge, getString(R.string.cd_edge), { state.edgeFlip }) {
             state.edgeFlip = !state.edgeFlip; savePrefs()
@@ -3372,15 +3355,79 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         if (lastDocQuery.isNotEmpty()) runSearch()
     }
 
-    private fun cyclePressure() {
-        state.pressureLevel = PressureCurve.next(state.pressureLevel)
-        savePrefs()
-        flash(getString(when (state.pressureLevel) {
-            PressureCurve.OFF -> R.string.pressure_off
-            PressureCurve.SOFT -> R.string.pressure_soft
-            PressureCurve.STRONG -> R.string.pressure_strong
-            else -> R.string.pressure_normal
-        }))
+    // ----- v53：设置面板（取代「点一下图标换一档」）-----
+
+    /** 关着时滑块停在这个值上，一拖就用它起步。 */
+    private var lastShrinkPct = LineShrink.DEFAULT_PCT
+
+    private fun showLineShrinkSheet() {
+        if (state.lineShrink != LineShrink.OFF) lastShrinkPct = state.lineShrink
+        SettingSheet(this).showPercent(
+            title = getString(R.string.shrink_sheet_title),
+            hint = getString(R.string.shrink_sheet_hint),
+            percent = state.lineShrink,
+            minPct = LineShrink.MIN_PCT, maxPct = LineShrink.MAX_PCT, step = LineShrink.STEP_PCT,
+            presets = LineShrink.PRESETS,
+            remembered = lastShrinkPct
+        ) { pct ->
+            state.lineShrink = LineShrink.clamp(pct)
+            if (state.lineShrink != LineShrink.OFF) lastShrinkPct = state.lineShrink
+            savePrefs()
+        }
+    }
+
+    private fun showPressureSheet() {
+        SettingSheet(this).showChoices(
+            title = getString(R.string.pressure_sheet_title),
+            hint = getString(R.string.pressure_sheet_hint),
+            choices = listOf(
+                SettingSheet.Choice(getString(R.string.pressure_level_off), getString(R.string.pressure_desc_off)),
+                SettingSheet.Choice(getString(R.string.pressure_level_soft), getString(R.string.pressure_desc_soft)),
+                SettingSheet.Choice(getString(R.string.pressure_level_normal), getString(R.string.pressure_desc_normal)),
+                SettingSheet.Choice(getString(R.string.pressure_level_strong), getString(R.string.pressure_desc_strong))
+            ),
+            selected = PressureCurve.coerce(state.pressureLevel)
+        ) { i ->
+            state.pressureLevel = PressureCurve.coerce(i)
+            savePrefs()
+        }
+    }
+
+    private fun showFingerOffsetSheet() {
+        SettingSheet(this).showChoices(
+            title = getString(R.string.finger_sheet_title),
+            hint = getString(R.string.finger_sheet_hint),
+            choices = listOf(
+                SettingSheet.Choice(getString(R.string.finger_level_off), getString(R.string.finger_desc_off)),
+                SettingSheet.Choice(getString(R.string.finger_level_small), getString(R.string.finger_desc_small)),
+                SettingSheet.Choice(getString(R.string.finger_level_medium), getString(R.string.finger_desc_medium)),
+                SettingSheet.Choice(getString(R.string.finger_level_large), getString(R.string.finger_desc_large))
+            ),
+            selected = FingerOffset.clamp(state.fingerOffset)
+        ) { i ->
+            state.fingerOffset = FingerOffset.clamp(i)
+            savePrefs()
+        }
+    }
+
+    private fun showTintSheet() {
+        SettingSheet(this).showChoices(
+            title = getString(R.string.tint_sheet_title),
+            hint = getString(R.string.tint_sheet_hint),
+            choices = listOf(
+                SettingSheet.Choice(getString(R.string.tint_level_white), getString(R.string.tint_desc_white), 0xFFFFFFFF.toInt()),
+                SettingSheet.Choice(getString(R.string.tint_level_warm), getString(R.string.tint_desc_warm), 0xFFF2E1C4.toInt()),
+                SettingSheet.Choice(getString(R.string.tint_level_night), getString(R.string.tint_desc_night), 0xFF1B1F27.toInt())
+            ),
+            selected = state.tint.coerceIn(0, 2)
+        ) { i ->
+            state.tint = i
+            savePrefs()
+            activeViews.values.forEach { it.setPageLook(state.tint) }
+            adapter?.invalidateRenderCache()
+            adapter?.notifyDataSetChanged()
+            saveSessionNow()
+        }
     }
 
     // ----- 导出 -----

@@ -42,7 +42,7 @@ class UiState {
     @Volatile var textSnap = true
     /** v52：放大书写条的倍数（窗口宽占整页宽的比例），默认 3×。 */
     @Volatile var loupeFrac = LoupeMath.fracOf(3f)
-    /** v52：写完自动缩小档位，0 关 / 1 → 60% / 2 → 50% / 3 → 40%，见 [LineShrink]。 */
+    /** 写完自动缩小：缩到原来的百分比，0 关，其余 30..90（步长 5），见 [LineShrink]。v53 起由档位改为百分比。 */
     @Volatile var lineShrink = LineShrink.OFF
     @Volatile var tempEraserOn = true
     // v5：竖屏时对开自动降级，用户设置原样保留，转回横屏自动恢复
