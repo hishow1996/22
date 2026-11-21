@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- v53：统一设置面板 -->
+    <!-- v53：统一设置面板；v55 起瘦身：说明段落 / 预览 / 完成按钮不再显示，下面带 hint / before / after 的串保留只是为了调用处不用改 -->
     <string name="sheet_done">完成</string>
     <string name="sheet_off">关</string>
 
@@ -20,10 +20,10 @@
     <string name="pressure_level_soft">弱</string>
     <string name="pressure_level_normal">标准</string>
     <string name="pressure_level_strong">强</string>
-    <string name="pressure_desc_off">粗细只和笔速有关，不随力度变化。</string>
-    <string name="pressure_desc_soft">力度对粗细影响较小，线条更均匀。</string>
-    <string name="pressure_desc_normal">标准手感，轻重有变化又不夸张。</string>
-    <string name="pressure_desc_strong">力度对粗细影响明显，轻重对比大，适合写字有笔锋。</string>
+    <string name="pressure_desc_off">粗细只看笔速</string>
+    <string name="pressure_desc_soft">力度影响小，线条均匀</string>
+    <string name="pressure_desc_normal">轻重有变化，不夸张</string>
+    <string name="pressure_desc_strong">轻重对比大，适合写笔锋</string>
 
     <!-- 手指书写偏移 -->
     <string name="finger_sheet_title">手指书写偏移</string>
@@ -32,10 +32,10 @@
     <string name="finger_level_small">小</string>
     <string name="finger_level_medium">中</string>
     <string name="finger_level_large">大</string>
-    <string name="finger_desc_off">笔迹落在手指正下方（默认）。</string>
-    <string name="finger_desc_small">笔迹落在指尖上方约 32dp，偏移最小，适合手指较细。</string>
-    <string name="finger_desc_medium">笔迹落在指尖上方约 48dp，刚好露出指尖上方，多数人合适。</string>
-    <string name="finger_desc_large">笔迹落在指尖上方约 64dp，手指粗或握得靠上时选这档。</string>
+    <string name="finger_desc_off">笔迹落在手指正下方</string>
+    <string name="finger_desc_small">上移约 32dp，适合手指细</string>
+    <string name="finger_desc_medium">上移约 48dp，多数人合适</string>
+    <string name="finger_desc_large">上移约 64dp，手指粗选这档</string>
 
     <!-- 页面底色 -->
     <string name="tint_sheet_title">页面底色</string>
@@ -43,7 +43,7 @@
     <string name="tint_level_white">白底</string>
     <string name="tint_level_warm">护眼</string>
     <string name="tint_level_night">夜间</string>
-    <string name="tint_desc_white">保持文件原来的颜色。</string>
-    <string name="tint_desc_warm">偏暖的米黄色，长时间看更柔和。</string>
-    <string name="tint_desc_night">深底浅字（反色），夜里看更不刺眼。</string>
+    <string name="tint_desc_white">保持文件原色</string>
+    <string name="tint_desc_warm">偏暖米黄，更柔和</string>
+    <string name="tint_desc_night">深底浅字，夜里不刺眼</string>
 </resources>
