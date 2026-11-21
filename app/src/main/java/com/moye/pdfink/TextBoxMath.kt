@@ -1,37 +1,30 @@
 package com.moye.pdfink
 
-import kotlin.math.abs
 
 /**
- * v53：文字批注框的纯数学（字号档、宽度 / 位置限位、屏幕 ↔ 页面换算）。不碰 Android，可单测。
+ * v53：文字批注框的纯数学（字号、宽度 / 位置限位、屏幕 ↔ 页面换算）。不碰 Android，可单测。
  * 排版和绘制在 [TextBoxGeometry]。
  */
 object TextBoxMath {
-    /** 字号四档（页面短边的比例）：小 / 中 / 大 / 特大。印刷正文大约 0.014~0.02。 */
-    val SIZES = floatArrayOf(0.018f, 0.026f, 0.036f, 0.05f)
-    const val DEFAULT_SIZE = 1
+    /** 字号（页面短边的比例）连续可调：拖角缩放时不分档。印刷正文大约 0.014~0.02。 */
+    const val MIN_SIZE = 0.012f
+    const val MAX_SIZE = 0.09f
+    const val DEFAULT_SIZE = 0.026f
+
+    fun clampSize(frac: Float): Float = frac.coerceIn(MIN_SIZE, MAX_SIZE)
+
+    /**
+     * 拖右下角等比缩放：宽度从 startW 拖到 newW，字号同比例变。
+     * 字号到上下限就停在限值（宽度仍可继续变，字不再变）。
+     */
+    fun scaledSize(startSize: Float, startW: Float, newW: Float): Float {
+        if (startW <= 0f) return clampSize(startSize)
+        return clampSize(startSize * newW / startW)
+    }
 
     /** 新文字框的默认宽（页宽的比例），自动换行；最窄不小于 [MIN_W]。 */
     const val DEFAULT_W = 0.6f
     const val MIN_W = 0.12f
-
-    fun size(idx: Int): Float = SIZES[idx.coerceIn(0, SIZES.size - 1)]
-
-    /** 存下来的字号比例 → 最近的一档（旧数据 / 手改数据也不会出错）。 */
-    fun nearestSize(frac: Float): Int {
-        var best = 0
-        var bd = Float.MAX_VALUE
-        for (i in SIZES.indices) {
-            val d = abs(SIZES[i] - frac)
-            if (d < bd) { bd = d; best = i }
-        }
-        return best
-    }
-
-    fun clampIdx(idx: Int): Int = idx.coerceIn(0, SIZES.size - 1)
-
-    /** 字号档 +1 / -1，到头不动。 */
-    fun step(idx: Int, delta: Int): Int = clampIdx(idx + delta)
 
     /** 宽度限位：不窄于 MIN_W、不超过页面（左边已定时放不下就缩窄，缩到 MIN_W 为止）。 */
     fun clampW(wNorm: Float): Float = wNorm.coerceIn(MIN_W, 1f)

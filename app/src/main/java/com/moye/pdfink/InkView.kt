@@ -1764,7 +1764,7 @@ class InkView @JvmOverloads constructor(
         val w = width.toFloat(); val hh = height.toFloat()
         val old = if (idx >= 0) marks.getOrNull(idx) else null
         val isBox = old != null && old.shape == Shapes.TEXTBOX
-        val sizeIdx = if (isBox) TextBoxMath.nearestSize(old!!.width) else TextBoxMath.DEFAULT_SIZE
+        val sizeFrac = if (isBox) TextBoxMath.clampSize(old!!.width) else TextBoxMath.DEFAULT_SIZE
         val bg = if (isBox) TextBoxMath.hasBg(old!!.ws) else true
         val color = old?.color ?: h.inkColor
         val x0: Float; val y0: Float; val wn: Float
@@ -1785,7 +1785,7 @@ class InkView @JvmOverloads constructor(
         if (!(scale > 0f)) return false
         val req = TextBoxRequest(
             a[0], a[1], wn * w * scale, scale, w, min(w, hh),
-            old?.text ?: "", sizeIdx, bg, color, old == null
+            old?.text ?: "", sizeFrac, bg, color, old == null
         )
         val oldMark = old
         return h.onEditTextBox(req) { res ->
@@ -1806,14 +1806,14 @@ class InkView @JvmOverloads constructor(
         if (old != null && idx < 0) return
         before = ArrayList(marks)
         val blank = res.text.isBlank()
-        if (res.delete || blank) {
+        if (blank) {
             if (idx < 0) return
             marks.removeAt(idx)
         } else {
             val w = width.toFloat(); val hh = height.toFloat()
             val wn = TextBoxMath.clampW(res.widthNorm)
             val nx = TextBoxMath.clampX(x0, wn)
-            val prov = Mark(res.color, TextBoxMath.size(res.sizeIdx), 255, Shapes.TEXTBOX,
+            val prov = Mark(res.color, TextBoxMath.clampSize(res.sizeFrac), 255, Shapes.TEXTBOX,
                 floatArrayOf(nx, y0, nx + wn, (y0 + 0.05f).coerceAtMost(1f)),
                 TextBoxMath.bgWs(res.bg), old?.layer ?: h.activeLayer, res.text.trimEnd())
             // 按真实排版算出外框，y1 记成排版后的底边（外接矩形、擦除、套索都靠它）

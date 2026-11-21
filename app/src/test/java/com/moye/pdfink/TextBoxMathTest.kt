@@ -8,20 +8,22 @@ import org.junit.Test
 class TextBoxMathTest {
 
     @Test
-    fun sizesSnapToNearestStep() {
-        assertEquals(1, TextBoxMath.nearestSize(0.026f))
-        assertEquals(0, TextBoxMath.nearestSize(0.001f))
-        assertEquals(3, TextBoxMath.nearestSize(0.5f))
-        assertEquals(2, TextBoxMath.nearestSize(0.034f))
-        assertEquals(0.036f, TextBoxMath.size(2), 0f)
+    fun sizeIsContinuousAndClamped() {
+        assertEquals(0.012f, TextBoxMath.clampSize(0.001f), 0f)
+        assertEquals(0.09f, TextBoxMath.clampSize(0.5f), 0f)
+        assertEquals(0.03f, TextBoxMath.clampSize(0.03f), 0f)
     }
 
     @Test
-    fun sizeStepStopsAtEnds() {
-        assertEquals(0, TextBoxMath.step(0, -1))
-        assertEquals(3, TextBoxMath.step(3, 1))
-        assertEquals(2, TextBoxMath.step(1, 1))
-        assertEquals(0, TextBoxMath.clampIdx(-4))
+    fun cornerDragScalesFontWithWidth() {
+        // 宽度拉到 1.5 倍，字号也是 1.5 倍
+        assertEquals(0.039f, TextBoxMath.scaledSize(0.026f, 0.4f, 0.6f), 1e-6f)
+        // 缩到很窄：字号停在下限
+        assertEquals(TextBoxMath.MIN_SIZE, TextBoxMath.scaledSize(0.026f, 0.4f, 0.05f), 0f)
+        // 放到很大：停在上限
+        assertEquals(TextBoxMath.MAX_SIZE, TextBoxMath.scaledSize(0.05f, 0.3f, 0.9f), 0f)
+        // 起始宽为 0：不动
+        assertEquals(0.026f, TextBoxMath.scaledSize(0.026f, 0f, 0.5f), 0f)
     }
 
     @Test

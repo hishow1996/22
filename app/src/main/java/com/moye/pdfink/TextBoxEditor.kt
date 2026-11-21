@@ -11,7 +11,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.HorizontalScrollView
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -36,23 +35,19 @@ class TextBoxRequest(
     val pageW: Float,
     val pageUnit: Float,
     val text: String,
-    val sizeIdx: Int,
+    /** 字号（页面短边的比例）。 */
+    val sizeFrac: Float,
     val bg: Boolean,
     val color: Int,
     val isNew: Boolean
-) {
-    /** 可选的文字颜色（和画笔调色板一致），由宿主填。 */
-    var palette: IntArray = IntArray(0)
-}
+)
 
 class TextBoxResult(
     val text: String,
-    val sizeIdx: Int,
+    val sizeFrac: Float,
     val bg: Boolean,
     /** 页面宽度比例。 */
     val widthNorm: Float,
-    val delete: Boolean,
-    /** 文字颜色。 */
     val color: Int,
     /** 编辑时把框拖走的位移（屏幕像素），0 = 没动。 */
     val dx: Float,
@@ -60,12 +55,13 @@ class TextBoxResult(
 )
 
 /**
- * v53/v54：页面上原地输入文字批注。
- *  - 输入框浮在页面上，和最终效果同字号 / 同宽；
- *  - 框左上角的 ✥ 按住拖 = 把框移到页面任意位置；右边缘的蓝点左右拖 = 调宽；
- *  - 工具栏贴在键盘上方（像 WPS）：A− A＋ 字号、五个颜色、底（白底开关）、🗑（已有的框才有）、✓；
- *  - 键盘盖住框时框自动上移；你自己拖过之后位置就听你的，不再自动挪；
- *  - 点框外面 / 返回键 = 确定。
+ * v55：页面上原地输入文字批注，界面尽量干净——
+ *  - 一个蓝色细边框；没有工具栏、没有颜色 / 字号按钮；
+ *  - **移动**：按住框的边框外一圈（14dp 宽的透明带）拖，框到页面任意位置；
+ *  - **放大缩小**：拖右下角的蓝点，宽度和字号等比例一起变（像 WPS 拖角缩放）；
+ *  - 右上角一个小 ✓ = 确定；点框外面 / 返回键也是确定；把字删光再确定 = 删除这个框；
+ *  - 键盘盖住框时框自动上移；自己拖过之后位置就听你的。
+ * 颜色用此刻画笔颜色（改已有的框保持原色）。
  */
 class TextBoxEditor(
     private val activity: AppCompatActivity,
@@ -74,17 +70,14 @@ class TextBoxEditor(
     private val onDone: (TextBoxResult?) -> Unit
 ) {
     private val d = activity.resources.displayMetrics.density
+    private val band = (14 * d).toInt()                // 框外一圈可拖动的透明带
     private val overlay = FrameLayout(activity)
+    private val frame = FrameLayout(activity)
     private val edit = EditText(activity)
-    private val bar = LinearLayout(activity)
-    private val barScroll = HorizontalScrollView(activity)
-    private val moveHandle = TextView(activity)
-    private val widthHandle = View(activity)
-    private val colorDots = ArrayList<View>()
+    private val okBtn = TextView(activity)
+    private val corner = View(activity)
 
-    private var sizeIdx = TextBoxMath.clampIdx(req.sizeIdx)
-    private var bg = req.bg
-    private var color = req.color
+    private var sizeFrac = TextBoxMath.clampSize(req.sizeFrac)
     private var widthPx = req.screenW
     private var dragDx = 0f
     private var dragDy = 0f
@@ -97,53 +90,38 @@ class TextBoxEditor(
     }
 
     private fun sizePx(): Float =
-        (TextBoxMath.size(sizeIdx) * req.pageUnit * req.scale).coerceAtLeast(9f * d)
+        (sizeFrac * req.pageUnit * req.scale).coerceAtLeast(9f * d)
 
     private fun applyStyle() {
         val s = sizePx()
         edit.setTextSize(TypedValue.COMPLEX_UNIT_PX, s)
-        edit.setTextColor(color)
+        edit.setTextColor(req.color)
         val pad = TextBoxGeometry.padOf(s).toInt()
         edit.setPadding(pad, pad, pad, pad)
         val gd = GradientDrawable()
         gd.cornerRadius = pad.toFloat()
-        if (bg) {
-            gd.setColor(Color.argb(245, 255, 255, 255))       // 编辑时几乎不透，字看得清；定稿后是半透明白底
-            gd.setStroke(max(1, (1.4f * d).toInt()), color)
-        } else {
-            gd.setColor(Color.argb(40, 255, 255, 255))
-            gd.setStroke(max(1, (1.4f * d).toInt()), 0xAA808080.toInt(), 6f * d, 4f * d)   // 虚线：无底时只在编辑时标出范围
-        }
+        gd.setColor(if (req.bg) Color.argb(245, 255, 255, 255) else Color.argb(60, 255, 255, 255))
+        gd.setStroke(max(1, (1.5f * d).toInt()), 0xFF2F6FED.toInt())
         edit.background = gd
         val lp = edit.layoutParams as FrameLayout.LayoutParams
         lp.width = widthPx.toInt()
         edit.layoutParams = lp
-        for (i in colorDots.indices) {
-            val c = req.palette[i]
-            val dot = GradientDrawable()
-            dot.shape = GradientDrawable.OVAL
-            dot.setColor(c)
-            dot.setStroke((if (c == color) 3 else 1) * d.toInt().coerceAtLeast(1),
-                if (c == color) 0xFF2F6FED.toInt() else 0x55000000)
-            colorDots[i].background = dot
-        }
+        val fl = frame.layoutParams as FrameLayout.LayoutParams
+        fl.width = widthPx.toInt() + band * 2
+        frame.layoutParams = fl
     }
 
-    private fun textButton(label: String, onClick: () -> Unit): TextView = TextView(activity).apply {
-        text = label
-        setTextColor(0xFF222226.toInt())
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        gravity = Gravity.CENTER
-        minWidth = (38 * d).toInt()
-        setPadding((4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt())
-        setOnClickListener { onClick() }
+    private fun dot(color: Int): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(color)
+        setStroke((2 * d).toInt(), Color.WHITE)
     }
 
     fun show() {
         overlay.isClickable = true
         overlay.setOnClickListener { finish(true) }
 
-        // 输入框（FrameLayout 子项，位置用 x / y 摆）
+        // 输入框 + 四周一圈透明的拖动带
         edit.setText(req.text)
         edit.gravity = Gravity.TOP or Gravity.START
         edit.setIncludeFontPadding(false)
@@ -152,65 +130,24 @@ class TextBoxEditor(
             InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         edit.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI      // 横屏别弹全屏输入法，要看着页面打字
         edit.isFocusableInTouchMode = true
-        overlay.addView(edit, FrameLayout.LayoutParams(widthPx.toInt(), ViewGroup.LayoutParams.WRAP_CONTENT))
-
-        // 底部工具栏：贴着键盘上方
-        bar.orientation = LinearLayout.HORIZONTAL
-        bar.gravity = Gravity.CENTER_VERTICAL
-        bar.setPadding((6 * d).toInt(), 0, (6 * d).toInt(), 0)
-        bar.addView(textButton("A−") { sizeIdx = TextBoxMath.step(sizeIdx, -1); applyStyle() })
-        bar.addView(textButton("A＋") { sizeIdx = TextBoxMath.step(sizeIdx, 1); applyStyle() })
-        for (c in req.palette) {
-            val v = View(activity)
-            val lp = LinearLayout.LayoutParams((26 * d).toInt(), (26 * d).toInt())
-            lp.setMargins((5 * d).toInt(), 0, (5 * d).toInt(), 0)
-            v.setOnClickListener { color = c; applyStyle() }
-            bar.addView(v, lp)
-            colorDots.add(v)
-        }
-        val bgBtn = textButton("底") { }
-        bgBtn.setOnClickListener {
-            bg = !bg
-            bgBtn.alpha = if (bg) 1f else 0.4f
-            applyStyle()
-        }
-        bgBtn.alpha = if (bg) 1f else 0.4f
-        bar.addView(bgBtn)
-        if (!req.isNew) bar.addView(textButton("🗑") { finish(false, delete = true) })
-        bar.addView(textButton("✓") { finish(true) }.apply { setTextColor(0xFF2F6FED.toInt()) })
-        barScroll.isHorizontalScrollBarEnabled = false
-        barScroll.setBackgroundColor(0xFFF4F4F6.toInt())
-        barScroll.elevation = 8 * d
-        barScroll.addView(bar, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, (46 * d).toInt()))
-        overlay.addView(barScroll, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, (46 * d).toInt()))
-
-        // 移动手柄（框左上角外侧）：按住拖 = 把框移到任意位置
-        moveHandle.text = "✥"
-        moveHandle.setTextColor(Color.WHITE)
-        moveHandle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        moveHandle.gravity = Gravity.CENTER
-        val mh = GradientDrawable()
-        mh.shape = GradientDrawable.OVAL
-        mh.setColor(0xFF2F6FED.toInt())
-        mh.setStroke((2 * d).toInt(), Color.WHITE)
-        moveHandle.background = mh
-        overlay.addView(moveHandle, FrameLayout.LayoutParams((34 * d).toInt(), (34 * d).toInt()))
-        var mdx = 0f; var mdy = 0f; var sdx = 0f; var sdy = 0f
-        moveHandle.setOnTouchListener { _, ev ->
+        frame.addView(edit, FrameLayout.LayoutParams(
+            widthPx.toInt(), ViewGroup.LayoutParams.WRAP_CONTENT).apply { setMargins(band, band, band, band) })
+        overlay.addView(frame, FrameLayout.LayoutParams(
+            widthPx.toInt() + band * 2, ViewGroup.LayoutParams.WRAP_CONTENT))
+        var downX = 0f; var downY = 0f; var sdx = 0f; var sdy = 0f
+        frame.setOnTouchListener { _, ev ->            // 只有落在透明带上的触摸才会到这里（框里面的归输入框）
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (!userMoved) {            // 从自动避让后的位置接着拖，画面不跳
+                    if (!userMoved) {                   // 从自动避让后的位置接着拖，画面不跳
                         userMoved = true
-                        dragDy += edit.y - baseTop()
+                        dragDy += frame.y + band - baseTop()
                     }
-                    mdx = ev.rawX; mdy = ev.rawY; sdx = dragDx; sdy = dragDy
+                    downX = ev.rawX; downY = ev.rawY; sdx = dragDx; sdy = dragDy
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    dragDx = sdx + (ev.rawX - mdx)
-                    dragDy = sdy + (ev.rawY - mdy)
+                    dragDx = sdx + (ev.rawX - downX)
+                    dragDy = sdy + (ev.rawY - downY)
                     reposition()
                     true
                 }
@@ -218,22 +155,28 @@ class TextBoxEditor(
             }
         }
 
-        // 调宽圆点
-        val hd = GradientDrawable()
-        hd.shape = GradientDrawable.OVAL
-        hd.setColor(0xFF2F6FED.toInt())
-        hd.setStroke((2 * d).toInt(), Color.WHITE)
-        widthHandle.background = hd
-        overlay.addView(widthHandle, FrameLayout.LayoutParams((28 * d).toInt(), (28 * d).toInt()))
-        var downX = 0f
-        var startW = 0f
-        widthHandle.setOnTouchListener { _, ev ->
+        // 右上角 ✓
+        okBtn.text = "✓"
+        okBtn.setTextColor(Color.WHITE)
+        okBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        okBtn.gravity = Gravity.CENTER
+        okBtn.background = dot(0xFF2F6FED.toInt())
+        okBtn.setOnClickListener { finish(true) }
+        overlay.addView(okBtn, FrameLayout.LayoutParams((32 * d).toInt(), (32 * d).toInt()))
+
+        // 右下角：拖动 = 宽度和字号等比例放大缩小
+        corner.background = dot(0xFF2F6FED.toInt())
+        overlay.addView(corner, FrameLayout.LayoutParams((26 * d).toInt(), (26 * d).toInt()))
+        var cx0 = 0f; var w0 = 0f; var s0 = 0f
+        corner.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { downX = ev.rawX; startW = widthPx; true }
+                MotionEvent.ACTION_DOWN -> { cx0 = ev.rawX; w0 = widthPx; s0 = sizeFrac; true }
                 MotionEvent.ACTION_MOVE -> {
-                    val minW = sizePx() * 3f
-                    val maxW = overlay.width - edit.x - 4 * d
-                    widthPx = (startW + (ev.rawX - downX)).coerceIn(minW, max(minW, maxW))
+                    val minW = 60 * d
+                    val maxW = max(minW, overlay.width - edit.x - 4 * d)
+                    val nw = (w0 + (ev.rawX - cx0)).coerceIn(minW, maxW)
+                    widthPx = nw
+                    sizeFrac = TextBoxMath.scaledSize(s0, w0, nw)
                     applyStyle()
                     true
                 }
@@ -246,7 +189,7 @@ class TextBoxEditor(
         activity.onBackPressedDispatcher.addCallback(activity, back)
         applyStyle()
 
-        // 布局变化（打字换行 / 键盘弹出）只重新避让键盘、挪手柄
+        // 布局变化（打字换行 / 键盘弹出）重新避让键盘、挪手柄
         overlay.viewTreeObserver.addOnGlobalLayoutListener { reposition() }
         ViewCompat.setOnApplyWindowInsetsListener(overlay) { _, insets ->
             reposition(); insets
@@ -277,29 +220,25 @@ class TextBoxEditor(
         if (finished || overlay.width == 0) return
         overlay.getLocationOnScreen(loc)
         val ow = overlay.width.toFloat()
-        val barH = barScroll.height.toFloat().coerceAtLeast(46 * d)
-        // 工具栏贴在键盘 / 导航栏上方
-        val barTop = overlay.height - insetBottom() - barH
-        barScroll.y = barTop
         val w = widthPx.coerceAtMost(ow)
         val left = (req.screenX - loc[0] + dragDx).coerceIn(0f, max(0f, ow - w))
+        val visibleBottom = overlay.height - insetBottom() - 8 * d
+        val minTop = 38f * d                                   // 上面给 ✓ 留位置
         var top = baseTop()
-        top = top.coerceIn(36f * d, max(36f * d, barTop - 24 * d))     // 上留出移动手柄的位置，下不压进工具栏
         if (!userMoved) {
-            // 没自己拖过：键盘 / 工具栏盖住框底就整体上移
             val bottom = top + edit.height
-            val limit = barTop - 8 * d
-            if (bottom > limit) top = max(36f * d, top - (bottom - limit))
+            if (bottom > visibleBottom) top -= (bottom - visibleBottom)   // 键盘盖住就整体上移
         }
-        edit.x = left
-        edit.y = top
-        moveHandle.x = left - 6 * d
-        moveHandle.y = top - 34 * d
-        widthHandle.x = left + w - 14 * d
-        widthHandle.y = top + edit.height / 2f - 14 * d
+        top = top.coerceIn(minTop, max(minTop, visibleBottom - 30 * d))
+        frame.x = left - band
+        frame.y = top - band
+        okBtn.x = left + w - 16 * d
+        okBtn.y = top - 38 * d
+        corner.x = left + w - 13 * d
+        corner.y = top + edit.height - 13 * d
     }
 
-    private fun finish(save: Boolean, delete: Boolean = false) {
+    private fun finish(save: Boolean) {
         if (finished) return
         finished = true
         back.remove()
@@ -309,11 +248,11 @@ class TextBoxEditor(
             imm.hideSoftInputFromWindow(edit.windowToken, 0)
         } catch (_: Throwable) { }
         host.removeView(overlay)
-        if (!save && !delete) { onDone(null); return }
+        if (!save) { onDone(null); return }
         onDone(TextBoxResult(
-            text, sizeIdx, bg,
+            text, sizeFrac, req.bg,
             TextBoxMath.normWidth(widthPx, req.scale, req.pageW),
-            delete, color,
+            req.color,
             if (userMoved) dragDx else 0f,
             if (userMoved) dragDy else 0f
         ))
