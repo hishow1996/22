@@ -56,4 +56,7 @@
     <string name="mt_sec_export">导出与同步</string>
     <string name="mt_sec_clear">清除</string>
     <string name="mt_clear_done">已清空本页，可撤销</string>
+    <string name="mt_sec_more">更多</string>
+    <string name="mt_entry_export">导出同步</string>
+    <string name="mt_entry_clear">清除</string>
 </resources>

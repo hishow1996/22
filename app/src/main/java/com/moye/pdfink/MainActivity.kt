@@ -1441,13 +1441,14 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 }
             }
         }
-        fun add(v: View, kind: String, i: Int) {
-            row.addView(v)
+        fun add(v: View, kind: String, i: Int, target: LinearLayout = row) {
+            target.addView(v)
             items.add(Triple(v, kind, i))
         }
         // 颜色 20dp + 间距 5dp，5 个 = 125dp；分隔 + 4 个笔刷槽 ≈ 80dp，窄浮层（240dp）一行放得下
 
-        colors.forEachIndexed { i, _ ->
+        // v60：顶栏已有 5 个颜色，菜单里只在顶栏被收起（沉浸）时才给颜色行
+        if (barsHidden) colors.forEachIndexed { i, _ ->
             val v = View(this).apply {
                 layoutParams = LinearLayout.LayoutParams(dp(20), dp(20)).apply {
                     marginEnd = dp(5)
@@ -1468,7 +1469,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         for (i in 0 until widths.size) {
             val idx = i
             val holder = FrameLayout(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(40), dp(26))
+                layoutParams = LinearLayout.LayoutParams(dp(30), dp(26))
                 contentDescription = getString(R.string.cd_width_step, i + 1)
                 isClickable = true
                 setOnClickListener {
@@ -1482,7 +1483,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             val bar = View(this).apply {
                 layoutParams = FrameLayout.LayoutParams(
-                    dp(26), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
+                    dp(22), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
             }
             holder.addView(bar)
             row2.addView(holder)
@@ -1497,7 +1498,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 setBackgroundColor(ContextCompat.getColor(
                     this@MainActivity, R.color.divider))
             }
-            row.addView(sep)
+            row2.addView(sep)
         }
         for (i in 0 until 4) {
             val v = View(this).apply {
@@ -1511,7 +1512,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                     onBrushSlotLongPress(idx, popup) { refresh() }
                 }
             }
-            add(v, "b", i)
+            add(v, "b", i, row2)
         }
         refresh()
     }
@@ -2541,42 +2542,78 @@ class MainActivity : AppCompatActivity(), InkView.Host {
      * v57：⋯ 菜单分组。每个功能仍由 menuActions() 提供（用长名当键），这里只负责
      * 归到哪一组、是开关 / 弹面板 / 危险、角标显示什么。
      */
+    private var menuTab = 0
+
     private fun menuSections(): List<MenuSection> {
         val all = menuActions().associateBy { it.label }
         fun mi(id: Int, kind: MK = MK.ACTION): MenuItem? =
             all[getString(id)]?.let { MenuItem(it, kind) }
-        val pressure = mi(R.string.cd_pressure)
-        val finger = mi(R.string.cd_finger_offset)
-        val shrink = mi(R.string.cd_line_shrink)
-        val tint = mi(R.string.cd_tint)
-        val rotate = mi(R.string.cd_rotate)
+
+        // v60：低频且有风险的收进二级面板，不占主菜单
+        val exportEntry = MenuItem(MenuAction(R.drawable.ic_export,
+            getString(R.string.mt_entry_export), { false }) {
+            showActionSheet(getString(R.string.mt_sec_export), listOfNotNull(
+                mi(R.string.cd_export), mi(R.string.cd_pdf_page), mi(R.string.cd_pdf_all),
+                mi(R.string.cd_backup), mi(R.string.cd_restore), mi(R.string.cd_webdav)))
+        })
+        val clearEntry = MenuItem(MenuAction(R.drawable.ic_trash,
+            getString(R.string.mt_entry_clear), { false }) {
+            showActionSheet(getString(R.string.mt_sec_clear), listOfNotNull(
+                mi(R.string.cd_clear, MK.DANGER), mi(R.string.cd_redo_page, MK.DANGER),
+                mi(R.string.cd_clear_all, MK.DANGER)))
+        }, MK.DANGER)
 
         val write = MenuSection(getString(R.string.mt_sec_write), listOfNotNull(
-            mi(R.string.cd_loupe), pressure, finger,
-            mi(R.string.cd_palm, MK.TOGGLE), mi(R.string.cd_stylus, MK.TOGGLE),
-            mi(R.string.cd_hand, MK.TOGGLE), mi(R.string.cd_holdsnap, MK.TOGGLE),
-            mi(R.string.cd_textsnap, MK.TOGGLE), shrink,
-            mi(R.string.cd_temp_eraser, MK.TOGGLE),
-            mi(R.string.cd_layer, MK.TOGGLE), mi(R.string.cd_hide_layer, MK.TOGGLE)))
+            mi(R.string.cd_loupe), mi(R.string.cd_pressure),
+            mi(R.string.cd_palm, MK.TOGGLE), mi(R.string.cd_textsnap, MK.TOGGLE),
+            mi(R.string.cd_line_shrink), mi(R.string.cd_temp_eraser, MK.TOGGLE),
+            mi(R.string.cd_stylus, MK.TOGGLE), mi(R.string.cd_hand, MK.TOGGLE)))
         val read = MenuSection(getString(R.string.mt_sec_read), listOfNotNull(
             mi(R.string.cd_overview), mi(R.string.cd_nav), mi(R.string.cd_doc_search),
             mi(R.string.cd_ocr), mi(R.string.cd_tabs), mi(R.string.cd_snapshots),
             mi(R.string.cd_home), mi(R.string.cd_immersive)))
         val view = MenuSection(getString(R.string.mt_sec_view), listOfNotNull(
-            mi(R.string.cd_spread, MK.TOGGLE), rotate,
-            mi(R.string.cd_autocrop, MK.TOGGLE), tint,
-            mi(R.string.cd_dark, MK.TOGGLE_CLOSE), mi(R.string.cd_awake, MK.TOGGLE),
-            mi(R.string.cd_edge, MK.TOGGLE), mi(R.string.cd_volume, MK.TOGGLE)),
+            mi(R.string.cd_spread, MK.TOGGLE), mi(R.string.cd_rotate),
+            mi(R.string.cd_autocrop, MK.TOGGLE), mi(R.string.cd_tint),
+            mi(R.string.cd_dark, MK.TOGGLE_CLOSE), mi(R.string.cd_awake, MK.TOGGLE)),
             segment = listOfNotNull(
                 mi(R.string.cd_fit_screen), mi(R.string.cd_fit_width),
                 mi(if (state.landscape) R.string.cd_double_page else R.string.cd_fill_screen)))
-        val export = MenuSection(getString(R.string.mt_sec_export), listOfNotNull(
-            mi(R.string.cd_export), mi(R.string.cd_pdf_page), mi(R.string.cd_pdf_all),
-            mi(R.string.cd_backup), mi(R.string.cd_restore), mi(R.string.cd_webdav)))
-        val clear = MenuSection(getString(R.string.mt_sec_clear), listOfNotNull(
-            mi(R.string.cd_clear, MK.DANGER), mi(R.string.cd_redo_page, MK.DANGER),
-            mi(R.string.cd_clear_all, MK.DANGER)))
-        return listOf(write, read, view, export, clear)
+        val more = MenuSection(getString(R.string.mt_sec_more), listOfNotNull(
+            mi(R.string.cd_finger_offset), mi(R.string.cd_holdsnap, MK.TOGGLE),
+            mi(R.string.cd_layer, MK.TOGGLE), mi(R.string.cd_hide_layer, MK.TOGGLE),
+            mi(R.string.cd_edge, MK.TOGGLE), mi(R.string.cd_volume, MK.TOGGLE),
+            exportEntry, clearEntry))
+        return listOf(write, read, view, more)
+    }
+
+    /** v60：二级面板——一组动作的小弹窗（导出与同步 / 清除），点一项就关面板并执行。 */
+    private fun showActionSheet(title: String, items: List<MenuItem>) {
+        val on = ContextCompat.getColor(this, R.color.accent)
+        val off = ContextCompat.getColor(this, R.color.icon)
+        val d = AlertDialog.Builder(this).create()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(this@MainActivity, R.drawable.popup_bg)
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        box.addView(TextView(this).apply {
+            text = title; textSize = 13f; alpha = 0.7f
+            setTextColor(off)
+            setPadding(dp(6), 0, 0, dp(6))
+        })
+        val grid = GridLayout(this).apply { columnCount = 4 }
+        for (item in items) {
+            val b = menuCell(grid, item, on, off)
+            b.setOnClickListener { d.dismiss(); item.a.run() }
+            grid.addView(b, GridLayout.LayoutParams().apply {
+                width = dp(MENU_CELL_W); height = dp(MENU_CELL_H)
+            })
+        }
+        box.addView(grid)
+        d.setView(box)
+        d.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        d.show()
     }
 
     /**
@@ -2637,24 +2674,30 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             buildMenuInkRow(pv.findViewById<LinearLayout>(R.id.menuInkRow),
                 pv.findViewById<LinearLayout>(R.id.menuInkRow2), popup)
         }
-        // v57：分组 + 开关不关菜单。所有格子登记在 refreshers 里，开关点完统一刷新状态
+        // v60：4 个标签页，一次只显示一页（≤2 行，不用滚）；开关点完不关菜单
+        pv.findViewById<View>(R.id.menuInkScroll).visibility =
+            if (barsHidden) View.VISIBLE else View.GONE
         val refreshers = ArrayList<() -> Unit>()
         fun refreshAll() {
             refreshers.forEach { it() }
             refreshMenuToolRow(tr)
             mRedo.alpha = if (history.canRedo) 1f else 0.32f
         }
-        fun title(t: String) {
-            sections.addView(TextView(this).apply {
-                text = t; textSize = 11f; alpha = 0.6f
-                setTextColor(off)
-                includeFontPadding = false
-                setPadding(dp(6), dp(14), 0, dp(4))
-            })
-        }
-        for (sec in menuSections()) {
-            if (sec.items.isEmpty() && sec.segment.isEmpty()) continue
-            title(sec.title)
+        val pages = menuSections()
+        val tabsRow = pv.findViewById<LinearLayout>(R.id.menuTabs)
+        val tabLabels = ArrayList<TextView>()
+        val tabBars = ArrayList<View>()
+        fun renderPage(idx: Int) {
+            menuTab = idx
+            sections.removeAllViews()
+            refreshers.clear()
+            tabLabels.forEachIndexed { i, t ->
+                val sel = i == idx
+                t.setTextColor(if (sel) on else off)
+                t.typeface = if (sel) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                tabBars[i].setBackgroundColor(if (sel) on else Color.TRANSPARENT)
+            }
+            val sec = pages[idx]
             if (sec.segment.isNotEmpty()) {
                 val seg = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
@@ -2671,7 +2714,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 }
                 sections.addView(seg, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(4); bottomMargin = dp(6) })
+                ).apply { topMargin = dp(6); bottomMargin = dp(4) })
             }
             val grid = GridLayout(this).apply { columnCount = 4 }
             for (item in sec.items) {
@@ -2692,6 +2735,24 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             sections.addView(grid)
         }
+        pages.forEachIndexed { i, sec ->
+            val label = TextView(this).apply {
+                text = sec.title; textSize = 14f; gravity = Gravity.CENTER
+            }
+            val bar = View(this)
+            val tab = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setOnClickListener { renderPage(i) }
+            }
+            tab.addView(label, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(32)))
+            tab.addView(bar, LinearLayout.LayoutParams(dp(22), dp(2)))
+            tabsRow.addView(tab, LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            tabLabels.add(label); tabBars.add(bar)
+        }
+        renderPage(menuTab.coerceIn(0, pages.lastIndex))
         val bar = pv.findViewById<SeekBar>(R.id.brightnessBar)
         bar.progress = ((state.brightness + 1f) * 50f).toInt().coerceIn(0, 100)
         bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {

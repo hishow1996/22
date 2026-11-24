@@ -152,6 +152,7 @@
         android:visibility="gone">
 
         <HorizontalScrollView
+            android:id="@+id/menuInkScroll"
             android:layout_width="240dp"
             android:layout_height="40dp"
             android:scrollbars="none">
@@ -170,13 +171,21 @@
         <LinearLayout
             android:id="@+id/menuInkRow2"
             android:layout_width="240dp"
-            android:layout_height="30dp"
+            android:layout_height="38dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="4dp" />
 
 
     </LinearLayout>
+
+    <!-- v60：4 个文字标签，当前页下一条细蓝线（由代码填充） -->
+    <LinearLayout
+        android:id="@+id/menuTabs"
+        android:layout_width="240dp"
+        android:layout_height="38dp"
+        android:layout_marginTop="2dp"
+        android:orientation="horizontal" />
 
     <ScrollView
         android:layout_width="240dp"
@@ -188,6 +197,7 @@
             android:id="@+id/menuSections"
             android:layout_width="240dp"
             android:layout_height="wrap_content"
+            android:minHeight="172dp"
             android:orientation="vertical" />
 
     </ScrollView>
