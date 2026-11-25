@@ -207,6 +207,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         const val MENU_CELL_W = 60      // v59：每行 4 个 × 60 = 240dp，正好撑满浮层内宽
         const val MENU_CELL_H = 62      // 图标 26 + 短名 12 + 上下留白
         const val MENU_DANGER = 0xFFD93025.toInt()
+        const val HOME_STAGE_H = 116   // v61：书架顶部 = 标题行 52 + 搜索胶囊 44 + 留白
     }
 
     private val colors = intArrayOf(
@@ -322,6 +323,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     private lateinit var btnHomeMore: ImageButton
     // v38 B③：书架搜索与排序，只影响首页卡片列表，不写进会话
     private lateinit var homeSearch: EditText
+    private lateinit var homeCount: TextView
+    private val covers by lazy { HomeCovers(this) }
     private lateinit var btnHomeSort: ImageButton
     private var homeQuery = ""
     private var homeSortMode = 0   // 0 最近打开 / 1 按名称 / 2 收藏优先
@@ -591,6 +594,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         btnHomeMore = findViewById(R.id.btnHomeMore)
         homeShelf = findViewById(R.id.homeShelf)
         homeSearch = findViewById(R.id.homeSearch)
+        homeCount = findViewById(R.id.homeCount)
         btnHomeSort = findViewById(R.id.btnHomeSort)
         homeSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -1314,7 +1318,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         homeHeader.layoutParams = headerLp
         if (homeHeader.visibility == View.VISIBLE) {
             val stageLp = homeStage.layoutParams as LinearLayout.LayoutParams
-            stageLp.height = homeCutTop + dp(56)
+            stageLp.height = homeCutTop + dp(HOME_STAGE_H)
             stageLp.weight = 0f
             homeStage.layoutParams = stageLp
         }
@@ -1758,7 +1762,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             homeHero.visibility = View.GONE
             homeHeader.visibility = View.VISIBLE
             homeScroll.visibility = View.VISIBLE
-            stage.height = maxOf(sysTop, safeT) + dp(56)
+            stage.height = maxOf(sysTop, safeT) + dp(HOME_STAGE_H)
             stage.weight = 0f
             scroll.height = 0
             scroll.weight = 1f
@@ -1766,6 +1770,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         homeStage.layoutParams = stage
         homeScroll.layoutParams = scroll
 
+        homeCount.text = getString(R.string.home_count, all.size)
         for (item in items) {
             val bk = bucketOfFp?.get(item.fp)
             if (bk != null && bk != lastBucket) {
@@ -1779,10 +1784,10 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                             HomeBuckets.Bucket.WEEK -> R.string.home_bucket_week
                             HomeBuckets.Bucket.EARLIER -> R.string.home_bucket_earlier
                         }, bucketCount[bk] ?: 0)
-                    textSize = 12f
-                    typeface = Typeface.DEFAULT_BOLD
+                    textSize = 13f
+                    letterSpacing = 0.04f
                     setTextColor(ContextCompat.getColor(this@MainActivity, R.color.page_text))
-                    setPadding(dp(8), dp(12), dp(8), dp(2))
+                    setPadding(dp(6), dp(18), dp(8), dp(8))
                 }, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
@@ -1804,20 +1809,31 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             card.findViewById<TextView>(R.id.cardName).text = title
 
-            // v28：参照微信 / WPS / Office / Drive 的「格式色方块 + 白缩写」。
-            // PDF 逐像素沿用图三那块红底 16sp「PDF」，其它类型只换底色和字。
+            // v61：封面占位 + 缩略图。PDF 占位是淡灰块 + 红「PDF」字，其它类型沿用格式色块；
+            // PDF 第一页渲染出来后盖在上面（缓存命中则立刻显示）。
             val kind = FileKind.fromKey(item.kind)
             val badgeFrame = card.findViewById<FrameLayout>(R.id.cardBadgeFrame)
             val badge = card.findViewById<TextView>(R.id.cardBadge)
+            val cover = card.findViewById<ImageView>(R.id.cardCover)
             if (kind == FileKind.PDF) {
-                badgeFrame.background = ContextCompat.getDrawable(
-                    this, R.drawable.pdf_badge_bg)
                 badge.text = "PDF"
+                val c = covers.cached(item.fp)
+                if (c != null) {
+                    cover.setImageBitmap(c); cover.visibility = View.VISIBLE
+                } else {
+                    cover.tag = item.fp
+                    covers.load(item.fp, u) { bmp ->
+                        if (bmp != null && cover.tag == item.fp) {
+                            cover.setImageBitmap(bmp); cover.visibility = View.VISIBLE
+                        }
+                    }
+                }
             } else {
                 badgeFrame.background = GradientDrawable().apply {
                     setColor(kind.color)
-                    cornerRadius = dp(4).toFloat()
+                    cornerRadius = dp(8).toFloat()
                 }
+                badge.setTextColor(Color.WHITE)
                 badge.text = kind.label
                 badge.textSize = kind.textSp
             }
@@ -1835,6 +1851,17 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 else "$sizeText · ${kind.tag}"
             card.findViewById<View>(R.id.cardInkDot).visibility =
                 if (InkStore.hasAnyInk(this, item.fp)) View.VISIBLE else View.GONE
+            // 阅读进度条：页码 / 总页数；没有页数概念就整条隐藏
+            val permille = if (kind.hasPages) HomeCardMath.progressPermille(cur, item.pages) else -1
+            val bar = card.findViewById<View>(R.id.cardBar)
+            if (permille < 0) {
+                bar.visibility = View.GONE
+            } else {
+                val fill = card.findViewById<View>(R.id.cardBarFill)
+                val flp = fill.layoutParams as LinearLayout.LayoutParams
+                flp.weight = permille.toFloat()
+                fill.layoutParams = flp
+            }
 
             // v38 B③：文件级收藏，点一下切换；不冒泡到整张卡片
             val star = card.findViewById<TextView>(R.id.cardStar)
@@ -1923,7 +1950,11 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             b.setOnClickListener { popup.dismiss(); a.run() }
             grid.addView(b)
         }
-        popup.showAsDropDown(btnHomeMore, 0, dp(6))
+        // v61：更多按钮移到右上角，让面板右缘对齐按钮右缘，避免被屏幕裁掉
+        grid.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        popup.showAsDropDown(btnHomeMore, btnHomeMore.width - grid.measuredWidth, dp(6))
     }
 
     private fun homeMenuActions() = listOf(

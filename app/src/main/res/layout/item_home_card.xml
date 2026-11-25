@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- v61：封面缩略图 + 两行标题 + 进度条；白卡片、无描边 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:layout_marginBottom="10dp"
     android:background="@drawable/home_card_bg"
+    android:elevation="1.5dp"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:layout_marginBottom="8dp"
-    android:paddingStart="10dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="10dp"
-    android:paddingBottom="8dp">
+    android:padding="12dp">
 
-    <!-- 图三：红色圆角方块 + 白色粗体 PDF 字样 -->
+    <!-- 封面：渲染出第一页就盖在占位块上；占位块 PDF 用淡灰 + 红字，其它类型沿用格式色 -->
     <FrameLayout
         android:id="@+id/cardBadgeFrame"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
-        android:background="@drawable/pdf_badge_bg"
+        android:layout_width="54dp"
+        android:layout_height="72dp"
+        android:background="@drawable/home_cover_bg"
+        android:clipToOutline="true"
         android:importantForAccessibility="no">
 
         <TextView
@@ -26,63 +26,104 @@
             android:gravity="center"
             android:includeFontPadding="false"
             android:importantForAccessibility="no"
-            android:letterSpacing="-0.03"
-            android:scaleX="0.84"
             android:text="PDF"
-            android:textColor="#FFFFFFFF"
-            android:textSize="16sp"
+            android:textColor="@color/pdf_badge_red"
+            android:textSize="14sp"
             android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/cardCover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
 
     </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
+        android:layout_marginStart="14dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
-        <!-- 与文件管理器一致：完整文件名（含 .pdf），不截断、不加省略号 -->
         <TextView
             android:id="@+id/cardName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:maxLines="4"
+            android:ellipsize="end"
+            android:maxLines="2"
             android:textColor="@color/icon"
-            android:textSize="16sp" />
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/cardProgress"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:singleLine="true"
-            android:textColor="@color/page_text"
-            android:textSize="12sp" />
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/cardProgress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/page_text"
+                android:textSize="12sp" />
+
+            <!-- 有批注的小标签（原来是一个蓝点） -->
+            <TextView
+                android:id="@+id/cardInkDot"
+                android:layout_width="wrap_content"
+                android:layout_height="16dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/home_tag_bg"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:text="@string/home_tag_ink"
+                android:textColor="@color/accent"
+                android:textSize="10sp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+        <!-- 阅读进度条：填充宽度由代码按页码比例设 weight -->
+        <LinearLayout
+            android:id="@+id/cardBar"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/home_track"
+            android:orientation="horizontal"
+            android:weightSum="1000">
+
+            <View
+                android:id="@+id/cardBarFill"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:background="@drawable/home_fill" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
     <!-- v38 B③：文件级收藏，点一下切换；与「按页书签」是两回事 -->
     <TextView
         android:id="@+id/cardStar"
-        android:layout_width="26dp"
-        android:layout_height="26dp"
-        android:layout_gravity="center_vertical"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="top"
         android:layout_marginStart="4dp"
         android:contentDescription="@string/cd_star"
         android:gravity="center"
         android:includeFontPadding="false"
         android:text="★"
         android:textColor="#FFF2A03D"
-        android:textSize="17sp" />
-
-    <View
-        android:id="@+id/cardInkDot"
-        android:layout_width="8dp"
-        android:layout_height="8dp"
-        android:layout_gravity="center_vertical"
-        android:layout_marginStart="4dp"
-        android:background="@drawable/home_dot"
-        android:visibility="gone" />
+        android:textSize="19sp" />
 
 </LinearLayout>

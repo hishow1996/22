@@ -7,4 +7,9 @@
     <color name="page_text">#FF9DA9BB</color>
     <color name="sheet">#FF1F2736</color>
     <color name="dot_off">#FF8995A8</color>
+    <color name="shelf_bg">#FF12161F</color>
+    <color name="card">#FF1B2230</color>
+    <color name="cover_bg">#FF252E3F</color>
+    <color name="track">#26FFFFFF</color>
+    <color name="accent_soft">#332F6FED</color>
 </resources>

@@ -10,4 +10,10 @@
     <color name="dot_off">#FF4A4A50</color>
     <!-- 图三 PDF 徽标实测主体色 -->
     <color name="pdf_badge_red">#FFD7463B</color>
+    <!-- v61：书架页新配色（淡冷灰底 + 白卡片），不动阅读页用的 paper -->
+    <color name="shelf_bg">#FFF5F6F8</color>
+    <color name="card">#FFFFFFFF</color>
+    <color name="cover_bg">#FFEDEFF3</color>
+    <color name="track">#14000000</color>
+    <color name="accent_soft">#1F2F6FED</color>
 </resources>

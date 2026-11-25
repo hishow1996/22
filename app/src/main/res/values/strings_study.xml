@@ -24,9 +24,12 @@
     <string name="cd_loupe_line">换行（回到这一行的起点并下移）</string>
     <string name="cd_loupe_close">关闭放大书写窗</string>
     <string name="loupe_rejected">这一笔没能落到页上，请稍后再写</string>
-    <string name="home_bucket_star">收藏 · %1$d</string>
-    <string name="home_bucket_hour">1 小时内 · %1$d</string>
-    <string name="home_bucket_today">今天内 · %1$d</string>
-    <string name="home_bucket_week">7 天内 · %1$d</string>
-    <string name="home_bucket_earlier">更早 · %1$d</string>
+    <string name="home_bucket_star">收藏</string>
+    <string name="home_bucket_hour">最近</string>
+    <string name="home_bucket_today">今天</string>
+    <string name="home_bucket_week">本周</string>
+    <string name="home_bucket_earlier">更早</string>
+    <string name="home_title">书架</string>
+    <string name="home_count">共 %1$d 本</string>
+    <string name="home_tag_ink">批注</string>
 </resources>
