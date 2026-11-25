@@ -1,6 +1,7 @@
 package com.moye.pdfink
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -89,7 +90,7 @@ class AnnotExportTest {
         val o = TextBoxOutline(floatArrayOf(0.1f, 0.2f, 0.7f, 0.25f), listOf(floatArrayOf(0.1f, 0.2f, 0.2f, 0.2f, 0.2f, 0.3f)))
         val f = AnnotExport.toInput(m) { o }!!
         assertEquals(AnnotInput.FREETEXT, f.kind)
-        assertTrue(f.fill)
+        assertFalse(f.fill)          // v62：只显示文字，导出也不带底色
         assertEquals(0.25f, f.pts[3], 0f)
         assertEquals(1, f.contours!!.size)
         // 空文字不导出

@@ -47,9 +47,10 @@ class TextBoxMathTest {
     }
 
     @Test
-    fun backgroundFlagDefaultsToOn() {
-        assertTrue(TextBoxMath.hasBg(null))
-        assertTrue(TextBoxMath.hasBg(TextBoxMath.bgWs(true)))
+    fun textBoxNeverHasBackground() {
+        // v62：只显示文字——不管旧数据里的标志是什么，都不画底框
+        assertFalse(TextBoxMath.hasBg(null))
+        assertFalse(TextBoxMath.hasBg(TextBoxMath.bgWs(true)))
         assertFalse(TextBoxMath.hasBg(TextBoxMath.bgWs(false)))
         assertEquals(2, TextBoxMath.bgWs(true).size)   // 长度 = 点数（两个角点），JSON 往返才不会丢
     }

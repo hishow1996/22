@@ -1765,7 +1765,7 @@ class InkView @JvmOverloads constructor(
         val old = if (idx >= 0) marks.getOrNull(idx) else null
         val isBox = old != null && old.shape == Shapes.TEXTBOX
         val sizeFrac = if (isBox) TextBoxMath.clampSize(old!!.width) else TextBoxMath.DEFAULT_SIZE
-        val bg = if (isBox) TextBoxMath.hasBg(old!!.ws) else true
+        val bg = false                                  // v62：只显示文字，不要框
         val color = old?.color ?: h.inkColor
         val x0: Float; val y0: Float; val wn: Float
         if (isBox) {

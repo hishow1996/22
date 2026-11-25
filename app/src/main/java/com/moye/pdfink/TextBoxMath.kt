@@ -42,7 +42,9 @@ object TextBoxMath {
     }
 
     /** 底色标志：ws[0] ≥ 0.5 有底；缺省有底。 */
-    fun hasBg(ws: FloatArray?): Boolean = (ws?.getOrNull(0) ?: 1f) >= 0.5f
+    /** v62：文字批注一律只显示文字，不再画底框 / 边框（旧数据里的底框标志忽略）。 */
+    @Suppress("UNUSED_PARAMETER")
+    fun hasBg(ws: FloatArray?): Boolean = false
 
     fun bgWs(bg: Boolean): FloatArray = floatArrayOf(if (bg) 1f else 0f, 0f)
 }

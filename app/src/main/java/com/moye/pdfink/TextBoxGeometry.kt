@@ -1,11 +1,9 @@
 package com.moye.pdfink
 
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
-import android.graphics.RectF
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -60,17 +58,7 @@ object TextBoxGeometry {
     ) {
         val tp = TextPaint(Paint.ANTI_ALIAS_FLAG)
         val laid = lay(m, w, h, tp) ?: return
-        val b = laid.box
-        val r = RectF(b[0], b[1], b[2], b[3])
-        if (TextBoxMath.hasBg(m.ws)) {
-            bgPaint.style = Paint.Style.FILL
-            bgPaint.color = colorTransform(Color.argb(225, 255, 255, 255))
-            c.drawRoundRect(r, laid.pad, laid.pad, bgPaint)
-            bgPaint.style = Paint.Style.STROKE
-            bgPaint.strokeWidth = max(1f, min(w, h) * 0.0012f)
-            bgPaint.color = argb
-            c.drawRoundRect(r, laid.pad, laid.pad, bgPaint)
-        }
+        // v62：只画文字，不画底框和边框，原文一点不挡
         tp.color = argb
         tp.style = Paint.Style.FILL
         c.save()

@@ -100,8 +100,10 @@ class TextBoxEditor(
         edit.setPadding(pad, pad, pad, pad)
         val gd = GradientDrawable()
         gd.cornerRadius = pad.toFloat()
-        gd.setColor(if (req.bg) Color.argb(245, 255, 255, 255) else Color.argb(60, 255, 255, 255))
-        gd.setStroke(max(1, (1.5f * d).toInt()), 0xFF2F6FED.toInt())
+        // v62：不再用白底盖住原文——只留一圈蓝色虚线框和极淡的蓝色提示，下面的文字清晰可见，
+        // 方便对准要批注的位置；确定后虚线框消失，页面上只剩文字
+        gd.setColor(0x122F6FED)
+        gd.setStroke(max(1, (1.5f * d).toInt()), 0xFF2F6FED.toInt(), 6f * d, 4f * d)
         edit.background = gd
         val lp = edit.layoutParams as FrameLayout.LayoutParams
         lp.width = widthPx.toInt()
