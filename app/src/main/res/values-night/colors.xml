@@ -12,4 +12,11 @@
     <color name="cover_bg">#FF252E3F</color>
     <color name="track">#26FFFFFF</color>
     <color name="accent_soft">#332F6FED</color>
+    <color name="surface">#FF1C2230</color>
+    <color name="surface_variant">#FF273045</color>
+    <color name="tab_sel">#FF3A4660</color>
+    <color name="label">#FFA9B4C6</color>
+    <color name="danger">#FFFF7B72</color>
+    <color name="danger_soft">#33FF7B72</color>
+    <color name="handle">#55FFFFFF</color>
 </resources>

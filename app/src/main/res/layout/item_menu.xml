@@ -1,21 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v56：菜单格 = 上面图标、下面 2~4 字短名；选中态由代码给图标和文字一起着色 -->
+<!-- v63：圆角色块按钮——图标在 56dp 圆角方块里，名字在下面（小一点、淡一点）。
+     关=淡灰块 + 深色图标；开=蓝色实心块 + 白图标；清除类=淡红块 + 红图标（由代码着色）。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/menuBtn"
-    android:layout_width="58dp"
-    android:layout_height="62dp"
-    android:background="@drawable/menu_bg"
+    android:layout_width="72dp"
+    android:layout_height="wrap_content"
     android:clickable="true"
     android:contentDescription="@string/cd_menu_item"
     android:focusable="true"
-    android:gravity="center"
+    android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:paddingTop="6dp"
-    android:paddingBottom="3dp">
+    android:paddingBottom="2dp">
 
     <FrameLayout
-        android:layout_width="44dp"
-        android:layout_height="26dp">
+        android:id="@+id/menuTile"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:clipToOutline="true"
+        android:foreground="?attr/selectableItemBackground">
 
         <ImageView
             android:id="@+id/menuIcon"
@@ -31,7 +33,7 @@
         android:id="@+id/menuLabel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="6dp"
         android:ellipsize="end"
         android:gravity="center"
         android:includeFontPadding="false"
@@ -39,7 +41,7 @@
         android:maxLines="1"
         android:paddingStart="1dp"
         android:paddingEnd="1dp"
-        android:textColor="@color/icon"
+        android:textColor="@color/label"
         android:textSize="11sp" />
 
 </LinearLayout>

@@ -16,4 +16,12 @@
     <color name="cover_bg">#FFEDEFF3</color>
     <color name="track">#14000000</color>
     <color name="accent_soft">#1F2F6FED</color>
+    <!-- v63：菜单 / 面板统一配色 -->
+    <color name="surface">#FFFFFFFF</color>
+    <color name="surface_variant">#FFF1F3F6</color>
+    <color name="tab_sel">#FFFFFFFF</color>
+    <color name="label">#FF5F6368</color>
+    <color name="danger">#FFD93025</color>
+    <color name="danger_soft">#1AD93025</color>
+    <color name="handle">#33000000</color>
 </resources>

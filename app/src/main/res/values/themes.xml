@@ -41,6 +41,25 @@
         <item name="android:contentDescription">@string/cd_shape</item>
     </style>
 
+    <!-- v63：底部面板 / 横屏侧面板的进出动画 -->
+    <style name="SheetAnim">
+        <item name="android:windowEnterAnimation">@anim/sheet_in</item>
+        <item name="android:windowExitAnimation">@anim/sheet_out</item>
+    </style>
+
+    <style name="SideSheetAnim">
+        <item name="android:windowEnterAnimation">@anim/side_in</item>
+        <item name="android:windowExitAnimation">@anim/side_out</item>
+    </style>
+
+    <!-- 工具胶囊里的图标按钮 -->
+    <style name="SheetTool">
+        <item name="android:background">@drawable/sheet_tool_bg</item>
+        <item name="android:scaleType">centerInside</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:tint">@color/sheet_tool_tint</item>
+    </style>
+
     <style name="Divider">
         <item name="android:layout_width">1dp</item>
         <item name="android:layout_height">20dp</item>
