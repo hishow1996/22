@@ -166,8 +166,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     }
 
     /**
-     * v63：圆角色块按钮。图标在 56dp 圆角方块里，名字在下面。
-     * 关=淡灰块 + 深色图标；开=蓝色实心块 + 白图标；清除类=淡红块 + 红图标。
+     * v64：轻量按钮。40dp 圆角底托 + 22dp 图标，名字在下面。
+     * 关=无底色 + 深色图标；开=淡蓝底 + 蓝图标；清除类=红图标。
      * 长名在 contentDescription，长按弹出。
      */
     private fun menuCell(parent: ViewGroup, item: MenuItem, on: Int, off: Int): View {
@@ -186,13 +186,12 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val danger = item.kind == MK.DANGER
         val active = item.a.active()
         val tileColor = when {
-            danger -> col(R.color.danger_soft)
-            active -> col(R.color.accent)
-            else -> col(R.color.surface_variant)
+            active -> col(R.color.accent_soft)
+            else -> Color.TRANSPARENT
         }
         val iconColor = when {
             danger -> col(R.color.danger)
-            active -> Color.WHITE
+            active -> col(R.color.accent)
             else -> col(R.color.icon)
         }
         val labelColor = when {
@@ -200,7 +199,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             active -> col(R.color.accent)
             else -> col(R.color.label)
         }
-        v.findViewById<View>(R.id.menuTile).background = roundBg(tileColor, 16)
+        v.findViewById<View>(R.id.menuTile).background = roundBg(tileColor, 12)
         v.findViewById<ImageView>(R.id.menuIcon).setColorFilter(iconColor)
         v.findViewById<TextView>(R.id.menuLabel).setTextColor(labelColor)
     }
@@ -208,20 +207,20 @@ class MainActivity : AppCompatActivity(), InkView.Host {
     /** v63：一条灰色圆角「分段胶囊」，里面放若干 [pillItem]（标签页 / 页面显示共用）。 */
     private fun pillGroup(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
-        background = roundBg(col(R.color.surface_variant), 22)
-        setPadding(dp(3), dp(3), dp(3), dp(3))
+        background = roundBg(col(R.color.surface_variant), 20)
+        setPadding(dp(2), dp(2), dp(2), dp(2))
     }
 
     private fun pillItem(text: String): TextView = TextView(this).apply {
         this.text = text
         gravity = Gravity.CENTER
-        textSize = 14f
+        textSize = 13f
         includeFontPadding = false
     }
 
     /** 选中 = 白色（深色模式下亮灰）小胶囊 + 深色字加粗；没选 = 透明 + 淡灰字。 */
     private fun stylePill(t: TextView, selected: Boolean) {
-        t.background = if (selected) roundBg(col(R.color.tab_sel), 19) else null
+        t.background = if (selected) roundBg(col(R.color.tab_sel), 17) else null
         t.elevation = if (selected) dp(1).toFloat() else 0f
         t.setTextColor(if (selected) col(R.color.icon) else col(R.color.label))
         t.typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
@@ -255,13 +254,13 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             parent.addView(row, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(8) })
+            ).apply { bottomMargin = dp(6) })
             i += cols
         }
     }
 
     private companion object MenuMetrics {
-        const val MENU_CELL_W = 72      // v63：色块按钮格宽（小弹窗里 4 个一行 = 288dp）
+        const val MENU_CELL_W = 64      // v64：按钮格宽（小弹窗里 4 个一行 = 256dp）
         const val MENU_DANGER = 0xFFD93025.toInt()
         const val HOME_STAGE_H = 116   // v61：书架顶部 = 标题行 52 + 搜索胶囊 44 + 留白
     }
@@ -1492,7 +1491,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                         // 选中的那档外面套一圈蓝环
                         (v.parent as? View)?.background = if (sel) GradientDrawable().apply {
                             cornerRadius = dp(10).toFloat()
-                            setStroke(dp(2), col(R.color.accent))
+                            setStroke(dp(1) + 1, col(R.color.accent))
                         } else null
                     }
                     "b" -> {
@@ -1523,7 +1522,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         // v60：顶栏已有 5 个颜色，菜单里只在顶栏被收起（沉浸）时才给颜色行
         if (barsHidden) colors.forEachIndexed { i, _ ->
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(26), dp(26)).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)).apply {
                     marginEnd = dp(10)
                 }
                 contentDescription = getString(R.string.cd_color)
@@ -1542,7 +1541,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         for (i in 0 until widths.size) {
             val idx = i
             val holder = FrameLayout(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(38), dp(30)).apply { marginEnd = dp(2) }
+                layoutParams = LinearLayout.LayoutParams(dp(36), dp(28)).apply { marginEnd = dp(2) }
                 contentDescription = getString(R.string.cd_width_step, i + 1)
                 isClickable = true
                 setOnClickListener {
@@ -1556,7 +1555,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             }
             val bar = View(this).apply {
                 layoutParams = FrameLayout.LayoutParams(
-                    dp(24), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
+                    dp(22), dp(BrushSizes.previewDp(i)), Gravity.CENTER)
             }
             holder.addView(bar)
             row2.addView(holder)
@@ -1575,8 +1574,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         for (i in 0 until 4) {
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply {
-                    marginEnd = dp(6)
+                layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply {
+                    marginEnd = dp(8)
                 }
                 contentDescription = getString(R.string.cd_brush_slot)
                 val idx = i
@@ -2752,7 +2751,7 @@ class MainActivity : AppCompatActivity(), InkView.Host {
             animationStyle = if (land) R.style.SideSheetAnim else R.style.SheetAnim
         }
         pv.setBackgroundResource(if (land) R.drawable.sheet_bg_side else R.drawable.sheet_bg_top)
-        pv.setPadding(dp(16), 0, dp(16), dp(12) + if (land) 0 else safeB)
+        pv.setPadding(dp(16), 0, dp(16), dp(8) + if (land) 0 else safeB)
         val handle = pv.findViewById<View>(R.id.menuHandle)
         if (land) {
             handle.visibility = View.GONE
@@ -2816,8 +2815,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         }
         val pages = menuSections()
         val tabsRow = pv.findViewById<LinearLayout>(R.id.menuTabs)
-        tabsRow.background = roundBg(col(R.color.surface_variant), 22)
-        tabsRow.setPadding(dp(3), dp(3), dp(3), dp(3))
+        tabsRow.background = roundBg(col(R.color.surface_variant), 20)
+        tabsRow.setPadding(dp(2), dp(2), dp(2), dp(2))
         val tabViews = ArrayList<TextView>()
         fun renderPage(idx: Int) {
             menuTab = idx
@@ -2830,15 +2829,15 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                 for (item in sec.segment) {
                     val t = segmentCell(item)
                     t.setOnClickListener { popup.dismiss(); item.a.run() }
-                    seg.addView(t, LinearLayout.LayoutParams(0, dp(36), 1f))
+                    seg.addView(t, LinearLayout.LayoutParams(0, dp(32), 1f))
                     refreshers.add { tintSegment(t) }
                     tintSegment(t)
                 }
                 sections.addView(seg, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = dp(12) })
+                ).apply { bottomMargin = dp(10) })
             }
-            addCellRows(sections, sec.items.size, 4) { k ->
+            addCellRows(sections, sec.items.size, 5) { k ->
                 val item = sec.items[k]
                 val b = menuCell(sections, item, on, off)
                 b.setOnClickListener {
@@ -4263,8 +4262,8 @@ class MainActivity : AppCompatActivity(), InkView.Host {
         val row = findViewById<LinearLayout>(R.id.brushRow)
         for (i in 0 until 4) {
             val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply {
-                    marginEnd = dp(6)
+                layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply {
+                    marginEnd = dp(8)
                 }
                 contentDescription = getString(R.string.cd_brush_slot)
                 isClickable = true

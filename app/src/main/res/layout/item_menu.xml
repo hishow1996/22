@@ -1,28 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- v63：圆角色块按钮——图标在 56dp 圆角方块里，名字在下面（小一点、淡一点）。
-     关=淡灰块 + 深色图标；开=蓝色实心块 + 白图标；清除类=淡红块 + 红图标（由代码着色）。 -->
+<!-- v63：轻量按钮——40dp 圆角底托 + 22dp 图标，名字在下面。
+     关=无底色 + 深色图标；开=淡蓝底 + 蓝图标；清除类=红图标（由代码着色）。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/menuBtn"
-    android:layout_width="72dp"
+    android:layout_width="64dp"
     android:layout_height="wrap_content"
     android:clickable="true"
     android:contentDescription="@string/cd_menu_item"
     android:focusable="true"
     android:gravity="center_horizontal"
     android:orientation="vertical"
-    android:paddingBottom="2dp">
+    android:paddingBottom="0dp">
 
     <FrameLayout
         android:id="@+id/menuTile"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
         android:clipToOutline="true"
         android:foreground="?attr/selectableItemBackground">
 
         <ImageView
             android:id="@+id/menuIcon"
-            android:layout_width="26dp"
-            android:layout_height="26dp"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
             android:layout_gravity="center"
             android:importantForAccessibility="no"
             android:scaleType="centerInside" />
@@ -33,7 +33,7 @@
         android:id="@+id/menuLabel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:gravity="center"
         android:includeFontPadding="false"

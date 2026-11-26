@@ -56,8 +56,9 @@
     <style name="SheetTool">
         <item name="android:background">@drawable/sheet_tool_bg</item>
         <item name="android:scaleType">centerInside</item>
-        <item name="android:padding">10dp</item>
+        <item name="android:padding">8dp</item>
         <item name="android:tint">@color/sheet_tool_tint</item>
+        <item name="android:elevation">1dp</item>
     </style>
 
     <style name="Divider">

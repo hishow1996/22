@@ -13,7 +13,7 @@
     <FrameLayout
         android:id="@+id/menuHandle"
         android:layout_width="match_parent"
-        android:layout_height="30dp">
+        android:layout_height="24dp">
 
         <View
             android:layout_width="40dp"
@@ -25,14 +25,14 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="44dp"
+        android:layout_height="40dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
         <LinearLayout
             android:id="@+id/menuToolRow"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="40dp"
             android:layout_weight="1"
             android:background="@drawable/sheet_pill_bg"
             android:gravity="center_vertical"
@@ -43,7 +43,7 @@
                 android:id="@+id/menuShape"
                 style="@style/SheetTool"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/cd_shape"
                 android:src="@drawable/ic_shape" />
@@ -52,7 +52,7 @@
                 android:id="@+id/menuLasso"
                 style="@style/SheetTool"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/cd_lasso"
                 android:src="@drawable/ic_lasso" />
@@ -61,7 +61,7 @@
                 android:id="@+id/menuNote"
                 style="@style/SheetTool"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/cd_note"
                 android:src="@drawable/ic_note" />
@@ -70,7 +70,7 @@
                 android:id="@+id/menuHighlight"
                 style="@style/SheetTool"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="36dp"
                 android:layout_weight="1"
                 android:contentDescription="@string/cd_highlighter"
                 android:src="@drawable/ic_highlighter" />
@@ -79,12 +79,12 @@
 
         <ImageButton
             android:id="@+id/menuRedo"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_marginStart="10dp"
             android:background="@drawable/sheet_round"
             android:contentDescription="@string/cd_redo"
-            android:padding="11dp"
+            android:padding="10dp"
             android:scaleType="centerInside"
             android:src="@drawable/ic_redo"
             android:tint="@color/icon" />
@@ -96,26 +96,21 @@
         android:id="@+id/menuInkWrap"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background="@drawable/sheet_card_bg"
+        android:layout_marginTop="8dp"
         android:contentDescription="@string/cd_menu_ink"
         android:orientation="vertical"
-        android:paddingStart="12dp"
-        android:paddingTop="6dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="6dp"
         android:visibility="gone">
 
         <HorizontalScrollView
             android:id="@+id/menuInkScroll"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:scrollbars="none">
 
             <LinearLayout
                 android:id="@+id/menuInkRow"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="36dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal" />
 
@@ -124,8 +119,9 @@
         <LinearLayout
             android:id="@+id/menuInkRow2"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:gravity="center_vertical"
+            android:paddingStart="4dp"
             android:orientation="horizontal" />
 
     </LinearLayout>
@@ -134,8 +130,8 @@
     <LinearLayout
         android:id="@+id/menuTabs"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:layout_marginTop="12dp"
+        android:layout_height="36dp"
+        android:layout_marginTop="8dp"
         android:orientation="horizontal" />
 
     <ScrollView
@@ -148,26 +144,25 @@
             android:id="@+id/menuSections"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="204dp"
+            android:minHeight="136dp"
             android:orientation="vertical"
-            android:paddingTop="14dp" />
+            android:paddingTop="12dp" />
 
     </ScrollView>
 
     <LinearLayout
         android:id="@+id/menuBrightRow"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:layout_marginTop="6dp"
-        android:background="@drawable/sheet_card_bg"
+        android:layout_height="40dp"
+        android:layout_marginTop="4dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp">
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp">
 
         <ImageView
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
             android:alpha="0.55"
             android:importantForAccessibility="no"
             android:src="@drawable/ic_sun"
@@ -180,8 +175,8 @@
             android:layout_weight="1"
             android:contentDescription="@string/cd_brightness"
             android:max="100"
-            android:maxHeight="8dp"
-            android:minHeight="8dp"
+            android:maxHeight="4dp"
+            android:minHeight="4dp"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
             android:progress="50"
@@ -191,8 +186,8 @@
             android:thumbOffset="0dp" />
 
         <ImageView
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
             android:importantForAccessibility="no"
             android:src="@drawable/ic_sun"
             android:tint="@color/icon" />
