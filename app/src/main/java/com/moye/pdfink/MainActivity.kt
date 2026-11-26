@@ -1505,7 +1505,9 @@ class MainActivity : AppCompatActivity(), InkView.Host {
                                 setStroke(dp(2),
                                     col(R.color.label), dp(3).toFloat(), dp(3).toFloat())
                             } else {
-                                setColor(colors[b.color.coerceIn(0, colors.lastIndex)])
+                                // GradientDrawable.setColors 的合成属性 colors(IntArray?) 在 apply 内遮蔽外部 colors，须显式限定
+                                val mc = this@MainActivity.colors
+                                setColor(mc[b.color.coerceIn(0, mc.lastIndex)])
                             }
                         }
                     }
